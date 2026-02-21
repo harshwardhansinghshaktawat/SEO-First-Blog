@@ -12,7 +12,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
     this.markedLoaded = false;
     this.isMobile = false;
     
-    // Parse initial style props
     const initialStyleProps = this.getAttribute('style-props');
     this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
     
@@ -25,65 +24,42 @@ class EnhancedBlogPostViewer extends HTMLElement {
 
   getDefaultStyleProps() {
     return {
-      // Typography
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      
-      // Background
       bgColor: '#1E1E1E',
-      
-      // Headings
       h1Color: '#64FFDA',
       h2Color: '#64FFDA',
       h3Color: '#64FFDA',
       h4Color: '#64FFDA',
       h5Color: '#64FFDA',
       h6Color: '#64FFDA',
-      
-      // Content
       paragraphColor: '#ffffff',
       linkColor: '#FFFF05',
       strongColor: '#64FFDA',
-      
-      // Blockquote
       blockquoteBg: '#2d2d2d',
       blockquoteBorder: '#FFFF05',
       blockquoteText: '#FFFF05',
-      
-      // Code
       codeBg: '#2d2d2d',
       codeText: '#64FFDA',
-      
-      // Table
       tableHeaderBg: '#1a1a1a',
       tableHeaderText: '#64FFDA',
       tableRowBg: '#2d2d2d',
       tableRowAltBg: '#252525',
       tableText: '#ffffff',
       tableBorder: '#3d3d3d',
-      
-      // TOC
       tocBg: '#2d2d2d',
       tocBorder: '#3d3d3d',
       tocTitle: '#64FFDA',
       tocText: '#b0b0b0',
       tocActive: '#64FFDA',
-      
-      // Meta
       authorBorder: '#64FFDA',
       metaText: '#9ca3af',
-      
-      // Share buttons
       shareBg: '#2d2d2d',
       shareBorder: '#3d3d3d',
       shareText: '#b0b0b0',
       shareHover: '#64FFDA',
-      
-      // Tags
       tagBg: '#2d2d2d',
       tagText: '#64FFDA',
       tagBorder: '#3d3d3d',
-      
-      // Related posts
       relatedCardBg: '#2d2d2d',
       relatedCardBorder: '#3d3d3d',
       relatedCategory: '#64FFDA',
@@ -133,10 +109,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
       <style>${this.getStyles()}</style>
 
       <div class="blog-post-container">
-        <!-- Post Meta -->
-        <div class="post-meta" id="postMeta"></div>
-
-        <!-- Content Wrapper -->
         <div id="blog-content-wrapper">
           <!-- TOC Sidebar -->
           <aside class="toc-sidebar" id="tocSidebar">
@@ -151,6 +123,9 @@ class EnhancedBlogPostViewer extends HTMLElement {
             </div>
             
             <div class="blog-content" id="blogContent"></div>
+
+            <!-- Author & Share Section (Bottom) -->
+            <div class="post-footer" id="postFooter" style="display: none;"></div>
           </div>
         </div>
 
@@ -162,12 +137,12 @@ class EnhancedBlogPostViewer extends HTMLElement {
       </div>
     `;
 
-    this.postMeta = this.shadowRoot.getElementById('postMeta');
     this.featuredImageContainer = this.shadowRoot.getElementById('featuredImageContainer');
     this.featuredImage = this.shadowRoot.getElementById('featuredImage');
     this.tocElement = this.shadowRoot.getElementById('tableOfContents');
     this.tocSidebar = this.shadowRoot.getElementById('tocSidebar');
     this.contentElement = this.shadowRoot.getElementById('blogContent');
+    this.postFooter = this.shadowRoot.getElementById('postFooter');
     this.tagsSection = this.shadowRoot.getElementById('tagsSection');
     this.relatedPostsSection = this.shadowRoot.getElementById('relatedPostsSection');
     
@@ -209,93 +184,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
         padding: 40px 20px;
         background-color: ${bgColor};
         min-height: 400px;
-      }
-
-      /* Post Meta */
-      .post-meta {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 30px;
-        flex-wrap: wrap;
-        padding: 20px 0;
-        border-bottom: 1px solid ${tableBorder};
-        margin-bottom: 40px;
-        max-width: 900px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-
-      .author-section {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .author-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 2px solid ${authorBorder};
-      }
-
-      .author-info {
-        text-align: left;
-      }
-
-      .author-name {
-        font-weight: 600;
-        color: ${paragraphColor};
-        font-size: 15px;
-      }
-
-      .publish-date {
-        font-size: 13px;
-        color: ${metaText};
-      }
-
-      .meta-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: ${metaText};
-        font-size: 14px;
-      }
-
-      /* Share Buttons */
-      .share-section {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .share-label {
-        font-size: 14px;
-        color: ${metaText};
-        font-weight: 500;
-      }
-
-      .share-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        border: 1px solid ${shareBorder};
-        background: ${shareBg};
-        color: ${shareText};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.3s;
-        text-decoration: none;
-      }
-
-      .share-btn:hover {
-        background: ${shareHover};
-        color: ${bgColor};
-        border-color: ${shareHover};
-        transform: translateY(-2px);
       }
 
       /* Content Wrapper */
@@ -428,8 +316,8 @@ class EnhancedBlogPostViewer extends HTMLElement {
         scroll-margin-top: 20px;
       }
 
-      .blog-content h1 { font-size: clamp(32px, 4vw, 42px); color: ${h1Color}; }
-      .blog-content h2 { font-size: clamp(28px, 3.5vw, 36px); color: ${h2Color}; }
+      .blog-content h1 { font-size: clamp(32px, 4vw, 42px); color: ${h1Color}; margin-top: 60px; }
+      .blog-content h2 { font-size: clamp(28px, 3.5vw, 36px); color: ${h2Color}; margin-top: 50px; }
       .blog-content h3 { font-size: clamp(24px, 3vw, 30px); color: ${h3Color}; }
       .blog-content h4 { font-size: clamp(20px, 2.5vw, 24px); color: ${h4Color}; }
       .blog-content h5 { font-size: clamp(18px, 2vw, 20px); color: ${h5Color}; }
@@ -595,6 +483,113 @@ class EnhancedBlogPostViewer extends HTMLElement {
         background-color: ${tableBorder};
       }
 
+      /* Post Footer (Author & Share) */
+      .post-footer {
+        margin-top: 60px;
+        padding-top: 40px;
+        border-top: 2px solid ${tableBorder};
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 30px;
+      }
+
+      .author-section {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .author-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid ${authorBorder};
+      }
+
+      .author-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .author-label {
+        font-size: 12px;
+        color: ${metaText};
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+      }
+
+      .author-name {
+        font-weight: 700;
+        color: ${paragraphColor};
+        font-size: 18px;
+      }
+
+      .author-meta {
+        font-size: 14px;
+        color: ${metaText};
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .meta-separator {
+        color: ${tableBorder};
+      }
+
+      /* Share Buttons */
+      .share-section {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+      }
+
+      .share-label {
+        font-size: 12px;
+        color: ${metaText};
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+      }
+
+      .share-buttons {
+        display: flex;
+        gap: 12px;
+      }
+
+      .share-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid ${shareBorder};
+        background: ${shareBg};
+        color: ${shareText};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+      }
+
+      .share-btn svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      .share-btn:hover {
+        background: ${shareHover};
+        color: ${bgColor};
+        border-color: ${shareHover};
+        transform: translateY(-2px);
+      }
+
       /* Tags Section */
       .tags-section {
         max-width: 900px;
@@ -745,9 +740,14 @@ class EnhancedBlogPostViewer extends HTMLElement {
           padding: 30px 16px;
         }
 
-        .post-meta {
+        .post-footer {
           flex-direction: column;
-          gap: 20px;
+          align-items: flex-start;
+        }
+
+        .share-section {
+          align-items: flex-start;
+          width: 100%;
         }
 
         .blog-content {
@@ -757,6 +757,10 @@ class EnhancedBlogPostViewer extends HTMLElement {
         .related-posts-grid {
           grid-template-columns: 1fr;
         }
+
+        .table-of-contents {
+          padding: 20px;
+        }
       }
 
       @media (max-width: 480px) {
@@ -765,8 +769,24 @@ class EnhancedBlogPostViewer extends HTMLElement {
         }
 
         .share-btn {
-          width: 36px;
-          height: 36px;
+          width: 40px;
+          height: 40px;
+        }
+
+        .share-btn svg {
+          width: 18px;
+          height: 18px;
+        }
+      }
+
+      /* Performance: Reduce animations on mobile */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
         }
       }
     `;
@@ -808,7 +828,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
     if (!this.state.postData) return;
 
     const post = this.state.postData;
-    const authorImageUrl = this._convertWixImageUrl(post.authorImage);
 
     // Render featured image
     if (post.featuredImage) {
@@ -820,39 +839,67 @@ class EnhancedBlogPostViewer extends HTMLElement {
       this.featuredImageContainer.style.display = 'block';
     }
 
-    // Render meta
-    this.postMeta.innerHTML = `
+    // Render content
+    this._renderContent(post.content);
+
+    // Render author & share at bottom
+    const authorImageUrl = this._convertWixImageUrl(post.authorImage);
+    this.postFooter.innerHTML = `
       <div class="author-section">
         <img 
           src="${authorImageUrl}" 
           alt="${this._escapeHtml(post.author)}"
           class="author-avatar"
           loading="lazy"
-          onerror="this.src='https://via.placeholder.com/48'"
+          onerror="this.src='https://via.placeholder.com/56'"
         />
         <div class="author-info">
+          <div class="author-label">Written by</div>
           <div class="author-name">${this._escapeHtml(post.author || 'Anonymous')}</div>
-          <div class="publish-date">${this._formatDate(post.publishedDate)}</div>
+          <div class="author-meta">
+            <span>${this._formatDate(post.publishedDate)}</span>
+            <span class="meta-separator">•</span>
+            <span>${post.readTime || '5 min read'}</span>
+          </div>
         </div>
       </div>
 
-      <div class="meta-item">
-        <span class="meta-icon">⏱️</span>
-        <span>${post.readTime || '5 min read'}</span>
-      </div>
-
       <div class="share-section">
-        <span class="share-label">Share:</span>
-        <a href="#" class="share-btn" data-share="twitter" title="Share on Twitter">🐦</a>
-        <a href="#" class="share-btn" data-share="facebook" title="Share on Facebook">📘</a>
-        <a href="#" class="share-btn" data-share="linkedin" title="Share on LinkedIn">💼</a>
-        <button class="share-btn" data-share="copy" title="Copy link">🔗</button>
+        <div class="share-label">Share this post</div>
+        <div class="share-buttons">
+          <a href="#" class="share-btn" data-share="twitter" title="Share on X (Twitter)" aria-label="Share on X">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
+          <a href="#" class="share-btn" data-share="facebook" title="Share on Facebook" aria-label="Share on Facebook">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+          </a>
+          <a href="#" class="share-btn" data-share="linkedin" title="Share on LinkedIn" aria-label="Share on LinkedIn">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+          </a>
+          <a href="#" class="share-btn" data-share="pinterest" title="Share on Pinterest" aria-label="Share on Pinterest">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"/>
+            </svg>
+          </a>
+          <button class="share-btn" data-share="copy" title="Copy link" aria-label="Copy link">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+          </button>
+        </div>
       </div>
     `;
+    this.postFooter.style.display = 'flex';
 
     this._setupShareButtons();
-    this._renderContent(post.content);
 
+    // Render tags
     if (post.tags) {
       this._renderTags(post.tags);
     }
@@ -1199,19 +1246,17 @@ class EnhancedBlogPostViewer extends HTMLElement {
     const post = this.state.postData;
     let seoHTML = '';
 
-    seoHTML += `<div class="post-meta">`;
-    seoHTML += `<div class="author-section">`;
-    seoHTML += `<strong>${this._escapeHtml(post.author || 'Anonymous')}</strong>`;
-    seoHTML += `<span>${this._formatDate(post.publishedDate)}</span>`;
-    seoHTML += `</div>`;
-    seoHTML += `<span>${post.readTime || '5 min read'}</span>`;
-    seoHTML += `</div>`;
-
     if (post.content) {
       let contentHTML = this._enhancedMarkdownParse(post.content);
       contentHTML = this._convertImagesInHTML(contentHTML);
       seoHTML += `<div class="blog-content">${contentHTML}</div>`;
     }
+
+    seoHTML += `<div class="post-footer">`;
+    seoHTML += `<strong>${this._escapeHtml(post.author || 'Anonymous')}</strong>`;
+    seoHTML += `<span>${this._formatDate(post.publishedDate)}</span>`;
+    seoHTML += `<span>${post.readTime || '5 min read'}</span>`;
+    seoHTML += `</div>`;
 
     if (post.tags) {
       const tags = post.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
@@ -1256,15 +1301,26 @@ class EnhancedBlogPostViewer extends HTMLElement {
   _handleShare(type) {
     const url = window.location.href;
     const title = this.state.postData?.title || '';
+    const description = this.state.postData?.excerpt || '';
 
     const shareUrls = {
       twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+      pinterest: `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&description=${encodeURIComponent(title)}`
     };
 
     if (type === 'copy') {
       navigator.clipboard.writeText(url).then(() => {
+        alert('Link copied to clipboard!');
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
         alert('Link copied to clipboard!');
       });
     } else if (shareUrls[type]) {
