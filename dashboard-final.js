@@ -73,6 +73,7 @@ class BlogDashboard extends HTMLElement {
         this._root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                @import url('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest/dist/editor.css');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -377,19 +378,78 @@ class BlogDashboard extends HTMLElement {
                     padding: 20px;
                     min-height: 400px;
                     background: white;
+                    position: relative;
+                }
+
+                /* Editor.js Core Styles - Import into Shadow DOM */
+                #editorjs {
+                    position: relative;
+                    border: none;
+                    outline: none;
+                    min-height: 350px;
+                }
+
+                /* Make sure Editor.js content is visible */
+                #editorjs > * {
+                    visibility: visible !important;
+                    opacity: 1 !important;
                 }
 
                 /* Editor.js specific styling */
+                .codex-editor {
+                    position: relative;
+                    z-index: 1;
+                }
+
                 .codex-editor__redactor {
                     padding-bottom: 100px !important;
+                    position: relative;
                 }
                 
                 .ce-block__content {
                     max-width: none !important;
+                    position: relative;
                 }
                 
                 .ce-toolbar__content {
                     max-width: none !important;
+                }
+
+                /* Ensure toolbar is visible and positioned correctly */
+                .ce-toolbar {
+                    position: absolute;
+                    left: 0;
+                    z-index: 2;
+                }
+
+                .ce-toolbar__plus,
+                .ce-toolbar__settings-btn {
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                }
+
+                /* Editor paragraph styling */
+                .ce-paragraph {
+                    line-height: 1.6;
+                    outline: none;
+                    min-height: 1.5em;
+                }
+
+                .ce-paragraph[data-placeholder]:empty::before {
+                    content: attr(data-placeholder);
+                    color: #707684;
+                    font-weight: normal;
+                    opacity: 0.6;
+                }
+
+                /* Block styling */
+                .ce-block {
+                    position: relative;
+                    margin-bottom: 10px;
+                }
+
+                .ce-block--selected .ce-block__content {
+                    background: #f7f9fb;
                 }
                 
                 .modal-footer {
@@ -737,7 +797,7 @@ class BlogDashboard extends HTMLElement {
         console.log('📝 Dashboard: Loading Editor.js core and plugins...');
         
         try {
-            // Load Editor.js core first
+            // Load Editor.js core
             if (!window.EditorJS) {
                 await this._loadScript('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest');
             }
@@ -1038,7 +1098,7 @@ class BlogDashboard extends HTMLElement {
         // Show modal
         this._shadow.getElementById('modal').classList.add('active');
         
-        // Initialize Editor.js after modal is visible
+        // Initialize Editor.js after modal is fully visible and rendered
         setTimeout(async () => {
             try {
                 await this._initializeEditor(post);
@@ -1047,7 +1107,7 @@ class BlogDashboard extends HTMLElement {
                 console.error('📝 Dashboard: Failed to initialize editor:', error);
                 this._showToast('error', 'Failed to initialize editor: ' + error.message);
             }
-        }, 200);
+        }, 300);
     }
     
     async _initializeEditor(post) {
@@ -1189,8 +1249,14 @@ class BlogDashboard extends HTMLElement {
                 tools: tools,
                 placeholder: 'Start writing your blog post here! Click the + button to add different content blocks.',
                 autofocus: false,
+                minHeight: 300,
                 onReady: () => {
                     console.log('📝 Dashboard: ✅ Editor ready');
+                    // Force a repaint to ensure proper rendering
+                    editorContainer.style.display = 'block';
+                },
+                onChange: (api, event) => {
+                    console.log('📝 Dashboard: Content changed');
                 }
             });
             
