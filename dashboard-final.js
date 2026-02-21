@@ -12,6 +12,8 @@ class BlogDashboard extends HTMLElement {
         this._featuredImageFile = null;
         this._authorImageFile = null;
         this._root = document.createElement('div');
+        this._editorLoaded = false;
+        this._editorPluginsLoaded = false;
         
         this._createStructure();
         this._setupEventListeners();
@@ -58,9 +60,10 @@ class BlogDashboard extends HTMLElement {
         console.log('📝 Dashboard: Connected to DOM');
         console.log('📝 Dashboard: Starting Editor.js load...');
         
-        // Load Editor.js asynchronously but don't block
+        // Load Editor.js libraries immediately
         this._loadEditorJS().then(() => {
             console.log('📝 Dashboard: ✅ Editor.js ready for use');
+            this._editorLoaded = true;
         }).catch(error => {
             console.error('📝 Dashboard: ❌ Failed to load Editor.js:', error);
         });
@@ -374,6 +377,19 @@ class BlogDashboard extends HTMLElement {
                     padding: 20px;
                     min-height: 400px;
                     background: white;
+                }
+
+                /* Editor.js specific styling */
+                .codex-editor__redactor {
+                    padding-bottom: 100px !important;
+                }
+                
+                .ce-block__content {
+                    max-width: none !important;
+                }
+                
+                .ce-toolbar__content {
+                    max-width: none !important;
                 }
                 
                 .modal-footer {
@@ -692,60 +708,67 @@ class BlogDashboard extends HTMLElement {
         this._shadow.appendChild(this._root);
     }
 
-    async _loadEditorJS() {
-        console.log('📝 Dashboard: Loading Editor.js...');
-        
-        // Check if already loaded
-        if (window.EditorJS && window.Header && window.List) {
-            console.log('📝 Dashboard: Editor.js already loaded');
-            return;
-        }
-        
-        // Load Editor.js core
-        if (!window.EditorJS) {
-            await this._loadScript('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest');
-            console.log('📝 Dashboard: ✅ Editor.js core loaded');
-        }
-        
-        // Load plugins
-        await this._loadEditorPlugins();
-    }
-
+    // Load external script helper
     async _loadScript(url) {
         return new Promise((resolve, reject) => {
+            // Check if script already exists
+            if (document.querySelector(`script[src="${url}"]`)) {
+                console.log(`📝 Dashboard: Script already loaded: ${url}`);
+                resolve();
+                return;
+            }
+
             const script = document.createElement('script');
             script.src = url;
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+            script.async = true;
+            script.onload = () => {
+                console.log(`📝 Dashboard: ✅ Loaded: ${url}`);
+                resolve();
+            };
+            script.onerror = () => {
+                console.error(`📝 Dashboard: ❌ Failed to load: ${url}`);
+                reject(new Error(`Failed to load script: ${url}`));
+            };
             document.head.appendChild(script);
         });
     }
 
-    async _loadEditorPlugins() {
-        console.log('📝 Dashboard: Loading Editor.js plugins...');
+    async _loadEditorJS() {
+        console.log('📝 Dashboard: Loading Editor.js core and plugins...');
         
-        const plugins = [
-            { name: 'Header', url: 'https://cdn.jsdelivr.net/npm/@editorjs/header@latest' },
-            { name: 'List', url: 'https://cdn.jsdelivr.net/npm/@editorjs/list@latest' },
-            { name: 'Quote', url: 'https://cdn.jsdelivr.net/npm/@editorjs/quote@latest' },
-            { name: 'Code', url: 'https://cdn.jsdelivr.net/npm/@editorjs/code@latest' },
-            { name: 'InlineCode', url: 'https://cdn.jsdelivr.net/npm/@editorjs/inline-code@latest' },
-            { name: 'Table', url: 'https://cdn.jsdelivr.net/npm/@editorjs/table@latest' },
-            { name: 'Delimiter', url: 'https://cdn.jsdelivr.net/npm/@editorjs/delimiter@latest' }
-        ];
+        try {
+            // Load Editor.js core first
+            if (!window.EditorJS) {
+                await this._loadScript('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest');
+            }
+            
+            // Load all plugins sequentially
+            const plugins = [
+                { name: 'Header', url: 'https://cdn.jsdelivr.net/npm/@editorjs/header@latest' },
+                { name: 'List', url: 'https://cdn.jsdelivr.net/npm/@editorjs/list@latest' },
+                { name: 'Quote', url: 'https://cdn.jsdelivr.net/npm/@editorjs/quote@latest' },
+                { name: 'Code', url: 'https://cdn.jsdelivr.net/npm/@editorjs/code@latest' },
+                { name: 'InlineCode', url: 'https://cdn.jsdelivr.net/npm/@editorjs/inline-code@latest' },
+                { name: 'Table', url: 'https://cdn.jsdelivr.net/npm/@editorjs/table@latest' },
+                { name: 'Delimiter', url: 'https://cdn.jsdelivr.net/npm/@editorjs/delimiter@latest' },
+                { name: 'Marker', url: 'https://cdn.jsdelivr.net/npm/@editorjs/marker@latest' },
+                { name: 'Checklist', url: 'https://cdn.jsdelivr.net/npm/@editorjs/checklist@latest' },
+                { name: 'Warning', url: 'https://cdn.jsdelivr.net/npm/@editorjs/warning@latest' }
+            ];
 
-        for (const plugin of plugins) {
-            if (!window[plugin.name]) {
-                try {
+            for (const plugin of plugins) {
+                if (!window[plugin.name]) {
                     await this._loadScript(plugin.url);
-                    console.log(`📝 Dashboard: ✅ ${plugin.name} loaded`);
-                } catch (error) {
-                    console.error(`📝 Dashboard: ❌ Failed to load ${plugin.name}:`, error);
                 }
             }
+            
+            this._editorPluginsLoaded = true;
+            console.log('📝 Dashboard: ✅ All Editor.js plugins loaded successfully');
+            
+        } catch (error) {
+            console.error('📝 Dashboard: ❌ Error loading Editor.js:', error);
+            throw error;
         }
-        
-        console.log('📝 Dashboard: ✅ All plugins loaded');
     }
 
     _setupEventListeners() {
@@ -964,16 +987,21 @@ class BlogDashboard extends HTMLElement {
         console.log('📝 Dashboard: _showModal called');
         console.log('📝 Dashboard: Post:', post ? post.title : 'New Post');
         
-        this._selectedPost = post;
-        
-        // Make sure Editor.js is loaded first
-        try {
-            await this._loadEditorJS();
-        } catch (error) {
-            console.error('📝 Dashboard: Failed to load Editor.js:', error);
-            this._showToast('error', 'Failed to load editor. Please refresh the page.');
-            return;
+        // Check if Editor.js is loaded
+        if (!this._editorLoaded || !this._editorPluginsLoaded) {
+            console.log('📝 Dashboard: Editor.js not loaded, loading now...');
+            try {
+                await this._loadEditorJS();
+                this._editorLoaded = true;
+                this._editorPluginsLoaded = true;
+            } catch (error) {
+                console.error('📝 Dashboard: Failed to load Editor.js:', error);
+                this._showToast('error', 'Failed to load editor. Please refresh the page.');
+                return;
+            }
         }
+        
+        this._selectedPost = post;
         
         // Reset modal
         this._shadow.getElementById('modalTitle').textContent = post ? 'Edit Post' : 'Create New Post';
@@ -1019,7 +1047,7 @@ class BlogDashboard extends HTMLElement {
                 console.error('📝 Dashboard: Failed to initialize editor:', error);
                 this._showToast('error', 'Failed to initialize editor: ' + error.message);
             }
-        }, 100);
+        }, 200);
     }
     
     async _initializeEditor(post) {
@@ -1037,7 +1065,10 @@ class BlogDashboard extends HTMLElement {
         }
         
         // Parse editor data
-        let editorData = { blocks: [] };
+        let editorData = {
+            time: Date.now(),
+            blocks: []
+        };
         
         if (post?.editorData) {
             try {
@@ -1047,7 +1078,7 @@ class BlogDashboard extends HTMLElement {
                 console.log('📝 Dashboard: Loaded existing editor data, blocks:', editorData.blocks?.length || 0);
             } catch (error) {
                 console.error('📝 Dashboard: Failed to parse editor data:', error);
-                editorData = { blocks: [] };
+                editorData = { time: Date.now(), blocks: [] };
             }
         }
         
@@ -1065,12 +1096,89 @@ class BlogDashboard extends HTMLElement {
             throw new Error('EditorJS not loaded');
         }
         
-        // Wait for tools to be available
-        const requiredTools = ['Header', 'List', 'Quote', 'Code', 'InlineCode', 'Table', 'Delimiter'];
-        for (const tool of requiredTools) {
-            if (!window[tool]) {
-                console.warn(`📝 Dashboard: Tool ${tool} not loaded, skipping...`);
-            }
+        // Create tools configuration
+        const tools = {};
+        
+        if (window.Header) {
+            tools.header = {
+                class: Header,
+                config: {
+                    placeholder: 'Enter a header',
+                    levels: [1, 2, 3, 4, 5, 6],
+                    defaultLevel: 2
+                }
+            };
+        }
+        
+        if (window.List) {
+            tools.list = {
+                class: List,
+                inlineToolbar: true,
+                config: {
+                    defaultStyle: 'unordered'
+                }
+            };
+        }
+        
+        if (window.Quote) {
+            tools.quote = {
+                class: Quote,
+                inlineToolbar: true,
+                config: {
+                    quotePlaceholder: 'Enter a quote',
+                    captionPlaceholder: "Quote's author"
+                }
+            };
+        }
+        
+        if (window.Code) {
+            tools.code = {
+                class: Code,
+                config: {
+                    placeholder: 'Enter your code here...'
+                }
+            };
+        }
+        
+        if (window.InlineCode) {
+            tools.inlineCode = InlineCode;
+        }
+        
+        if (window.Table) {
+            tools.table = {
+                class: Table,
+                inlineToolbar: true,
+                config: {
+                    rows: 2,
+                    cols: 3
+                }
+            };
+        }
+        
+        if (window.Delimiter) {
+            tools.delimiter = Delimiter;
+        }
+        
+        if (window.Marker) {
+            tools.marker = Marker;
+        }
+        
+        if (window.Checklist) {
+            tools.checklist = {
+                class: Checklist,
+                inlineToolbar: true
+            };
+        }
+        
+        if (window.Warning) {
+            tools.warning = {
+                class: Warning,
+                inlineToolbar: true,
+                config: {
+                    titlePlaceholder: 'Title',
+                    messagePlaceholder: 'Message'
+                }
+            };
         }
         
         // Create new editor instance
@@ -1078,31 +1186,8 @@ class BlogDashboard extends HTMLElement {
             this._editor = new EditorJS({
                 holder: editorContainer,
                 data: editorData,
-                tools: {
-                    header: window.Header ? {
-                        class: Header,
-                        config: {
-                            levels: [1, 2, 3, 4, 5, 6],
-                            defaultLevel: 2
-                        }
-                    } : undefined,
-                    list: window.List ? {
-                        class: List,
-                        inlineToolbar: true
-                    } : undefined,
-                    quote: window.Quote ? {
-                        class: Quote,
-                        inlineToolbar: true
-                    } : undefined,
-                    code: window.Code ? Code : undefined,
-                    inlineCode: window.InlineCode ? InlineCode : undefined,
-                    table: window.Table ? {
-                        class: Table,
-                        inlineToolbar: true
-                    } : undefined,
-                    delimiter: window.Delimiter ? Delimiter : undefined
-                },
-                placeholder: 'Start writing your blog post...',
+                tools: tools,
+                placeholder: 'Start writing your blog post here! Click the + button to add different content blocks.',
                 autofocus: false,
                 onReady: () => {
                     console.log('📝 Dashboard: ✅ Editor ready');
@@ -1146,6 +1231,9 @@ class BlogDashboard extends HTMLElement {
         try {
             const editorData = await this._editor.save();
             
+            // Convert Editor.js data to markdown
+            const markdown = this._convertToMarkdown(editorData);
+            
             const postData = {
                 title,
                 slug,
@@ -1155,6 +1243,7 @@ class BlogDashboard extends HTMLElement {
                 author: this._shadow.getElementById('postAuthor').value.trim() || 'Anonymous',
                 status: this._shadow.getElementById('postStatus').value,
                 editorData: JSON.stringify(editorData),
+                content: markdown, // Add markdown content
                 featuredImageFile: this._featuredImageFile,
                 authorImageFile: this._authorImageFile,
                 existingFeaturedImage: this._selectedPost?.featuredImage,
@@ -1169,6 +1258,83 @@ class BlogDashboard extends HTMLElement {
             console.error('📝 Dashboard: Save error:', error);
             this._showToast('error', 'Failed to save post: ' + error.message);
         }
+    }
+
+    // Convert Editor.js output to Markdown
+    _convertToMarkdown(outputData) {
+        let markdown = '';
+        
+        if (!outputData || !outputData.blocks) {
+            return markdown;
+        }
+        
+        outputData.blocks.forEach(block => {
+            switch(block.type) {
+                case 'header':
+                    markdown += `${'#'.repeat(block.data.level)} ${block.data.text}\n\n`;
+                    break;
+                    
+                case 'paragraph':
+                    markdown += `${block.data.text}\n\n`;
+                    break;
+                    
+                case 'list':
+                    block.data.items.forEach((item, index) => {
+                        const prefix = block.data.style === 'ordered' ? `${index + 1}.` : '-';
+                        markdown += `${prefix} ${item}\n`;
+                    });
+                    markdown += '\n';
+                    break;
+                    
+                case 'checklist':
+                    block.data.items.forEach(item => {
+                        const checked = item.checked ? '[x]' : '[ ]';
+                        markdown += `- ${checked} ${item.text}\n`;
+                    });
+                    markdown += '\n';
+                    break;
+                    
+                case 'quote':
+                    markdown += `> ${block.data.text}\n`;
+                    if (block.data.caption) {
+                        markdown += `> \n> — ${block.data.caption}\n`;
+                    }
+                    markdown += '\n';
+                    break;
+                    
+                case 'code':
+                    markdown += '```\n';
+                    markdown += `${block.data.code}\n`;
+                    markdown += '```\n\n';
+                    break;
+                    
+                case 'table':
+                    if (block.data.content && block.data.content.length > 0) {
+                        markdown += '| ' + block.data.content[0].join(' | ') + ' |\n';
+                        markdown += '| ' + block.data.content[0].map(() => '---').join(' | ') + ' |\n';
+                        for (let i = 1; i < block.data.content.length; i++) {
+                            markdown += '| ' + block.data.content[i].join(' | ') + ' |\n';
+                        }
+                        markdown += '\n';
+                    }
+                    break;
+                    
+                case 'warning':
+                    markdown += `> ⚠️ **${block.data.title || 'Warning'}**\n`;
+                    markdown += `> ${block.data.message}\n\n`;
+                    break;
+                    
+                case 'delimiter':
+                    markdown += '---\n\n';
+                    break;
+                    
+                default:
+                    // Skip unknown block types
+                    console.log(`📝 Dashboard: Skipping unknown block type: ${block.type}`);
+            }
+        });
+        
+        return markdown;
     }
     
     _deletePost(postId) {
