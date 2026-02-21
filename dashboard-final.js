@@ -56,7 +56,14 @@ class BlogDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Dashboard: Connected to DOM');
-        this._loadEditorJS();
+        console.log('📝 Dashboard: Starting Editor.js load...');
+        
+        // Load Editor.js asynchronously but don't block
+        this._loadEditorJS().then(() => {
+            console.log('📝 Dashboard: ✅ Editor.js ready for use');
+        }).catch(error => {
+            console.error('📝 Dashboard: ❌ Failed to load Editor.js:', error);
+        });
     }
     
     _createStructure() {
@@ -686,22 +693,37 @@ class BlogDashboard extends HTMLElement {
     }
 
     async _loadEditorJS() {
-        // Load Editor.js from CDN
-        if (!window.EditorJS) {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest';
-            script.onload = () => {
-                console.log('📝 Dashboard: Editor.js loaded');
-                this._loadEditorPlugins();
-            };
-            document.head.appendChild(script);
-        } else {
-            this._loadEditorPlugins();
+        console.log('📝 Dashboard: Loading Editor.js...');
+        
+        // Check if already loaded
+        if (window.EditorJS && window.Header && window.List) {
+            console.log('📝 Dashboard: Editor.js already loaded');
+            return;
         }
+        
+        // Load Editor.js core
+        if (!window.EditorJS) {
+            await this._loadScript('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest');
+            console.log('📝 Dashboard: ✅ Editor.js core loaded');
+        }
+        
+        // Load plugins
+        await this._loadEditorPlugins();
+    }
+
+    async _loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+            document.head.appendChild(script);
+        });
     }
 
     async _loadEditorPlugins() {
-        // Load essential Editor.js plugins
+        console.log('📝 Dashboard: Loading Editor.js plugins...');
+        
         const plugins = [
             { name: 'Header', url: 'https://cdn.jsdelivr.net/npm/@editorjs/header@latest' },
             { name: 'List', url: 'https://cdn.jsdelivr.net/npm/@editorjs/list@latest' },
@@ -714,21 +736,24 @@ class BlogDashboard extends HTMLElement {
 
         for (const plugin of plugins) {
             if (!window[plugin.name]) {
-                const script = document.createElement('script');
-                script.src = plugin.url;
-                await new Promise((resolve) => {
-                    script.onload = resolve;
-                    document.head.appendChild(script);
-                });
+                try {
+                    await this._loadScript(plugin.url);
+                    console.log(`📝 Dashboard: ✅ ${plugin.name} loaded`);
+                } catch (error) {
+                    console.error(`📝 Dashboard: ❌ Failed to load ${plugin.name}:`, error);
+                }
             }
         }
         
-        console.log('📝 Dashboard: All Editor.js plugins loaded');
+        console.log('📝 Dashboard: ✅ All plugins loaded');
     }
 
     _setupEventListeners() {
         // Header button
-        this._shadow.getElementById('createBtn').addEventListener('click', () => this._showModal());
+        this._shadow.getElementById('createBtn').addEventListener('click', () => {
+            console.log('📝 Dashboard: Create button clicked');
+            this._showModal();
+        });
         
         // Modal controls
         this._shadow.getElementById('closeModal').addEventListener('click', () => this._hideModal());
@@ -798,6 +823,31 @@ class BlogDashboard extends HTMLElement {
         }
     }
 
+    _convertWixImageUrl(wixUrl) {
+        if (!wixUrl || typeof wixUrl !== 'string') {
+            return 'https://via.placeholder.com/60';
+        }
+
+        if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
+            return wixUrl;
+        }
+
+        if (wixUrl.startsWith('wix:image://')) {
+            try {
+                const parts = wixUrl.split('/');
+                const fileId = parts[3]?.split('#')[0];
+                
+                if (fileId) {
+                    return `https://static.wixstatic.com/media/${fileId}`;
+                }
+            } catch (e) {
+                console.error('📝 Dashboard: Error parsing Wix image URL:', wixUrl, e);
+            }
+        }
+
+        return 'https://via.placeholder.com/60';
+    }
+
     _dispatchEvent(name, detail) {
         this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
@@ -855,11 +905,16 @@ class BlogDashboard extends HTMLElement {
         
         this._posts.forEach(post => {
             const row = document.createElement('tr');
+            
+            // Convert Wix image URLs
+            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
+            
             row.innerHTML = `
                 <td>
-                    <img src="${post.featuredImage || 'https://via.placeholder.com/60'}" 
+                    <img src="${featuredImageUrl}" 
                          class="post-image" 
-                         alt="${post.title}"
+                         alt="${this._escapeHtml(post.title)}"
+                         loading="lazy"
                          onerror="this.src='https://via.placeholder.com/60'">
                 </td>
                 <td>
@@ -886,20 +941,39 @@ class BlogDashboard extends HTMLElement {
             btn.addEventListener('click', () => {
                 const postId = btn.getAttribute('data-id');
                 const post = this._posts.find(p => p._id === postId);
-                this._showModal(post);
+                if (post) {
+                    console.log('📝 Dashboard: Edit clicked for:', post.title);
+                    this._showModal(post);
+                }
             });
         });
         
         this._shadow.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const postId = btn.getAttribute('data-id');
-                this._deletePost(postId);
+                const post = this._posts.find(p => p._id === postId);
+                if (post) {
+                    console.log('📝 Dashboard: Delete clicked for:', post.title);
+                    this._deletePost(postId);
+                }
             });
         });
     }
     
     async _showModal(post = null) {
+        console.log('📝 Dashboard: _showModal called');
+        console.log('📝 Dashboard: Post:', post ? post.title : 'New Post');
+        
         this._selectedPost = post;
+        
+        // Make sure Editor.js is loaded first
+        try {
+            await this._loadEditorJS();
+        } catch (error) {
+            console.error('📝 Dashboard: Failed to load Editor.js:', error);
+            this._showToast('error', 'Failed to load editor. Please refresh the page.');
+            return;
+        }
         
         // Reset modal
         this._shadow.getElementById('modalTitle').textContent = post ? 'Edit Post' : 'Create New Post';
@@ -920,67 +994,137 @@ class BlogDashboard extends HTMLElement {
         this._shadow.getElementById('authorImagePreview').classList.remove('active');
         
         if (post?.featuredImage) {
+            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
             this._shadow.getElementById('featuredImagePreview').innerHTML = 
-                `<img src="${post.featuredImage}" alt="Featured">`;
+                `<img src="${featuredImageUrl}" alt="Featured" onerror="this.src='https://via.placeholder.com/200'">`;
             this._shadow.getElementById('featuredImagePreview').classList.add('active');
         }
         
         if (post?.authorImage) {
+            const authorImageUrl = this._convertWixImageUrl(post.authorImage);
             this._shadow.getElementById('authorImagePreview').innerHTML = 
-                `<img src="${post.authorImage}" alt="Author">`;
+                `<img src="${authorImageUrl}" alt="Author" onerror="this.src='https://via.placeholder.com/200'">`;
             this._shadow.getElementById('authorImagePreview').classList.add('active');
         }
         
-        // Initialize Editor.js
-        await this._initializeEditor(post);
-        
+        // Show modal
         this._shadow.getElementById('modal').classList.add('active');
+        
+        // Initialize Editor.js after modal is visible
+        setTimeout(async () => {
+            try {
+                await this._initializeEditor(post);
+                console.log('📝 Dashboard: ✅ Editor initialized');
+            } catch (error) {
+                console.error('📝 Dashboard: Failed to initialize editor:', error);
+                this._showToast('error', 'Failed to initialize editor: ' + error.message);
+            }
+        }, 100);
     }
     
     async _initializeEditor(post) {
+        console.log('📝 Dashboard: Initializing editor...');
+        
+        // Destroy existing editor
         if (this._editor) {
-            this._editor.destroy();
+            try {
+                await this._editor.destroy();
+                console.log('📝 Dashboard: Previous editor destroyed');
+            } catch (error) {
+                console.log('📝 Dashboard: No previous editor to destroy');
+            }
+            this._editor = null;
         }
         
-        const editorData = post?.editorData ? JSON.parse(post.editorData) : {
-            blocks: []
-        };
+        // Parse editor data
+        let editorData = { blocks: [] };
         
-        this._editor = new EditorJS({
-            holder: this._shadow.getElementById('editorjs'),
-            data: editorData,
-            tools: {
-                header: {
-                    class: Header,
-                    config: {
-                        levels: [1, 2, 3, 4, 5, 6],
-                        defaultLevel: 2
-                    }
+        if (post?.editorData) {
+            try {
+                editorData = typeof post.editorData === 'string' 
+                    ? JSON.parse(post.editorData) 
+                    : post.editorData;
+                console.log('📝 Dashboard: Loaded existing editor data, blocks:', editorData.blocks?.length || 0);
+            } catch (error) {
+                console.error('📝 Dashboard: Failed to parse editor data:', error);
+                editorData = { blocks: [] };
+            }
+        }
+        
+        // Get editor container
+        const editorContainer = this._shadow.getElementById('editorjs');
+        if (!editorContainer) {
+            throw new Error('Editor container not found');
+        }
+        
+        // Clear container
+        editorContainer.innerHTML = '';
+        
+        // Wait for EditorJS to be available
+        if (!window.EditorJS) {
+            throw new Error('EditorJS not loaded');
+        }
+        
+        // Wait for tools to be available
+        const requiredTools = ['Header', 'List', 'Quote', 'Code', 'InlineCode', 'Table', 'Delimiter'];
+        for (const tool of requiredTools) {
+            if (!window[tool]) {
+                console.warn(`📝 Dashboard: Tool ${tool} not loaded, skipping...`);
+            }
+        }
+        
+        // Create new editor instance
+        try {
+            this._editor = new EditorJS({
+                holder: editorContainer,
+                data: editorData,
+                tools: {
+                    header: window.Header ? {
+                        class: Header,
+                        config: {
+                            levels: [1, 2, 3, 4, 5, 6],
+                            defaultLevel: 2
+                        }
+                    } : undefined,
+                    list: window.List ? {
+                        class: List,
+                        inlineToolbar: true
+                    } : undefined,
+                    quote: window.Quote ? {
+                        class: Quote,
+                        inlineToolbar: true
+                    } : undefined,
+                    code: window.Code ? Code : undefined,
+                    inlineCode: window.InlineCode ? InlineCode : undefined,
+                    table: window.Table ? {
+                        class: Table,
+                        inlineToolbar: true
+                    } : undefined,
+                    delimiter: window.Delimiter ? Delimiter : undefined
                 },
-                list: {
-                    class: List,
-                    inlineToolbar: true
-                },
-                quote: {
-                    class: Quote,
-                    inlineToolbar: true
-                },
-                code: Code,
-                inlineCode: InlineCode,
-                table: {
-                    class: Table,
-                    inlineToolbar: true
-                },
-                delimiter: Delimiter
-            },
-            placeholder: 'Start writing your blog post...'
-        });
+                placeholder: 'Start writing your blog post...',
+                autofocus: false,
+                onReady: () => {
+                    console.log('📝 Dashboard: ✅ Editor ready');
+                }
+            });
+            
+            console.log('📝 Dashboard: Editor instance created');
+            
+        } catch (error) {
+            console.error('📝 Dashboard: Failed to create editor:', error);
+            throw error;
+        }
     }
     
     _hideModal() {
         this._shadow.getElementById('modal').classList.remove('active');
         if (this._editor) {
-            this._editor.destroy();
+            try {
+                this._editor.destroy();
+            } catch (error) {
+                console.log('📝 Dashboard: Error destroying editor:', error);
+            }
             this._editor = null;
         }
     }
