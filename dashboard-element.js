@@ -17,11 +17,15 @@ class BlogDashboard extends HTMLElement {
   }
 
   static get observedAttributes() {
-    return ['posts-data', 'save-result', 'delete-result', 'notification', 'upload-result'];
+    return ['posts-data', 'save-result', 'delete-result', 'notification', 'upload-result', 'trigger-load'];
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
     if (!newValue || oldValue === newValue) return;
+    if (name === 'trigger-load') {
+      this._loadPosts();
+      return;
+    }
     try {
       const data = JSON.parse(newValue);
       if (name === 'posts-data') { this._onPostsData(data); }
@@ -33,7 +37,8 @@ class BlogDashboard extends HTMLElement {
   }
 
   connectedCallback() {
-    this._loadPosts();
+    // Frontend triggers initial load via setAttribute('trigger-load','1')
+    // after registering all el.on() listeners, avoiding timing race conditions
   }
 
   _dispatch(name, detail) {
@@ -667,7 +672,7 @@ class BlogDashboard extends HTMLElement {
               <div class="tb-sep"></div>
               <!-- Blocks -->
               <button class="tb-btn" data-action="blockquote" title="Blockquote">"</button>
-              <button class="tb-btn tb-btn-text" data-action="code-block" title="Code Block">```</button>
+              <button class="tb-btn tb-btn-text" data-action="code-block" title="Code Block">{ } Code</button>
               <button class="tb-btn" data-action="hr" title="Horizontal Rule">—</button>
               <div class="tb-sep"></div>
               <!-- Media -->
