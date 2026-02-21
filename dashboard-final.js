@@ -8,12 +8,10 @@ class BlogDashboard extends HTMLElement {
         this._pageSize = 10;
         this._totalPosts = 0;
         this._selectedPost = null;
-        this._editor = null;
         this._featuredImageFile = null;
         this._authorImageFile = null;
+        this._editorContent = '';
         this._root = document.createElement('div');
-        this._editorLoaded = false;
-        this._editorPluginsLoaded = false;
         
         this._createStructure();
         this._setupEventListeners();
@@ -58,22 +56,13 @@ class BlogDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Dashboard: Connected to DOM');
-        console.log('📝 Dashboard: Starting Editor.js load...');
-        
-        // Load Editor.js libraries immediately
-        this._loadEditorJS().then(() => {
-            console.log('📝 Dashboard: ✅ Editor.js ready for use');
-            this._editorLoaded = true;
-        }).catch(error => {
-            console.error('📝 Dashboard: ❌ Failed to load Editor.js:', error);
-        });
     }
     
     _createStructure() {
         this._root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                @import url('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest/dist/editor.css');
+                @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -83,6 +72,20 @@ class BlogDashboard extends HTMLElement {
                     font-family: 'Inter', sans-serif;
                     font-size: 14px;
                     background: #f9fafb;
+                }
+                
+                .material-icons {
+                    font-family: 'Material Icons';
+                    font-weight: normal;
+                    font-style: normal;
+                    font-size: 20px;
+                    display: inline-block;
+                    line-height: 1;
+                    text-transform: none;
+                    letter-spacing: normal;
+                    word-wrap: normal;
+                    white-space: nowrap;
+                    direction: ltr;
                 }
                 
                 .container { width: 100%; min-height: 600px; }
@@ -238,6 +241,9 @@ class BlogDashboard extends HTMLElement {
                     transition: all 0.2s;
                     font-family: inherit;
                     margin-right: 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
                 }
                 
                 .btn:hover { transform: translateY(-1px); }
@@ -296,6 +302,9 @@ class BlogDashboard extends HTMLElement {
                     width: 40px;
                     height: 40px;
                     border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
                 
                 .modal-body { padding: 32px; }
@@ -371,85 +380,236 @@ class BlogDashboard extends HTMLElement {
                     border-radius: 8px;
                     border: 2px solid #e5e7eb;
                 }
-                
-                .editor-container {
+
+                /* Rich Content Editor */
+                .rich-editor {
                     border: 2px solid #e5e7eb;
                     border-radius: 12px;
-                    padding: 20px;
-                    min-height: 400px;
                     background: white;
-                    position: relative;
+                    overflow: hidden;
                 }
 
-                /* Editor.js Core Styles - Import into Shadow DOM */
-                #editorjs {
-                    position: relative;
+                .editor-toolbar {
+                    background: #f9fafb;
+                    border-bottom: 2px solid #e5e7eb;
+                    padding: 12px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+
+                .toolbar-group {
+                    display: flex;
+                    gap: 4px;
+                    padding: 4px;
+                    border-right: 1px solid #e5e7eb;
+                    padding-right: 12px;
+                }
+
+                .toolbar-group:last-child {
+                    border-right: none;
+                }
+
+                .toolbar-btn {
+                    width: 36px;
+                    height: 36px;
                     border: none;
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                    color: #374151;
+                }
+
+                .toolbar-btn:hover {
+                    background: #e5e7eb;
+                    transform: translateY(-1px);
+                }
+
+                .toolbar-btn.active {
+                    background: #8b5cf6;
+                    color: white;
+                }
+
+                .toolbar-btn .material-icons {
+                    font-size: 20px;
+                }
+
+                .editor-content {
+                    padding: 24px;
+                    min-height: 400px;
+                    max-height: 500px;
+                    overflow-y: auto;
+                    font-size: 16px;
+                    line-height: 1.7;
+                    color: #111827;
+                }
+
+                .editor-content:focus {
                     outline: none;
-                    min-height: 350px;
                 }
 
-                /* Make sure Editor.js content is visible */
-                #editorjs > * {
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                }
-
-                /* Editor.js specific styling */
-                .codex-editor {
-                    position: relative;
-                    z-index: 1;
-                }
-
-                .codex-editor__redactor {
-                    padding-bottom: 100px !important;
-                    position: relative;
-                }
-                
-                .ce-block__content {
-                    max-width: none !important;
-                    position: relative;
-                }
-                
-                .ce-toolbar__content {
-                    max-width: none !important;
-                }
-
-                /* Ensure toolbar is visible and positioned correctly */
-                .ce-toolbar {
-                    position: absolute;
-                    left: 0;
-                    z-index: 2;
-                }
-
-                .ce-toolbar__plus,
-                .ce-toolbar__settings-btn {
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                }
-
-                /* Editor paragraph styling */
-                .ce-paragraph {
-                    line-height: 1.6;
-                    outline: none;
-                    min-height: 1.5em;
-                }
-
-                .ce-paragraph[data-placeholder]:empty::before {
+                .editor-content[contenteditable]:empty:before {
                     content: attr(data-placeholder);
-                    color: #707684;
-                    font-weight: normal;
-                    opacity: 0.6;
+                    color: #9ca3af;
+                    font-style: italic;
                 }
 
-                /* Block styling */
-                .ce-block {
-                    position: relative;
-                    margin-bottom: 10px;
+                .editor-content h1 {
+                    font-size: 2em;
+                    font-weight: 700;
+                    margin: 0.67em 0;
                 }
 
-                .ce-block--selected .ce-block__content {
-                    background: #f7f9fb;
+                .editor-content h2 {
+                    font-size: 1.5em;
+                    font-weight: 700;
+                    margin: 0.75em 0;
+                }
+
+                .editor-content h3 {
+                    font-size: 1.17em;
+                    font-weight: 700;
+                    margin: 0.83em 0;
+                }
+
+                .editor-content ul, .editor-content ol {
+                    margin: 1em 0;
+                    padding-left: 2em;
+                }
+
+                .editor-content blockquote {
+                    border-left: 4px solid #8b5cf6;
+                    padding-left: 1em;
+                    margin: 1em 0;
+                    color: #6b7280;
+                    font-style: italic;
+                }
+
+                .editor-content code {
+                    background: #f3f4f6;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.9em;
+                }
+
+                .editor-content pre {
+                    background: #1f2937;
+                    color: #f3f4f6;
+                    padding: 16px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 1em 0;
+                }
+
+                .editor-content pre code {
+                    background: none;
+                    padding: 0;
+                    color: inherit;
+                }
+
+                .editor-content img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    margin: 1em 0;
+                }
+
+                .editor-content a {
+                    color: #8b5cf6;
+                    text-decoration: underline;
+                }
+
+                .editor-content hr {
+                    border: none;
+                    border-top: 2px solid #e5e7eb;
+                    margin: 2em 0;
+                }
+
+                /* Image Upload Modal */
+                .image-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0,0,0,0.7);
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 2000;
+                }
+
+                .image-modal.active {
+                    display: flex;
+                }
+
+                .image-modal-content {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 32px;
+                    max-width: 500px;
+                    width: 90%;
+                }
+
+                .image-modal-title {
+                    font-size: 20px;
+                    font-weight: 700;
+                    margin-bottom: 20px;
+                    color: #111827;
+                }
+
+                .image-upload-area {
+                    border: 2px dashed #e5e7eb;
+                    border-radius: 12px;
+                    padding: 40px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    background: #f9fafb;
+                    margin-bottom: 20px;
+                }
+
+                .image-upload-area:hover {
+                    border-color: #8b5cf6;
+                    background: #ede9fe;
+                }
+
+                .image-upload-area.dragover {
+                    border-color: #8b5cf6;
+                    background: #ede9fe;
+                }
+
+                .upload-icon {
+                    font-size: 48px;
+                    color: #9ca3af;
+                    margin-bottom: 12px;
+                }
+
+                .image-preview-area {
+                    display: none;
+                    margin-top: 16px;
+                }
+
+                .image-preview-area.active {
+                    display: block;
+                }
+
+                .image-preview-area img {
+                    max-width: 100%;
+                    border-radius: 8px;
+                    border: 2px solid #e5e7eb;
+                }
+
+                .button-group {
+                    display: flex;
+                    gap: 12px;
+                    justify-content: flex-end;
+                    margin-top: 20px;
                 }
                 
                 .modal-footer {
@@ -471,7 +631,7 @@ class BlogDashboard extends HTMLElement {
                     border-radius: 12px;
                     box-shadow: 0 20px 25px rgba(0,0,0,0.1);
                     display: none;
-                    z-index: 2000;
+                    z-index: 3000;
                     min-width: 320px;
                     animation: slideIn 0.3s;
                 }
@@ -596,6 +756,31 @@ class BlogDashboard extends HTMLElement {
                     color: #6b7280;
                     font-size: 14px;
                 }
+
+                .link-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0,0,0,0.7);
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 2000;
+                }
+
+                .link-modal.active {
+                    display: flex;
+                }
+
+                .link-modal-content {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 32px;
+                    max-width: 500px;
+                    width: 90%;
+                }
             </style>
             
             <div class="container">
@@ -620,7 +805,7 @@ class BlogDashboard extends HTMLElement {
                             </div>
                         </div>
                         <button class="btn-create" id="createBtn">
-                            <span style="font-size: 20px;">✏️</span>
+                            <span class="material-icons">edit</span>
                             Create New Post
                         </button>
                     </div>
@@ -656,9 +841,15 @@ class BlogDashboard extends HTMLElement {
                         </div>
                         
                         <div class="pagination" id="pagination" style="display: none;">
-                            <button class="btn btn-primary" id="prevBtn" disabled>← Previous</button>
+                            <button class="btn btn-primary" id="prevBtn" disabled>
+                                <span class="material-icons">chevron_left</span>
+                                Previous
+                            </button>
                             <span id="pageInfo" style="font-weight: 600;">Page 1</span>
-                            <button class="btn btn-primary" id="nextBtn">Next →</button>
+                            <button class="btn btn-primary" id="nextBtn">
+                                Next
+                                <span class="material-icons">chevron_right</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -668,7 +859,9 @@ class BlogDashboard extends HTMLElement {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2 class="modal-title" id="modalTitle">Create New Post</h2>
-                        <button class="modal-close" id="closeModal">×</button>
+                        <button class="modal-close" id="closeModal">
+                            <span class="material-icons">close</span>
+                        </button>
                     </div>
                     
                     <div class="modal-body">
@@ -706,7 +899,8 @@ class BlogDashboard extends HTMLElement {
                                 <label class="label">Featured Image</label>
                                 <div class="file-upload" id="featuredImageUpload">
                                     <input type="file" id="featuredImageInput" accept="image/*">
-                                    <div>📷 Click to upload featured image</div>
+                                    <div><span class="material-icons" style="font-size: 32px; color: #9ca3af;">image</span></div>
+                                    <div style="margin-top: 8px;">Click to upload featured image</div>
                                     <small style="color: #6b7280;">Recommended: 1200x630px</small>
                                 </div>
                                 <div class="file-preview" id="featuredImagePreview"></div>
@@ -716,7 +910,8 @@ class BlogDashboard extends HTMLElement {
                                 <label class="label">Author Image</label>
                                 <div class="file-upload" id="authorImageUpload">
                                     <input type="file" id="authorImageInput" accept="image/*">
-                                    <div>👤 Click to upload author image</div>
+                                    <div><span class="material-icons" style="font-size: 32px; color: #9ca3af;">account_circle</span></div>
+                                    <div style="margin-top: 8px;">Click to upload author image</div>
                                     <small style="color: #6b7280;">Recommended: Square image</small>
                                 </div>
                                 <div class="file-preview" id="authorImagePreview"></div>
@@ -740,13 +935,134 @@ class BlogDashboard extends HTMLElement {
                         
                         <div class="form-group full">
                             <label class="label">Content (Rich Editor) *</label>
-                            <div class="editor-container" id="editorjs"></div>
+                            <div class="rich-editor">
+                                <div class="editor-toolbar">
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" data-command="bold" title="Bold">
+                                            <span class="material-icons">format_bold</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="italic" title="Italic">
+                                            <span class="material-icons">format_italic</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="underline" title="Underline">
+                                            <span class="material-icons">format_underlined</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="strikeThrough" title="Strikethrough">
+                                            <span class="material-icons">format_strikethrough</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" data-command="h1" title="Heading 1">
+                                            <span class="material-icons">title</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="h2" title="Heading 2">
+                                            <span class="material-icons">format_size</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="h3" title="Heading 3">
+                                            <span class="material-icons">text_fields</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" data-command="insertUnorderedList" title="Bullet List">
+                                            <span class="material-icons">format_list_bulleted</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="insertOrderedList" title="Numbered List">
+                                            <span class="material-icons">format_list_numbered</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" data-command="blockquote" title="Quote">
+                                            <span class="material-icons">format_quote</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" data-command="code" title="Code">
+                                            <span class="material-icons">code</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" id="insertImageBtn" title="Insert Image">
+                                            <span class="material-icons">image</span>
+                                        </button>
+                                        <button type="button" class="toolbar-btn" id="insertLinkBtn" title="Insert Link">
+                                            <span class="material-icons">link</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="toolbar-group">
+                                        <button type="button" class="toolbar-btn" data-command="insertHorizontalRule" title="Horizontal Line">
+                                            <span class="material-icons">horizontal_rule</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="editor-content" 
+                                     id="richEditor" 
+                                     contenteditable="true"
+                                     data-placeholder="Start writing your blog post here...">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <div class="modal-footer">
-                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelBtn">Cancel</button>
-                        <button class="btn btn-primary" id="saveBtn">Save Post</button>
+                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelBtn">
+                            <span class="material-icons">close</span>
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" id="saveBtn">
+                            <span class="material-icons">save</span>
+                            Save Post
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Upload Modal -->
+            <div id="imageModal" class="image-modal">
+                <div class="image-modal-content">
+                    <h3 class="image-modal-title">Insert Image</h3>
+                    <div class="image-upload-area" id="imageUploadArea">
+                        <input type="file" id="editorImageInput" accept="image/*" style="display: none;">
+                        <div class="upload-icon">
+                            <span class="material-icons" style="font-size: 48px;">cloud_upload</span>
+                        </div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Click to upload or drag and drop</div>
+                        <div style="font-size: 13px; color: #6b7280;">PNG, JPG, GIF up to 10MB</div>
+                    </div>
+                    <div class="image-preview-area" id="editorImagePreview"></div>
+                    <div class="button-group">
+                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelImageBtn">
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" id="insertImageConfirmBtn" style="display: none;">
+                            Insert Image
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Link Modal -->
+            <div id="linkModal" class="link-modal">
+                <div class="link-modal-content">
+                    <h3 class="image-modal-title">Insert Link</h3>
+                    <div class="form-group">
+                        <label class="label">URL</label>
+                        <input type="url" class="input" id="linkUrl" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Link Text (optional)</label>
+                        <input type="text" class="input" id="linkText" placeholder="Click here">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelLinkBtn">
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" id="insertLinkConfirmBtn">
+                            Insert Link
+                        </button>
                     </div>
                 </div>
             </div>
@@ -768,73 +1084,9 @@ class BlogDashboard extends HTMLElement {
         this._shadow.appendChild(this._root);
     }
 
-    // Load external script helper
-    async _loadScript(url) {
-        return new Promise((resolve, reject) => {
-            // Check if script already exists
-            if (document.querySelector(`script[src="${url}"]`)) {
-                console.log(`📝 Dashboard: Script already loaded: ${url}`);
-                resolve();
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = url;
-            script.async = true;
-            script.onload = () => {
-                console.log(`📝 Dashboard: ✅ Loaded: ${url}`);
-                resolve();
-            };
-            script.onerror = () => {
-                console.error(`📝 Dashboard: ❌ Failed to load: ${url}`);
-                reject(new Error(`Failed to load script: ${url}`));
-            };
-            document.head.appendChild(script);
-        });
-    }
-
-    async _loadEditorJS() {
-        console.log('📝 Dashboard: Loading Editor.js core and plugins...');
-        
-        try {
-            // Load Editor.js core
-            if (!window.EditorJS) {
-                await this._loadScript('https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest');
-            }
-            
-            // Load all plugins sequentially
-            const plugins = [
-                { name: 'Header', url: 'https://cdn.jsdelivr.net/npm/@editorjs/header@latest' },
-                { name: 'List', url: 'https://cdn.jsdelivr.net/npm/@editorjs/list@latest' },
-                { name: 'Quote', url: 'https://cdn.jsdelivr.net/npm/@editorjs/quote@latest' },
-                { name: 'Code', url: 'https://cdn.jsdelivr.net/npm/@editorjs/code@latest' },
-                { name: 'InlineCode', url: 'https://cdn.jsdelivr.net/npm/@editorjs/inline-code@latest' },
-                { name: 'Table', url: 'https://cdn.jsdelivr.net/npm/@editorjs/table@latest' },
-                { name: 'Delimiter', url: 'https://cdn.jsdelivr.net/npm/@editorjs/delimiter@latest' },
-                { name: 'Marker', url: 'https://cdn.jsdelivr.net/npm/@editorjs/marker@latest' },
-                { name: 'Checklist', url: 'https://cdn.jsdelivr.net/npm/@editorjs/checklist@latest' },
-                { name: 'Warning', url: 'https://cdn.jsdelivr.net/npm/@editorjs/warning@latest' }
-            ];
-
-            for (const plugin of plugins) {
-                if (!window[plugin.name]) {
-                    await this._loadScript(plugin.url);
-                }
-            }
-            
-            this._editorPluginsLoaded = true;
-            console.log('📝 Dashboard: ✅ All Editor.js plugins loaded successfully');
-            
-        } catch (error) {
-            console.error('📝 Dashboard: ❌ Error loading Editor.js:', error);
-            throw error;
-        }
-    }
-
     _setupEventListeners() {
         // Header button
         this._shadow.getElementById('createBtn').addEventListener('click', () => {
-            console.log('📝 Dashboard: Create button clicked');
             this._showModal();
         });
         
@@ -877,6 +1129,277 @@ class BlogDashboard extends HTMLElement {
         this._shadow.getElementById('nextBtn').addEventListener('click', () => {
             this._currentPage++;
             this._loadPosts();
+        });
+
+        // Rich Editor Toolbar
+        this._setupRichEditorToolbar();
+
+        // Image Modal
+        this._setupImageModal();
+
+        // Link Modal
+        this._setupLinkModal();
+    }
+
+    _setupRichEditorToolbar() {
+        const toolbar = this._shadow.querySelector('.editor-toolbar');
+        const editor = this._shadow.getElementById('richEditor');
+
+        // Handle toolbar button clicks
+        toolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
+            if (btn.id === 'insertImageBtn' || btn.id === 'insertLinkBtn') {
+                return; // These are handled separately
+            }
+
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const command = btn.getAttribute('data-command');
+                this._executeEditorCommand(command);
+            });
+        });
+
+        // Update toolbar state on selection change
+        editor.addEventListener('mouseup', () => this._updateToolbarState());
+        editor.addEventListener('keyup', () => this._updateToolbarState());
+    }
+
+    _executeEditorCommand(command) {
+        const editor = this._shadow.getElementById('richEditor');
+        editor.focus();
+
+        switch(command) {
+            case 'h1':
+                document.execCommand('formatBlock', false, '<h1>');
+                break;
+            case 'h2':
+                document.execCommand('formatBlock', false, '<h2>');
+                break;
+            case 'h3':
+                document.execCommand('formatBlock', false, '<h3>');
+                break;
+            case 'blockquote':
+                document.execCommand('formatBlock', false, '<blockquote>');
+                break;
+            case 'code':
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const code = document.createElement('code');
+                    code.textContent = range.toString();
+                    range.deleteContents();
+                    range.insertNode(code);
+                }
+                break;
+            default:
+                document.execCommand(command, false, null);
+        }
+    }
+
+    _updateToolbarState() {
+        const toolbar = this._shadow.querySelector('.editor-toolbar');
+        
+        toolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
+            const command = btn.getAttribute('data-command');
+            
+            let isActive = false;
+            try {
+                if (command === 'h1' || command === 'h2' || command === 'h3') {
+                    const tagName = command.toUpperCase();
+                    isActive = document.queryCommandValue('formatBlock') === tagName;
+                } else if (command === 'blockquote') {
+                    isActive = document.queryCommandValue('formatBlock') === 'BLOCKQUOTE';
+                } else {
+                    isActive = document.queryCommandState(command);
+                }
+            } catch (e) {
+                // Some commands may not support queryCommandState
+            }
+            
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    _setupImageModal() {
+        const imageBtn = this._shadow.getElementById('insertImageBtn');
+        const imageModal = this._shadow.getElementById('imageModal');
+        const imageUploadArea = this._shadow.getElementById('imageUploadArea');
+        const imageInput = this._shadow.getElementById('editorImageInput');
+        const cancelBtn = this._shadow.getElementById('cancelImageBtn');
+        const confirmBtn = this._shadow.getElementById('insertImageConfirmBtn');
+        const preview = this._shadow.getElementById('editorImagePreview');
+
+        let selectedImageFile = null;
+
+        imageBtn.addEventListener('click', () => {
+            imageModal.classList.add('active');
+            selectedImageFile = null;
+            preview.classList.remove('active');
+            preview.innerHTML = '';
+            confirmBtn.style.display = 'none';
+        });
+
+        imageUploadArea.addEventListener('click', () => {
+            imageInput.click();
+        });
+
+        // Drag and drop
+        imageUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            imageUploadArea.classList.add('dragover');
+        });
+
+        imageUploadArea.addEventListener('dragleave', () => {
+            imageUploadArea.classList.remove('dragover');
+        });
+
+        imageUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            imageUploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                selectedImageFile = files[0];
+                this._showImagePreview(files[0], preview, confirmBtn);
+            }
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedImageFile = file;
+                this._showImagePreview(file, preview, confirmBtn);
+            }
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            imageModal.classList.remove('active');
+        });
+
+        confirmBtn.addEventListener('click', async () => {
+            if (selectedImageFile) {
+                // Show progress
+                const progressOverlay = this._shadow.getElementById('progressOverlay');
+                progressOverlay.classList.add('active');
+                this._updateUploadProgress({ status: 'uploading', progress: 30, message: 'Uploading image...' });
+
+                // Upload to media manager
+                try {
+                    const imageUrl = await this._uploadImageToMediaManager(selectedImageFile);
+                    
+                    // Insert image into editor
+                    const editor = this._shadow.getElementById('richEditor');
+                    editor.focus();
+                    
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = selectedImageFile.name.replace(/\.[^/.]+$/, '');
+                    img.style.maxWidth = '100%';
+                    
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        range.insertNode(img);
+                        range.collapse(false);
+                    } else {
+                        editor.appendChild(img);
+                    }
+
+                    progressOverlay.classList.remove('active');
+                    imageModal.classList.remove('active');
+                    this._showToast('success', 'Image uploaded successfully!');
+                } catch (error) {
+                    progressOverlay.classList.remove('active');
+                    this._showToast('error', 'Failed to upload image: ' + error.message);
+                }
+            }
+        });
+    }
+
+    _showImagePreview(file, previewElement, confirmBtn) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewElement.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            previewElement.classList.add('active');
+            confirmBtn.style.display = 'inline-flex';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async _uploadImageToMediaManager(file) {
+        return new Promise((resolve, reject) => {
+            // Dispatch event to widget to handle upload
+            const eventDetail = {
+                file: file,
+                callback: (url, error) => {
+                    if (error) {
+                        reject(new Error(error));
+                    } else {
+                        resolve(url);
+                    }
+                }
+            };
+            
+            this.dispatchEvent(new CustomEvent('upload-editor-image', {
+                detail: eventDetail,
+                bubbles: true,
+                composed: true
+            }));
+        });
+    }
+
+    _setupLinkModal() {
+        const linkBtn = this._shadow.getElementById('insertLinkBtn');
+        const linkModal = this._shadow.getElementById('linkModal');
+        const linkUrl = this._shadow.getElementById('linkUrl');
+        const linkText = this._shadow.getElementById('linkText');
+        const cancelBtn = this._shadow.getElementById('cancelLinkBtn');
+        const confirmBtn = this._shadow.getElementById('insertLinkConfirmBtn');
+
+        linkBtn.addEventListener('click', () => {
+            // Get selected text
+            const selection = window.getSelection();
+            const selectedText = selection.toString();
+            
+            linkUrl.value = '';
+            linkText.value = selectedText;
+            linkModal.classList.add('active');
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            linkModal.classList.remove('active');
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            const url = linkUrl.value.trim();
+            const text = linkText.value.trim();
+
+            if (!url) {
+                this._showToast('error', 'Please enter a URL');
+                return;
+            }
+
+            const editor = this._shadow.getElementById('richEditor');
+            editor.focus();
+
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.textContent = text || url;
+                link.target = '_blank';
+                
+                range.deleteContents();
+                range.insertNode(link);
+                range.collapse(false);
+            }
+
+            linkModal.classList.remove('active');
         });
     }
 
@@ -989,7 +1512,6 @@ class BlogDashboard extends HTMLElement {
         this._posts.forEach(post => {
             const row = document.createElement('tr');
             
-            // Convert Wix image URLs
             const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
             
             row.innerHTML = `
@@ -1011,8 +1533,14 @@ class BlogDashboard extends HTMLElement {
                 </td>
                 <td>${this._formatDate(post.publishedDate || post._createdDate)}</td>
                 <td>
-                    <button class="btn btn-warning edit-btn" data-id="${post._id}">Edit</button>
-                    <button class="btn btn-danger delete-btn" data-id="${post._id}">Delete</button>
+                    <button class="btn btn-warning edit-btn" data-id="${post._id}">
+                        <span class="material-icons">edit</span>
+                        Edit
+                    </button>
+                    <button class="btn btn-danger delete-btn" data-id="${post._id}">
+                        <span class="material-icons">delete</span>
+                        Delete
+                    </button>
                 </td>
             `;
             
@@ -1025,7 +1553,6 @@ class BlogDashboard extends HTMLElement {
                 const postId = btn.getAttribute('data-id');
                 const post = this._posts.find(p => p._id === postId);
                 if (post) {
-                    console.log('📝 Dashboard: Edit clicked for:', post.title);
                     this._showModal(post);
                 }
             });
@@ -1036,31 +1563,13 @@ class BlogDashboard extends HTMLElement {
                 const postId = btn.getAttribute('data-id');
                 const post = this._posts.find(p => p._id === postId);
                 if (post) {
-                    console.log('📝 Dashboard: Delete clicked for:', post.title);
                     this._deletePost(postId);
                 }
             });
         });
     }
     
-    async _showModal(post = null) {
-        console.log('📝 Dashboard: _showModal called');
-        console.log('📝 Dashboard: Post:', post ? post.title : 'New Post');
-        
-        // Check if Editor.js is loaded
-        if (!this._editorLoaded || !this._editorPluginsLoaded) {
-            console.log('📝 Dashboard: Editor.js not loaded, loading now...');
-            try {
-                await this._loadEditorJS();
-                this._editorLoaded = true;
-                this._editorPluginsLoaded = true;
-            } catch (error) {
-                console.error('📝 Dashboard: Failed to load Editor.js:', error);
-                this._showToast('error', 'Failed to load editor. Please refresh the page.');
-                return;
-            }
-        }
-        
+    _showModal(post = null) {
         this._selectedPost = post;
         
         // Reset modal
@@ -1072,6 +1581,10 @@ class BlogDashboard extends HTMLElement {
         this._shadow.getElementById('postExcerpt').value = post?.excerpt || '';
         this._shadow.getElementById('postAuthor').value = post?.author || '';
         this._shadow.getElementById('postStatus').value = post?.status || 'draft';
+        
+        // Reset editor
+        const editor = this._shadow.getElementById('richEditor');
+        editor.innerHTML = post?.content ? this._markdownToHtml(post.content) : '';
         
         // Reset images
         this._featuredImageFile = null;
@@ -1097,187 +1610,10 @@ class BlogDashboard extends HTMLElement {
         
         // Show modal
         this._shadow.getElementById('modal').classList.add('active');
-        
-        // Initialize Editor.js after modal is fully visible and rendered
-        setTimeout(async () => {
-            try {
-                await this._initializeEditor(post);
-                console.log('📝 Dashboard: ✅ Editor initialized');
-            } catch (error) {
-                console.error('📝 Dashboard: Failed to initialize editor:', error);
-                this._showToast('error', 'Failed to initialize editor: ' + error.message);
-            }
-        }, 300);
-    }
-    
-    async _initializeEditor(post) {
-        console.log('📝 Dashboard: Initializing editor...');
-        
-        // Destroy existing editor
-        if (this._editor) {
-            try {
-                await this._editor.destroy();
-                console.log('📝 Dashboard: Previous editor destroyed');
-            } catch (error) {
-                console.log('📝 Dashboard: No previous editor to destroy');
-            }
-            this._editor = null;
-        }
-        
-        // Parse editor data
-        let editorData = {
-            time: Date.now(),
-            blocks: []
-        };
-        
-        if (post?.editorData) {
-            try {
-                editorData = typeof post.editorData === 'string' 
-                    ? JSON.parse(post.editorData) 
-                    : post.editorData;
-                console.log('📝 Dashboard: Loaded existing editor data, blocks:', editorData.blocks?.length || 0);
-            } catch (error) {
-                console.error('📝 Dashboard: Failed to parse editor data:', error);
-                editorData = { time: Date.now(), blocks: [] };
-            }
-        }
-        
-        // Get editor container
-        const editorContainer = this._shadow.getElementById('editorjs');
-        if (!editorContainer) {
-            throw new Error('Editor container not found');
-        }
-        
-        // Clear container
-        editorContainer.innerHTML = '';
-        
-        // Wait for EditorJS to be available
-        if (!window.EditorJS) {
-            throw new Error('EditorJS not loaded');
-        }
-        
-        // Create tools configuration
-        const tools = {};
-        
-        if (window.Header) {
-            tools.header = {
-                class: Header,
-                config: {
-                    placeholder: 'Enter a header',
-                    levels: [1, 2, 3, 4, 5, 6],
-                    defaultLevel: 2
-                }
-            };
-        }
-        
-        if (window.List) {
-            tools.list = {
-                class: List,
-                inlineToolbar: true,
-                config: {
-                    defaultStyle: 'unordered'
-                }
-            };
-        }
-        
-        if (window.Quote) {
-            tools.quote = {
-                class: Quote,
-                inlineToolbar: true,
-                config: {
-                    quotePlaceholder: 'Enter a quote',
-                    captionPlaceholder: "Quote's author"
-                }
-            };
-        }
-        
-        if (window.Code) {
-            tools.code = {
-                class: Code,
-                config: {
-                    placeholder: 'Enter your code here...'
-                }
-            };
-        }
-        
-        if (window.InlineCode) {
-            tools.inlineCode = InlineCode;
-        }
-        
-        if (window.Table) {
-            tools.table = {
-                class: Table,
-                inlineToolbar: true,
-                config: {
-                    rows: 2,
-                    cols: 3
-                }
-            };
-        }
-        
-        if (window.Delimiter) {
-            tools.delimiter = Delimiter;
-        }
-        
-        if (window.Marker) {
-            tools.marker = Marker;
-        }
-        
-        if (window.Checklist) {
-            tools.checklist = {
-                class: Checklist,
-                inlineToolbar: true
-            };
-        }
-        
-        if (window.Warning) {
-            tools.warning = {
-                class: Warning,
-                inlineToolbar: true,
-                config: {
-                    titlePlaceholder: 'Title',
-                    messagePlaceholder: 'Message'
-                }
-            };
-        }
-        
-        // Create new editor instance
-        try {
-            this._editor = new EditorJS({
-                holder: editorContainer,
-                data: editorData,
-                tools: tools,
-                placeholder: 'Start writing your blog post here! Click the + button to add different content blocks.',
-                autofocus: false,
-                minHeight: 300,
-                onReady: () => {
-                    console.log('📝 Dashboard: ✅ Editor ready');
-                    // Force a repaint to ensure proper rendering
-                    editorContainer.style.display = 'block';
-                },
-                onChange: (api, event) => {
-                    console.log('📝 Dashboard: Content changed');
-                }
-            });
-            
-            console.log('📝 Dashboard: Editor instance created');
-            
-        } catch (error) {
-            console.error('📝 Dashboard: Failed to create editor:', error);
-            throw error;
-        }
     }
     
     _hideModal() {
         this._shadow.getElementById('modal').classList.remove('active');
-        if (this._editor) {
-            try {
-                this._editor.destroy();
-            } catch (error) {
-                console.log('📝 Dashboard: Error destroying editor:', error);
-            }
-            this._editor = null;
-        }
     }
     
     async _savePost() {
@@ -1289,118 +1625,191 @@ class BlogDashboard extends HTMLElement {
             return;
         }
         
-        if (!this._editor) {
-            this._showToast('error', 'Editor not initialized');
+        const editor = this._shadow.getElementById('richEditor');
+        const htmlContent = editor.innerHTML;
+        
+        if (!htmlContent || htmlContent === '') {
+            this._showToast('error', 'Please add some content to your post');
             return;
         }
         
-        try {
-            const editorData = await this._editor.save();
-            
-            // Convert Editor.js data to markdown
-            const markdown = this._convertToMarkdown(editorData);
-            
-            const postData = {
-                title,
-                slug,
-                category: this._shadow.getElementById('postCategory').value.trim(),
-                tags: this._shadow.getElementById('postTags').value.trim(),
-                excerpt: this._shadow.getElementById('postExcerpt').value.trim(),
-                author: this._shadow.getElementById('postAuthor').value.trim() || 'Anonymous',
-                status: this._shadow.getElementById('postStatus').value,
-                editorData: JSON.stringify(editorData),
-                content: markdown, // Add markdown content
-                featuredImageFile: this._featuredImageFile,
-                authorImageFile: this._authorImageFile,
-                existingFeaturedImage: this._selectedPost?.featuredImage,
-                existingAuthorImage: this._selectedPost?.authorImage,
-                isEdit: !!this._selectedPost,
-                postId: this._selectedPost?._id
-            };
-            
-            this._dispatchEvent('save-post', postData);
-            
-        } catch (error) {
-            console.error('📝 Dashboard: Save error:', error);
-            this._showToast('error', 'Failed to save post: ' + error.message);
-        }
+        // Convert HTML to Markdown
+        const markdown = this._htmlToMarkdown(htmlContent);
+        
+        const postData = {
+            title,
+            slug,
+            category: this._shadow.getElementById('postCategory').value.trim(),
+            tags: this._shadow.getElementById('postTags').value.trim(),
+            excerpt: this._shadow.getElementById('postExcerpt').value.trim(),
+            author: this._shadow.getElementById('postAuthor').value.trim() || 'Anonymous',
+            status: this._shadow.getElementById('postStatus').value,
+            content: markdown,
+            featuredImageFile: this._featuredImageFile,
+            authorImageFile: this._authorImageFile,
+            existingFeaturedImage: this._selectedPost?.featuredImage,
+            existingAuthorImage: this._selectedPost?.authorImage,
+            isEdit: !!this._selectedPost,
+            postId: this._selectedPost?._id
+        };
+        
+        this._dispatchEvent('save-post', postData);
     }
 
-    // Convert Editor.js output to Markdown
-    _convertToMarkdown(outputData) {
+    _htmlToMarkdown(html) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
         let markdown = '';
         
-        if (!outputData || !outputData.blocks) {
-            return markdown;
-        }
-        
-        outputData.blocks.forEach(block => {
-            switch(block.type) {
-                case 'header':
-                    markdown += `${'#'.repeat(block.data.level)} ${block.data.text}\n\n`;
-                    break;
-                    
-                case 'paragraph':
-                    markdown += `${block.data.text}\n\n`;
-                    break;
-                    
-                case 'list':
-                    block.data.items.forEach((item, index) => {
-                        const prefix = block.data.style === 'ordered' ? `${index + 1}.` : '-';
-                        markdown += `${prefix} ${item}\n`;
-                    });
-                    markdown += '\n';
-                    break;
-                    
-                case 'checklist':
-                    block.data.items.forEach(item => {
-                        const checked = item.checked ? '[x]' : '[ ]';
-                        markdown += `- ${checked} ${item.text}\n`;
-                    });
-                    markdown += '\n';
-                    break;
-                    
-                case 'quote':
-                    markdown += `> ${block.data.text}\n`;
-                    if (block.data.caption) {
-                        markdown += `> \n> — ${block.data.caption}\n`;
-                    }
-                    markdown += '\n';
-                    break;
-                    
-                case 'code':
-                    markdown += '```\n';
-                    markdown += `${block.data.code}\n`;
-                    markdown += '```\n\n';
-                    break;
-                    
-                case 'table':
-                    if (block.data.content && block.data.content.length > 0) {
-                        markdown += '| ' + block.data.content[0].join(' | ') + ' |\n';
-                        markdown += '| ' + block.data.content[0].map(() => '---').join(' | ') + ' |\n';
-                        for (let i = 1; i < block.data.content.length; i++) {
-                            markdown += '| ' + block.data.content[i].join(' | ') + ' |\n';
-                        }
-                        markdown += '\n';
-                    }
-                    break;
-                    
-                case 'warning':
-                    markdown += `> ⚠️ **${block.data.title || 'Warning'}**\n`;
-                    markdown += `> ${block.data.message}\n\n`;
-                    break;
-                    
-                case 'delimiter':
-                    markdown += '---\n\n';
-                    break;
-                    
-                default:
-                    // Skip unknown block types
-                    console.log(`📝 Dashboard: Skipping unknown block type: ${block.type}`);
+        const processNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent;
             }
-        });
+            
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+            
+            const tagName = node.tagName.toLowerCase();
+            let text = '';
+            
+            // Process children first
+            for (let child of node.childNodes) {
+                text += processNode(child);
+            }
+            
+            switch(tagName) {
+                case 'h1':
+                    return `\n# ${text}\n\n`;
+                case 'h2':
+                    return `\n## ${text}\n\n`;
+                case 'h3':
+                    return `\n### ${text}\n\n`;
+                case 'h4':
+                    return `\n#### ${text}\n\n`;
+                case 'h5':
+                    return `\n##### ${text}\n\n`;
+                case 'h6':
+                    return `\n###### ${text}\n\n`;
+                case 'p':
+                    return `${text}\n\n`;
+                case 'br':
+                    return '\n';
+                case 'strong':
+                case 'b':
+                    return `**${text}**`;
+                case 'em':
+                case 'i':
+                    return `*${text}*`;
+                case 'u':
+                    return `<u>${text}</u>`;
+                case 'strike':
+                case 'del':
+                    return `~~${text}~~`;
+                case 'code':
+                    return `\`${text}\``;
+                case 'pre':
+                    return `\n\`\`\`\n${text}\n\`\`\`\n\n`;
+                case 'blockquote':
+                    return `\n> ${text}\n\n`;
+                case 'ul':
+                    return `\n${text}\n`;
+                case 'ol':
+                    return `\n${text}\n`;
+                case 'li':
+                    const parent = node.parentElement;
+                    if (parent && parent.tagName.toLowerCase() === 'ol') {
+                        const index = Array.from(parent.children).indexOf(node) + 1;
+                        return `${index}. ${text}\n`;
+                    } else {
+                        return `- ${text}\n`;
+                    }
+                case 'a':
+                    const href = node.getAttribute('href') || '';
+                    return `[${text}](${href})`;
+                case 'img':
+                    const src = node.getAttribute('src') || '';
+                    const alt = node.getAttribute('alt') || '';
+                    return `\n![${alt}](${src})\n\n`;
+                case 'hr':
+                    return '\n---\n\n';
+                case 'div':
+                    return text + '\n\n';
+                default:
+                    return text;
+            }
+        };
+        
+        markdown = processNode(tempDiv);
+        
+        // Clean up extra whitespace
+        markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
         
         return markdown;
+    }
+
+    _markdownToHtml(markdown) {
+        let html = markdown;
+        
+        // Headers
+        html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+        html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+        html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+        html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+        
+        // Bold
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Italic
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        
+        // Strikethrough
+        html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+        
+        // Inline code
+        html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+        
+        // Code blocks
+        html = html.replace(/```\n([\s\S]+?)\n```/g, '<pre><code>$1</code></pre>');
+        
+        // Images
+        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;">');
+        
+        // Links
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+        
+        // Blockquotes
+        html = html.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+        
+        // Horizontal rule
+        html = html.replace(/^---$/gm, '<hr>');
+        
+        // Lists
+        html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+        html = html.replace(/^-\s+(.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+        
+        // Paragraphs
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+        
+        // Clean up
+        html = html.replace(/<p><\/p>/g, '');
+        html = html.replace(/<p>(<h[1-6]>)/g, '$1');
+        html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<ul>)/g, '$1');
+        html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<blockquote>)/g, '$1');
+        html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<pre>)/g, '$1');
+        html = html.replace(/(<\/pre>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<img[^>]+>)<\/p>/g, '$1');
+        
+        return html;
     }
     
     _deletePost(postId) {
