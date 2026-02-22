@@ -8,6 +8,10 @@ class BlogEditorDashboard extends HTMLElement {
         this._editingItemId = null;
         this._quillLoaded = false;
         
+        // Lifecycle state for React compatibility 
+        this._isInitialized = false;
+        this._attributeQueue = [];
+        
         // Form data
         this._formData = {
             title: '',
@@ -31,7 +35,7 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
-        this._createStructure();
+        // We DO NOT call _createStructure() here to prevent the React constructor error.
     }
     
     static get observedAttributes() {
@@ -41,49 +45,65 @@ class BlogEditorDashboard extends HTMLElement {
     attributeChangedCallback(name, oldValue, newValue) {
         if (!newValue || newValue === oldValue) return;
         
+        // If DOM isn't ready yet, queue the attributes
+        if (!this._isInitialized) {
+            this._attributeQueue.push({ name, newValue });
+            return;
+        }
+        
+        this._processAttribute(name, newValue);
+    }
+    
+    _processAttribute(name, newValue) {
         if (name === 'notification') {
             try {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
-            } catch (e) {
-                // Silently handle
-            }
+            } catch (e) { }
         }
         
         if (name === 'image-upload-result') {
             try {
                 const result = JSON.parse(newValue);
                 this._handleImageUploadResult(result);
-            } catch (e) {
-                // Silently handle
-            }
+            } catch (e) { }
         }
         
         if (name === 'blog-posts-data') {
             try {
                 const data = JSON.parse(newValue);
                 this._renderBlogPosts(data);
-            } catch (e) {
-                // Silently handle
-            }
+            } catch (e) { }
         }
         
         if (name === 'edit-data') {
             try {
                 const data = JSON.parse(newValue);
                 this._loadEditData(data);
-            } catch (e) {
-                // Silently handle
-            }
+            } catch (e) { }
         }
     }
     
     connectedCallback() {
-        this._loadQuill(() => {
-            this._setupEventListeners();
-            this._initializeQuill();
-            this._dispatchEvent('load-blog-posts', {});
-        });
+        // Only run initialization once
+        if (!this._isInitialized) {
+            this._createStructure();
+            
+            this._loadQuill(() => {
+                this._setupEventListeners();
+                this._initializeQuill();
+                
+                this._isInitialized = true;
+                
+                // Process any attributes that Wix passed before the DOM was ready
+                this._attributeQueue.forEach(attr => {
+                    this._processAttribute(attr.name, attr.newValue);
+                });
+                this._attributeQueue = [];
+                
+                this._dispatchEvent('load-blog-posts', {});
+            });
+        }
     }
     
     _loadQuill(callback) {
@@ -93,13 +113,11 @@ class BlogEditorDashboard extends HTMLElement {
             return;
         }
         
-        // Load Quill CSS to document head
         const quillCss = document.createElement('link');
         quillCss.rel = 'stylesheet';
         quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
         document.head.appendChild(quillCss);
         
-        // Load Quill JS
         const quillScript = document.createElement('script');
         quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
         quillScript.onload = () => {
@@ -113,7 +131,6 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _createStructure() {
-        // We use this.innerHTML directly instead of shadow DOM so Quill's selection works
         this.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -249,7 +266,6 @@ class BlogEditorDashboard extends HTMLElement {
                     background: white;
                 }
                 
-                /* Quill Toolbar Styling */
                 .ql-toolbar {
                     background: #f9fafb !important;
                     border: none !important;
@@ -275,7 +291,6 @@ class BlogEditorDashboard extends HTMLElement {
                 .ql-editor h4 { font-size: 1.5em; margin: 16px 0 10px; }
                 .ql-editor h5 { font-size: 1.25em; margin: 12px 0 8px; }
                 .ql-editor h6 { font-size: 1em; margin: 12px 0 8px; font-weight: 600; }
-                
                 .ql-editor p { margin-bottom: 16px; }
                 
                 .ql-editor ul, .ql-editor ol { 
@@ -322,30 +337,18 @@ class BlogEditorDashboard extends HTMLElement {
                     margin: 16px 0;
                 }
                 
-                /* Toolbar button styling */
                 .ql-toolbar button:hover,
                 .ql-toolbar button:focus,
                 .ql-toolbar button.ql-active {
                     color: #6366f1 !important;
                 }
                 
-                .ql-toolbar .ql-stroke {
-                    stroke: #374151;
-                }
-                
+                .ql-toolbar .ql-stroke { stroke: #374151; }
                 .ql-toolbar button:hover .ql-stroke,
-                .ql-toolbar button.ql-active .ql-stroke {
-                    stroke: #6366f1;
-                }
-                
-                .ql-toolbar .ql-fill {
-                    fill: #374151;
-                }
-                
+                .ql-toolbar button.ql-active .ql-stroke { stroke: #6366f1; }
+                .ql-toolbar .ql-fill { fill: #374151; }
                 .ql-toolbar button:hover .ql-fill,
-                .ql-toolbar button.ql-active .ql-fill {
-                    fill: #6366f1;
-                }
+                .ql-toolbar button.ql-active .ql-fill { fill: #6366f1; }
                 
                 .blog-editor-sidebar {
                     display: flex;
@@ -401,11 +404,7 @@ class BlogEditorDashboard extends HTMLElement {
                     gap: 8px;
                 }
                 
-                .blog-editor-checkbox {
-                    width: 18px;
-                    height: 18px;
-                    cursor: pointer;
-                }
+                .blog-editor-checkbox { width: 18px; height: 18px; cursor: pointer; }
                 
                 .blog-editor-image-upload-area {
                     border: 2px dashed #e5e7eb;
@@ -429,10 +428,7 @@ class BlogEditorDashboard extends HTMLElement {
                     margin-top: 12px;
                 }
                 
-                .blog-editor-tag-input-wrapper {
-                    display: flex;
-                    gap: 8px;
-                }
+                .blog-editor-tag-input-wrapper { display: flex; gap: 8px; }
                 
                 .blog-editor-tags-display {
                     display: flex;
@@ -452,10 +448,7 @@ class BlogEditorDashboard extends HTMLElement {
                     gap: 6px;
                 }
                 
-                .blog-editor-tag-remove {
-                    cursor: pointer;
-                    font-weight: 700;
-                }
+                .blog-editor-tag-remove { cursor: pointer; font-weight: 700; }
                 
                 .blog-editor-posts-grid {
                     display: grid;
@@ -528,10 +521,7 @@ class BlogEditorDashboard extends HTMLElement {
                     margin-bottom: 16px;
                 }
                 
-                .blog-editor-post-card-actions {
-                    display: flex;
-                    gap: 8px;
-                }
+                .blog-editor-post-card-actions { display: flex; gap: 8px; }
                 
                 .blog-editor-toast {
                     position: fixed;
@@ -746,7 +736,6 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _setupEventListeners() {
-        // View toggle
         const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
         viewBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -763,13 +752,11 @@ class BlogEditorDashboard extends HTMLElement {
             });
         });
         
-        // Title to slug
         this.querySelector('#titleInput').addEventListener('input', (e) => {
             const slug = this._generateSlug(e.target.value);
             this.querySelector('#slugInput').value = slug;
         });
         
-        // Tags
         this.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
         this.querySelector('#tagInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -778,20 +765,16 @@ class BlogEditorDashboard extends HTMLElement {
             }
         });
         
-        // Image uploads
         this._setupImageUpload('featuredImage');
         this._setupImageUpload('authorImage');
         this._setupImageUpload('seoOgImage');
         
-        // Save & Cancel
         this.querySelector('#savePost').addEventListener('click', () => this._savePost());
         this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
     }
     
     _initializeQuill() {
-        if (!window.Quill) {
-            return;
-        }
+        if (!window.Quill) return;
         
         const editorElement = this.querySelector('#quillEditor');
         
@@ -815,10 +798,7 @@ class BlogEditorDashboard extends HTMLElement {
             });
             
             this._editorReady = true;
-            
-        } catch (error) {
-            // Silently handle
-        }
+        } catch (error) { }
     }
     
     _convertQuillToMarkdown(delta) {
@@ -987,7 +967,6 @@ class BlogEditorDashboard extends HTMLElement {
             });
             
             await Promise.all(promises);
-            
             this._dispatchEvent('save-blog-post', formData);
             
         } catch (error) {
@@ -1133,9 +1112,7 @@ class BlogEditorDashboard extends HTMLElement {
         this.querySelector('#cancelEdit').style.display = 'inline-block';
     }
     
-    _handleImageUploadResult(result) {
-        // Handled silently
-    }
+    _handleImageUploadResult(result) { }
     
     _dispatchEvent(name, detail) {
         this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
