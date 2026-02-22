@@ -7,6 +7,7 @@ class BlogEditorDashboard extends HTMLElement {
         this._quill = null;
         this._editorReady = false;
         this._editingItemId = null;
+        this._quillLoaded = false;
         
         // Form data
         this._formData = {
@@ -32,10 +33,7 @@ class BlogEditorDashboard extends HTMLElement {
         };
         
         this._createStructure();
-        this._loadQuill(() => {
-            this._setupEventListeners();
-        });
-        console.log('📝 Blog Editor: Complete');
+        console.log('📝 Blog Editor: Structure created');
     }
     
     static get observedAttributes() {
@@ -84,11 +82,30 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
-        this._dispatchEvent('load-blog-posts', {});
+        
+        // Load Quill only after element is connected
+        this._loadQuill(() => {
+            console.log('📝 Blog Editor: Quill loaded, setting up...');
+            this._setupEventListeners();
+            this._initializeQuill();
+            this._dispatchEvent('load-blog-posts', {});
+        });
+    }
+    
+    disconnectedCallback() {
+        console.log('📝 Blog Editor: Disconnected from DOM');
     }
     
     _loadQuill(callback) {
         console.log('📝 Blog Editor: Loading Quill.js...');
+        
+        // Check if Quill is already loaded
+        if (window.Quill) {
+            console.log('📝 Blog Editor: Quill already loaded');
+            this._quillLoaded = true;
+            callback();
+            return;
+        }
         
         // Load CSS
         const quillCss = document.createElement('link');
@@ -100,396 +117,420 @@ class BlogEditorDashboard extends HTMLElement {
         const quillScript = document.createElement('script');
         quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
         quillScript.onload = () => {
-            console.log('📝 Blog Editor: Quill loaded');
+            console.log('📝 Blog Editor: Quill JS loaded successfully');
+            this._quillLoaded = true;
             callback();
         };
-        quillScript.onerror = () => {
-            console.error('📝 Blog Editor: Failed to load Quill');
+        quillScript.onerror = (error) => {
+            console.error('📝 Blog Editor: Failed to load Quill', error);
+            this._showToast('error', 'Failed to load editor');
         };
         document.head.appendChild(quillScript);
     }
     
     _createStructure() {
-        // Add styles to document head
-        const style = document.createElement('style');
-        style.textContent = `
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-            
-            blog-editor-dashboard {
-                display: block;
-                width: 100%;
-                font-family: 'Inter', sans-serif;
-                font-size: 14px;
-                background: #f8f9fa;
-            }
-            
-            blog-editor-dashboard * { box-sizing: border-box; }
-            
-            .blog-editor-container { width: 100%; min-height: 100vh; }
-            
-            .blog-editor-header {
-                background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-                color: white;
-                padding: 24px 32px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            
-            .blog-editor-header-content {
-                max-width: 1400px;
-                margin: 0 auto;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            
-            .blog-editor-title {
-                font-size: 28px;
-                font-weight: 700;
-            }
-            
-            .blog-editor-subtitle {
-                font-size: 14px;
-                opacity: 0.9;
-                margin-top: 4px;
-            }
-            
-            .blog-editor-header-actions {
-                display: flex;
-                gap: 12px;
-            }
-            
-            .blog-editor-btn {
-                padding: 10px 20px;
-                border: none;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s;
-                font-family: inherit;
-            }
-            
-            .blog-editor-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-            
-            .blog-editor-btn-primary { background: #8b5cf6; color: white; }
-            .blog-editor-btn-success { background: #10b981; color: white; }
-            .blog-editor-btn-secondary { background: white; color: #6366f1; }
-            .blog-editor-btn-danger { background: #ef4444; color: white; }
-            
-            .blog-editor-main { padding: 32px; }
-            
-            .blog-editor-content { max-width: 1400px; margin: 0 auto; }
-            
-            .blog-editor-view-toggle {
-                display: flex;
-                gap: 12px;
-                margin-bottom: 24px;
-            }
-            
-            .blog-editor-view-btn {
-                padding: 10px 20px;
-                border: 2px solid #e5e7eb;
-                background: white;
-                border-radius: 8px;
-                cursor: pointer;
-                font-weight: 600;
-                transition: all 0.2s;
-            }
-            
-            .blog-editor-view-btn.active {
-                background: #6366f1;
-                color: white;
-                border-color: #6366f1;
-            }
-            
-            .blog-editor-editor-view, .blog-editor-posts-view { display: none; }
-            .blog-editor-editor-view.active, .blog-editor-posts-view.active { display: block; }
-            
-            .blog-editor-layout {
-                display: grid;
-                grid-template-columns: 1fr 400px;
-                gap: 24px;
-            }
-            
-            @media (max-width: 1200px) {
-                .blog-editor-layout {
-                    grid-template-columns: 1fr;
+        // Add styles to document head (only once)
+        if (!document.getElementById('blog-editor-styles')) {
+            const style = document.createElement('style');
+            style.id = 'blog-editor-styles';
+            style.textContent = `
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                
+                blog-editor-dashboard {
+                    display: block;
+                    width: 100%;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 14px;
+                    background: #f8f9fa;
                 }
-            }
-            
-            .blog-editor-main-panel {
-                background: white;
-                border-radius: 16px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                overflow: hidden;
-            }
-            
-            .blog-editor-wrapper {
-                padding: 24px;
-            }
-            
-            #quillEditor {
-                min-height: 500px;
-                background: white;
-            }
-            
-            /* Quill customization */
-            .ql-container {
-                font-size: 16px;
-                font-family: 'Inter', sans-serif;
-            }
-            
-            .ql-editor {
-                min-height: 450px;
-                max-height: 600px;
-                overflow-y: auto;
-            }
-            
-            .ql-editor p {
-                line-height: 1.8;
-            }
-            
-            .blog-editor-sidebar {
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-            }
-            
-            .blog-editor-section {
-                background: white;
-                border-radius: 12px;
-                padding: 20px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            
-            .blog-editor-section-title {
-                font-size: 16px;
-                font-weight: 700;
-                margin-bottom: 16px;
-                color: #1f2937;
-            }
-            
-            .blog-editor-form-group { margin-bottom: 16px; }
-            .blog-editor-form-group:last-child { margin-bottom: 0; }
-            
-            .blog-editor-label {
-                display: block;
-                font-weight: 600;
-                margin-bottom: 6px;
-                color: #374151;
-                font-size: 13px;
-            }
-            
-            .blog-editor-input, .blog-editor-textarea, .blog-editor-select {
-                width: 100%;
-                padding: 10px 12px;
-                border: 2px solid #e5e7eb;
-                border-radius: 8px;
-                font-size: 14px;
-                font-family: inherit;
-                transition: border-color 0.2s;
-            }
-            
-            .blog-editor-input:focus, .blog-editor-textarea:focus, .blog-editor-select:focus {
-                outline: none;
-                border-color: #6366f1;
-            }
-            
-            .blog-editor-textarea { resize: vertical; min-height: 80px; }
-            
-            .blog-editor-checkbox-group {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .blog-editor-checkbox {
-                width: 18px;
-                height: 18px;
-                cursor: pointer;
-            }
-            
-            .blog-editor-image-upload-area {
-                border: 2px dashed #e5e7eb;
-                border-radius: 8px;
-                padding: 20px;
-                text-align: center;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            
-            .blog-editor-image-upload-area:hover {
-                border-color: #6366f1;
-                background: #f9fafb;
-            }
-            
-            .blog-editor-image-preview {
-                width: 100%;
-                max-height: 200px;
-                object-fit: cover;
-                border-radius: 8px;
-                margin-top: 12px;
-            }
-            
-            .blog-editor-tag-input-wrapper {
-                display: flex;
-                gap: 8px;
-            }
-            
-            .blog-editor-tags-display {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 6px;
-                margin-top: 8px;
-            }
-            
-            .blog-editor-tag-chip {
-                background: #ede9fe;
-                color: #6366f1;
-                padding: 4px 12px;
-                border-radius: 16px;
-                font-size: 12px;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
-            
-            .blog-editor-tag-remove {
-                cursor: pointer;
-                font-weight: 700;
-            }
-            
-            .blog-editor-posts-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-                gap: 24px;
-            }
-            
-            .blog-editor-post-card {
-                background: white;
-                border-radius: 12px;
-                overflow: hidden;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                transition: all 0.3s;
-            }
-            
-            .blog-editor-post-card:hover {
-                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-                transform: translateY(-4px);
-            }
-            
-            .blog-editor-post-card-image {
-                width: 100%;
-                height: 180px;
-                object-fit: cover;
-                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            }
-            
-            .blog-editor-post-card-body { padding: 20px; }
-            
-            .blog-editor-post-status {
-                display: inline-block;
-                padding: 4px 12px;
-                border-radius: 12px;
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                margin-bottom: 12px;
-            }
-            
-            .blog-editor-status-published { background: #d1fae5; color: #065f46; }
-            .blog-editor-status-draft { background: #fee2e2; color: #991b1b; }
-            
-            .blog-editor-post-card-title {
-                font-size: 18px;
-                font-weight: 700;
-                margin-bottom: 8px;
-                line-height: 1.4;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }
-            
-            .blog-editor-post-card-excerpt {
-                font-size: 14px;
-                color: #6b7280;
-                margin-bottom: 16px;
-                display: -webkit-box;
-                -webkit-line-clamp: 3;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }
-            
-            .blog-editor-post-card-meta {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 12px;
-                color: #9ca3af;
-                margin-bottom: 16px;
-            }
-            
-            .blog-editor-post-card-actions {
-                display: flex;
-                gap: 8px;
-            }
-            
-            .blog-editor-toast {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 16px 20px;
-                border-radius: 12px;
-                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-                display: none;
-                z-index: 2000;
-                min-width: 320px;
-                animation: slideIn 0.3s;
-            }
-            
-            .blog-editor-toast.show { display: block; }
-            
-            .blog-editor-toast-success {
-                background: #f0fdf4;
-                border-left: 4px solid #10b981;
-                color: #166534;
-            }
-            
-            .blog-editor-toast-error {
-                background: #fef2f2;
-                border-left: 4px solid #ef4444;
-                color: #991b1b;
-            }
-            
-            @keyframes slideIn {
-                from { transform: translateX(400px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            
-            .blog-editor-loading {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 60px 20px;
-            }
-            
-            .blog-editor-loading.hide { display: none; }
-            
-            .blog-editor-spinner {
-                width: 40px;
-                height: 40px;
-                border: 4px solid #e5e7eb;
-                border-top-color: #6366f1;
-                border-radius: 50%;
-                animation: spin 0.8s linear infinite;
-            }
-            
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-        `;
-        document.head.appendChild(style);
+                
+                blog-editor-dashboard * { box-sizing: border-box; }
+                
+                .blog-editor-container { 
+                    width: 100%; 
+                    min-height: 100vh;
+                    display: block !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                }
+                
+                .blog-editor-header {
+                    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                    color: white;
+                    padding: 24px 32px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                
+                .blog-editor-header-content {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .blog-editor-title {
+                    font-size: 28px;
+                    font-weight: 700;
+                }
+                
+                .blog-editor-subtitle {
+                    font-size: 14px;
+                    opacity: 0.9;
+                    margin-top: 4px;
+                }
+                
+                .blog-editor-header-actions {
+                    display: flex;
+                    gap: 12px;
+                }
+                
+                .blog-editor-btn {
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-family: inherit;
+                }
+                
+                .blog-editor-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+                
+                .blog-editor-btn-primary { background: #8b5cf6; color: white; }
+                .blog-editor-btn-success { background: #10b981; color: white; }
+                .blog-editor-btn-secondary { background: white; color: #6366f1; }
+                .blog-editor-btn-danger { background: #ef4444; color: white; }
+                
+                .blog-editor-main { padding: 32px; }
+                
+                .blog-editor-content { max-width: 1400px; margin: 0 auto; }
+                
+                .blog-editor-view-toggle {
+                    display: flex;
+                    gap: 12px;
+                    margin-bottom: 24px;
+                }
+                
+                .blog-editor-view-btn {
+                    padding: 10px 20px;
+                    border: 2px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: all 0.2s;
+                }
+                
+                .blog-editor-view-btn.active {
+                    background: #6366f1;
+                    color: white;
+                    border-color: #6366f1;
+                }
+                
+                .blog-editor-editor-view, 
+                .blog-editor-posts-view { 
+                    display: none;
+                }
+                
+                .blog-editor-editor-view.active, 
+                .blog-editor-posts-view.active { 
+                    display: block !important;
+                }
+                
+                .blog-editor-layout {
+                    display: grid;
+                    grid-template-columns: 1fr 400px;
+                    gap: 24px;
+                }
+                
+                @media (max-width: 1200px) {
+                    .blog-editor-layout {
+                        grid-template-columns: 1fr;
+                    }
+                }
+                
+                .blog-editor-main-panel {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }
+                
+                .blog-editor-wrapper {
+                    padding: 24px;
+                }
+                
+                #quillEditor {
+                    min-height: 500px;
+                    background: white;
+                    display: block !important;
+                }
+                
+                /* Quill customization */
+                .ql-container {
+                    font-size: 16px;
+                    font-family: 'Inter', sans-serif;
+                }
+                
+                .ql-editor {
+                    min-height: 450px;
+                    max-height: 600px;
+                    overflow-y: auto;
+                }
+                
+                .ql-editor p {
+                    line-height: 1.8;
+                }
+                
+                .ql-toolbar {
+                    border-top-left-radius: 8px;
+                    border-top-right-radius: 8px;
+                }
+                
+                .blog-editor-sidebar {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                }
+                
+                .blog-editor-section {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                
+                .blog-editor-section-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    margin-bottom: 16px;
+                    color: #1f2937;
+                }
+                
+                .blog-editor-form-group { margin-bottom: 16px; }
+                .blog-editor-form-group:last-child { margin-bottom: 0; }
+                
+                .blog-editor-label {
+                    display: block;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                    color: #374151;
+                    font-size: 13px;
+                }
+                
+                .blog-editor-input, .blog-editor-textarea, .blog-editor-select {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    transition: border-color 0.2s;
+                }
+                
+                .blog-editor-input:focus, .blog-editor-textarea:focus, .blog-editor-select:focus {
+                    outline: none;
+                    border-color: #6366f1;
+                }
+                
+                .blog-editor-textarea { resize: vertical; min-height: 80px; }
+                
+                .blog-editor-checkbox-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .blog-editor-checkbox {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+                
+                .blog-editor-image-upload-area {
+                    border: 2px dashed #e5e7eb;
+                    border-radius: 8px;
+                    padding: 20px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                
+                .blog-editor-image-upload-area:hover {
+                    border-color: #6366f1;
+                    background: #f9fafb;
+                }
+                
+                .blog-editor-image-preview {
+                    width: 100%;
+                    max-height: 200px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    margin-top: 12px;
+                }
+                
+                .blog-editor-tag-input-wrapper {
+                    display: flex;
+                    gap: 8px;
+                }
+                
+                .blog-editor-tags-display {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    margin-top: 8px;
+                }
+                
+                .blog-editor-tag-chip {
+                    background: #ede9fe;
+                    color: #6366f1;
+                    padding: 4px 12px;
+                    border-radius: 16px;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                .blog-editor-tag-remove {
+                    cursor: pointer;
+                    font-weight: 700;
+                }
+                
+                .blog-editor-posts-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                    gap: 24px;
+                }
+                
+                .blog-editor-post-card {
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    transition: all 0.3s;
+                }
+                
+                .blog-editor-post-card:hover {
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                    transform: translateY(-4px);
+                }
+                
+                .blog-editor-post-card-image {
+                    width: 100%;
+                    height: 180px;
+                    object-fit: cover;
+                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                }
+                
+                .blog-editor-post-card-body { padding: 20px; }
+                
+                .blog-editor-post-status {
+                    display: inline-block;
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    margin-bottom: 12px;
+                }
+                
+                .blog-editor-status-published { background: #d1fae5; color: #065f46; }
+                .blog-editor-status-draft { background: #fee2e2; color: #991b1b; }
+                
+                .blog-editor-post-card-title {
+                    font-size: 18px;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                    line-height: 1.4;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+                
+                .blog-editor-post-card-excerpt {
+                    font-size: 14px;
+                    color: #6b7280;
+                    margin-bottom: 16px;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+                
+                .blog-editor-post-card-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 12px;
+                    color: #9ca3af;
+                    margin-bottom: 16px;
+                }
+                
+                .blog-editor-post-card-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+                
+                .blog-editor-toast {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 16px 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                    display: none;
+                    z-index: 2000;
+                    min-width: 320px;
+                    animation: slideIn 0.3s;
+                }
+                
+                .blog-editor-toast.show { display: block; }
+                
+                .blog-editor-toast-success {
+                    background: #f0fdf4;
+                    border-left: 4px solid #10b981;
+                    color: #166534;
+                }
+                
+                .blog-editor-toast-error {
+                    background: #fef2f2;
+                    border-left: 4px solid #ef4444;
+                    color: #991b1b;
+                }
+                
+                @keyframes slideIn {
+                    from { transform: translateX(400px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                
+                .blog-editor-loading {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 60px 20px;
+                }
+                
+                .blog-editor-loading.hide { display: none; }
+                
+                .blog-editor-spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 4px solid #e5e7eb;
+                    border-top-color: #6366f1;
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                }
+                
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
         
         // Create HTML structure in Light DOM
         this.innerHTML = `
@@ -655,11 +696,12 @@ class BlogEditorDashboard extends HTMLElement {
             
             <div class="blog-editor-toast" id="toast"></div>
         `;
+        
+        console.log('📝 Blog Editor: HTML structure created');
     }
 
     _setupEventListeners() {
-        // Initialize Quill
-        this._initializeQuill();
+        console.log('📝 Blog Editor: Setting up event listeners');
         
         // View toggle
         const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
@@ -703,36 +745,52 @@ class BlogEditorDashboard extends HTMLElement {
         
         // Cancel edit
         this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
+        
+        console.log('📝 Blog Editor: Event listeners set up');
     }
     
     _initializeQuill() {
+        console.log('📝 Blog Editor: Initializing Quill editor');
+        
         if (!window.Quill) {
             console.error('📝 Blog Editor: Quill not loaded');
+            this._showToast('error', 'Editor failed to load');
             return;
         }
         
         const editorElement = this.querySelector('#quillEditor');
         
-        this._quill = new Quill(editorElement, {
-            theme: 'snow',
-            placeholder: 'Start writing your amazing blog post...',
-            modules: {
-                toolbar: [
-                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                    ['bold', 'italic', 'underline', 'strike'],
-                    [{ 'color': [] }, { 'background': [] }],
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'indent': '-1'}, { 'indent': '+1' }],
-                    [{ 'align': [] }],
-                    ['blockquote', 'code-block'],
-                    ['link', 'image', 'video'],
-                    ['clean']
-                ]
-            }
-        });
+        if (!editorElement) {
+            console.error('📝 Blog Editor: Editor element not found');
+            return;
+        }
         
-        this._editorReady = true;
-        console.log('📝 Blog Editor: Quill initialized');
+        try {
+            this._quill = new Quill(editorElement, {
+                theme: 'snow',
+                placeholder: 'Start writing your amazing blog post...',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'align': [] }],
+                        ['blockquote', 'code-block'],
+                        ['link', 'image', 'video'],
+                        ['clean']
+                    ]
+                }
+            });
+            
+            this._editorReady = true;
+            console.log('📝 Blog Editor: ✅ Quill initialized successfully');
+            
+        } catch (error) {
+            console.error('📝 Blog Editor: Failed to initialize Quill:', error);
+            this._showToast('error', 'Failed to initialize editor');
+        }
     }
     
     _convertQuillToMarkdown(delta) {
@@ -1065,12 +1123,19 @@ class BlogEditorDashboard extends HTMLElement {
         this.querySelector('#cancelEdit').style.display = 'inline-block';
     }
     
+    _handleImageUploadResult(result) {
+        // Handle image upload result if needed
+        console.log('📝 Blog Editor: Image upload result:', result);
+    }
+    
     _dispatchEvent(name, detail) {
         this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
     
     _showToast(type, message) {
         const toast = this.querySelector('#toast');
+        if (!toast) return;
+        
         toast.textContent = message;
         toast.className = `blog-editor-toast blog-editor-toast-${type} show`;
         setTimeout(() => toast.classList.remove('show'), 5000);
