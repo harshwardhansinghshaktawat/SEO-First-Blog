@@ -2,7 +2,6 @@ class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
         console.log('📝 Blog Editor: Initializing...');
-        this._shadow = this.attachShadow({ mode: 'open' });
         
         // Editor state
         this._editor = null;
@@ -138,7 +137,7 @@ class BlogEditorDashboard extends HTMLElement {
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
-                :host {
+                blog-editor-dashboard {
                     display: block;
                     width: 100%;
                     font-family: 'Inter', sans-serif;
@@ -539,7 +538,6 @@ class BlogEditorDashboard extends HTMLElement {
                             <button class="view-btn" data-view="posts">📚 All Posts</button>
                         </div>
                         
-                        <!-- Editor View -->
                         <div class="editor-view active">
                             <div class="editor-container">
                                 <div class="editor-main">
@@ -549,7 +547,6 @@ class BlogEditorDashboard extends HTMLElement {
                                 </div>
                                 
                                 <div class="editor-sidebar">
-                                    <!-- Basic Info -->
                                     <div class="sidebar-section">
                                         <div class="section-title">📄 Basic Information</div>
                                         
@@ -583,7 +580,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- Featured Image -->
                                     <div class="sidebar-section">
                                         <div class="section-title">🖼️ Featured Image</div>
                                         <input type="file" id="featuredImageInput" accept="image/*" style="display: none;">
@@ -593,7 +589,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         <div id="featuredImagePreview"></div>
                                     </div>
                                     
-                                    <!-- Author Info -->
                                     <div class="sidebar-section">
                                         <div class="section-title">✍️ Author Information</div>
                                         
@@ -612,7 +607,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- Publishing -->
                                     <div class="sidebar-section">
                                         <div class="section-title">🚀 Publishing</div>
                                         
@@ -635,7 +629,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- SEO -->
                                     <div class="sidebar-section">
                                         <div class="section-title">🔍 SEO Settings</div>
                                         
@@ -667,7 +660,6 @@ class BlogEditorDashboard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <!-- Posts View -->
                         <div class="posts-view">
                             <div id="loadingPosts" class="loading">
                                 <div class="spinner"></div>
@@ -681,7 +673,8 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="toast" id="toast"></div>
         `;
         
-        this._shadow.appendChild(root);
+        // Fix: Append directly to the custom element, not the shadow root
+        this.appendChild(root);
     }
 
     _setupEventListeners() {
@@ -689,15 +682,15 @@ class BlogEditorDashboard extends HTMLElement {
         this._initializeEditor();
         
         // View toggle
-        const viewBtns = this._shadow.querySelectorAll('.view-btn');
+        const viewBtns = this.querySelectorAll('.view-btn');
         viewBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 viewBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
                 const view = btn.dataset.view;
-                this._shadow.querySelector('.editor-view').classList.toggle('active', view === 'editor');
-                this._shadow.querySelector('.posts-view').classList.toggle('active', view === 'posts');
+                this.querySelector('.editor-view').classList.toggle('active', view === 'editor');
+                this.querySelector('.posts-view').classList.toggle('active', view === 'posts');
                 
                 if (view === 'posts') {
                     this._dispatchEvent('load-blog-posts', {});
@@ -706,14 +699,14 @@ class BlogEditorDashboard extends HTMLElement {
         });
         
         // Title to slug auto-generation
-        this._shadow.getElementById('titleInput').addEventListener('input', (e) => {
+        this.querySelector('#titleInput').addEventListener('input', (e) => {
             const slug = this._generateSlug(e.target.value);
-            this._shadow.getElementById('slugInput').value = slug;
+            this.querySelector('#slugInput').value = slug;
         });
         
         // Tags
-        this._shadow.getElementById('addTagBtn').addEventListener('click', () => this._addTag());
-        this._shadow.getElementById('tagInput').addEventListener('keypress', (e) => {
+        this.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
+        this.querySelector('#tagInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 this._addTag();
@@ -726,14 +719,14 @@ class BlogEditorDashboard extends HTMLElement {
         this._setupImageUpload('seoOgImage');
         
         // Save post
-        this._shadow.getElementById('savePost').addEventListener('click', () => this._savePost());
+        this.querySelector('#savePost').addEventListener('click', () => this._savePost());
         
         // Cancel edit
-        this._shadow.getElementById('cancelEdit').addEventListener('click', () => this._cancelEdit());
+        this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
     }
     
     _initializeEditor() {
-        const editorElement = this._shadow.getElementById('editorjs');
+        const editorElement = this.querySelector('#editorjs');
         
         if (!window.EditorJS) {
             console.error('📝 Blog Editor: Editor.js not loaded');
@@ -800,28 +793,31 @@ class BlogEditorDashboard extends HTMLElement {
                     const base64Data = event.target.result.split(',')[1];
                     
                     // Dispatch upload event to custom element
-                    const customElement = wrapper.getRootNode().host;
-                    customElement._uploadEditorImage(base64Data, file.name, file.type, (result) => {
-                        if (result.success) {
-                            wrapper.innerHTML = '';
-                            
-                            const img = document.createElement('img');
-                            img.src = result.url;
-                            img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
-                            wrapper.appendChild(img);
-                            
-                            const caption = document.createElement('div');
-                            caption.contentEditable = true;
-                            caption.innerHTML = 'Enter image caption...';
-                            caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
-                            wrapper.appendChild(caption);
-                            
-                            this.data = {
-                                url: result.url,
-                                caption: 'Enter image caption...'
-                            };
-                        }
-                    });
+                    // The host element in Light DOM is found differently, but we can search for the tag
+                    const customElement = document.querySelector('blog-editor-dashboard');
+                    if(customElement) {
+                        customElement._uploadEditorImage(base64Data, file.name, file.type, (result) => {
+                            if (result.success) {
+                                wrapper.innerHTML = '';
+                                
+                                const img = document.createElement('img');
+                                img.src = result.url;
+                                img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
+                                wrapper.appendChild(img);
+                                
+                                const caption = document.createElement('div');
+                                caption.contentEditable = true;
+                                caption.innerHTML = 'Enter image caption...';
+                                caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
+                                wrapper.appendChild(caption);
+                                
+                                this.data = {
+                                    url: result.url,
+                                    caption: 'Enter image caption...'
+                                };
+                            }
+                        });
+                    }
                 };
                 reader.readAsDataURL(file);
             }
@@ -926,8 +922,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _setupImageUpload(type) {
-        const area = this._shadow.getElementById(`${type}Area`);
-        const input = this._shadow.getElementById(`${type}Input`);
+        const area = this.querySelector(`#${type}Area`);
+        const input = this.querySelector(`#${type}Input`);
         
         area.addEventListener('click', () => input.click());
         
@@ -937,7 +933,7 @@ class BlogEditorDashboard extends HTMLElement {
             
             const reader = new FileReader();
             reader.onload = (event) => {
-                const preview = this._shadow.getElementById(`${type}Preview`);
+                const preview = this.querySelector(`#${type}Preview`);
                 preview.innerHTML = `
                     <img src="${event.target.result}" class="image-preview">
                     <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name}</div>
@@ -959,7 +955,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _addTag() {
-        const input = this._shadow.getElementById('tagInput');
+        const input = this.querySelector('#tagInput');
         const tag = input.value.trim();
         
         if (!tag) return;
@@ -973,7 +969,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _renderTags() {
-        const container = this._shadow.getElementById('tagsDisplay');
+        const container = this.querySelector('#tagsDisplay');
         container.innerHTML = this._formData.tags.map((tag, index) => `
             <div class="tag-chip">
                 ${tag}
@@ -991,8 +987,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     async _savePost() {
-        const title = this._shadow.getElementById('titleInput').value.trim();
-        const slug = this._shadow.getElementById('slugInput').value.trim();
+        const title = this.querySelector('#titleInput').value.trim();
+        const slug = this.querySelector('#slugInput').value.trim();
         
         if (!title) {
             this._showToast('error', 'Please enter a title');
@@ -1012,18 +1008,18 @@ class BlogEditorDashboard extends HTMLElement {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
-                excerpt: this._shadow.getElementById('excerptInput').value,
+                excerpt: this.querySelector('#excerptInput').value,
                 content: markdown,
                 editorData: JSON.stringify(editorData),
-                author: this._shadow.getElementById('authorInput').value,
-                category: this._shadow.getElementById('categoryInput').value,
+                author: this.querySelector('#authorInput').value,
+                category: this.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
-                status: this._shadow.getElementById('statusSelect').value,
-                readTime: parseInt(this._shadow.getElementById('readTimeInput').value) || 5,
-                isFeatured: this._shadow.getElementById('isFeaturedCheckbox').checked,
-                seoTitle: this._shadow.getElementById('seoTitleInput').value,
-                seoDescription: this._shadow.getElementById('seoDescriptionInput').value,
-                seoKeywords: this._shadow.getElementById('seoKeywordsInput').value,
+                status: this.querySelector('#statusSelect').value,
+                readTime: parseInt(this.querySelector('#readTimeInput').value) || 5,
+                isFeatured: this.querySelector('#isFeaturedCheckbox').checked,
+                seoTitle: this.querySelector('#seoTitleInput').value,
+                seoDescription: this.querySelector('#seoDescriptionInput').value,
+                seoKeywords: this.querySelector('#seoKeywordsInput').value,
                 featuredImage: this._formData.featuredImage,
                 authorImage: this._formData.authorImage,
                 seoOgImage: this._formData.seoOgImage,
@@ -1101,7 +1097,7 @@ class BlogEditorDashboard extends HTMLElement {
                     break;
                     
                 case 'code':
-                    markdown += `\`\`\`\n${block.data.code}\n\`\`\`\n\n`;
+                    markdown += \`\`\`\n\${block.data.code}\n\`\`\`\n\n\`;
                     break;
                     
                 case 'delimiter':
@@ -1144,28 +1140,28 @@ class BlogEditorDashboard extends HTMLElement {
     _cancelEdit() {
         this._editingItemId = null;
         this._resetForm();
-        this._shadow.getElementById('cancelEdit').style.display = 'none';
+        this.querySelector('#cancelEdit').style.display = 'none';
     }
     
     _resetForm() {
-        this._shadow.getElementById('titleInput').value = '';
-        this._shadow.getElementById('slugInput').value = '';
-        this._shadow.getElementById('excerptInput').value = '';
-        this._shadow.getElementById('authorInput').value = '';
-        this._shadow.getElementById('categoryInput').value = '';
-        this._shadow.getElementById('readTimeInput').value = '5';
-        this._shadow.getElementById('seoTitleInput').value = '';
-        this._shadow.getElementById('seoDescriptionInput').value = '';
-        this._shadow.getElementById('seoKeywordsInput').value = '';
-        this._shadow.getElementById('isFeaturedCheckbox').checked = false;
-        this._shadow.getElementById('statusSelect').value = 'draft';
+        this.querySelector('#titleInput').value = '';
+        this.querySelector('#slugInput').value = '';
+        this.querySelector('#excerptInput').value = '';
+        this.querySelector('#authorInput').value = '';
+        this.querySelector('#categoryInput').value = '';
+        this.querySelector('#readTimeInput').value = '5';
+        this.querySelector('#seoTitleInput').value = '';
+        this.querySelector('#seoDescriptionInput').value = '';
+        this.querySelector('#seoKeywordsInput').value = '';
+        this.querySelector('#isFeaturedCheckbox').checked = false;
+        this.querySelector('#statusSelect').value = 'draft';
         
         this._formData.tags = [];
         this._renderTags();
         
-        this._shadow.getElementById('featuredImagePreview').innerHTML = '';
-        this._shadow.getElementById('authorImagePreview').innerHTML = '';
-        this._shadow.getElementById('seoOgImagePreview').innerHTML = '';
+        this.querySelector('#featuredImagePreview').innerHTML = '';
+        this.querySelector('#authorImagePreview').innerHTML = '';
+        this.querySelector('#seoOgImagePreview').innerHTML = '';
         
         this._formData.featuredImage = null;
         this._formData.authorImage = null;
@@ -1177,8 +1173,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _renderBlogPosts(data) {
-        const loading = this._shadow.getElementById('loadingPosts');
-        const grid = this._shadow.getElementById('postsGrid');
+        const loading = this.querySelector('#loadingPosts');
+        const grid = this.querySelector('#postsGrid');
         
         loading.classList.add('hide');
         
@@ -1226,37 +1222,37 @@ class BlogEditorDashboard extends HTMLElement {
     async _loadEditData(data) {
         this._editingItemId = data._id;
         
-        this._shadow.getElementById('titleInput').value = data.title || '';
-        this._shadow.getElementById('slugInput').value = data.slug || '';
-        this._shadow.getElementById('excerptInput').value = data.excerpt || '';
-        this._shadow.getElementById('authorInput').value = data.author || '';
-        this._shadow.getElementById('categoryInput').value = data.category || '';
-        this._shadow.getElementById('readTimeInput').value = data.readTime || 5;
-        this._shadow.getElementById('seoTitleInput').value = data.seoTitle || '';
-        this._shadow.getElementById('seoDescriptionInput').value = data.seoDescription || '';
-        this._shadow.getElementById('seoKeywordsInput').value = data.seoKeywords || '';
-        this._shadow.getElementById('isFeaturedCheckbox').checked = data.isFeatured || false;
-        this._shadow.getElementById('statusSelect').value = data.status || 'draft';
+        this.querySelector('#titleInput').value = data.title || '';
+        this.querySelector('#slugInput').value = data.slug || '';
+        this.querySelector('#excerptInput').value = data.excerpt || '';
+        this.querySelector('#authorInput').value = data.author || '';
+        this.querySelector('#categoryInput').value = data.category || '';
+        this.querySelector('#readTimeInput').value = data.readTime || 5;
+        this.querySelector('#seoTitleInput').value = data.seoTitle || '';
+        this.querySelector('#seoDescriptionInput').value = data.seoDescription || '';
+        this.querySelector('#seoKeywordsInput').value = data.seoKeywords || '';
+        this.querySelector('#isFeaturedCheckbox').checked = data.isFeatured || false;
+        this.querySelector('#statusSelect').value = data.status || 'draft';
         
         this._formData.tags = data.tags || [];
         this._renderTags();
         
         if (data.featuredImage) {
-            this._shadow.getElementById('featuredImagePreview').innerHTML = `
+            this.querySelector('#featuredImagePreview').innerHTML = `
                 <img src="${data.featuredImage.url}" class="image-preview">
             `;
             this._formData.featuredImage = data.featuredImage;
         }
         
         if (data.authorImage) {
-            this._shadow.getElementById('authorImagePreview').innerHTML = `
+            this.querySelector('#authorImagePreview').innerHTML = `
                 <img src="${data.authorImage.url}" class="image-preview">
             `;
             this._formData.authorImage = data.authorImage;
         }
         
         if (data.seoOgImage) {
-            this._shadow.getElementById('seoOgImagePreview').innerHTML = `
+            this.querySelector('#seoOgImagePreview').innerHTML = `
                 <img src="${data.seoOgImage.url}" class="image-preview">
             `;
             this._formData.seoOgImage = data.seoOgImage;
@@ -1274,8 +1270,8 @@ class BlogEditorDashboard extends HTMLElement {
             }
         }
         
-        this._shadow.querySelector('[data-view="editor"]').click();
-        this._shadow.getElementById('cancelEdit').style.display = 'inline-block';
+        this.querySelector('[data-view="editor"]').click();
+        this.querySelector('#cancelEdit').style.display = 'inline-block';
     }
     
     _dispatchEvent(name, detail) {
@@ -1283,7 +1279,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _showToast(type, message) {
-        const toast = this._shadow.getElementById('toast');
+        const toast = this.querySelector('#toast');
         toast.textContent = message;
         toast.className = `toast toast-${type} show`;
         setTimeout(() => toast.classList.remove('show'), 5000);
