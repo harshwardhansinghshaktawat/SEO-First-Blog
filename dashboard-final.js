@@ -34,6 +34,12 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
+        // Prevent re-render flashing
+        this._lastNotification = null;
+        this._lastImageResult = null;
+        this._lastPostsData = null;
+        this._lastEditData = null;
+        
         this._createStructure();
         this._setupEventListeners();
         console.log('📝 Blog Editor: Complete');
@@ -44,7 +50,13 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
-        if (name === 'notification' && newValue && newValue !== oldValue) {
+        // Prevent processing same value twice (stops flashing)
+        if (!newValue || newValue === oldValue) return;
+        
+        if (name === 'notification') {
+            if (newValue === this._lastNotification) return;
+            this._lastNotification = newValue;
+            
             try {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
@@ -53,7 +65,10 @@ class BlogEditorDashboard extends HTMLElement {
             }
         }
         
-        if (name === 'image-upload-result' && newValue && newValue !== oldValue) {
+        if (name === 'image-upload-result') {
+            if (newValue === this._lastImageResult) return;
+            this._lastImageResult = newValue;
+            
             try {
                 const result = JSON.parse(newValue);
                 this._handleImageUploadResult(result);
@@ -62,7 +77,10 @@ class BlogEditorDashboard extends HTMLElement {
             }
         }
         
-        if (name === 'blog-posts-data' && newValue && newValue !== oldValue) {
+        if (name === 'blog-posts-data') {
+            if (newValue === this._lastPostsData) return;
+            this._lastPostsData = newValue;
+            
             try {
                 const data = JSON.parse(newValue);
                 this._renderBlogPosts(data);
@@ -71,7 +89,10 @@ class BlogEditorDashboard extends HTMLElement {
             }
         }
         
-        if (name === 'edit-data' && newValue && newValue !== oldValue) {
+        if (name === 'edit-data') {
+            if (newValue === this._lastEditData) return;
+            this._lastEditData = newValue;
+            
             try {
                 const data = JSON.parse(newValue);
                 this._loadEditData(data);
@@ -83,7 +104,11 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
-        this._dispatchEvent('load-blog-posts', {});
+        // Only load posts once on initial connection
+        if (!this._hasLoadedPosts) {
+            this._hasLoadedPosts = true;
+            this._dispatchEvent('load-blog-posts', {});
+        }
     }
     
     _createStructure() {
@@ -255,6 +280,7 @@ class BlogEditorDashboard extends HTMLElement {
                     font-size: 11px;
                     white-space: nowrap;
                     z-index: 100;
+                    pointer-events: none;
                 }
                 
                 .editor-textarea {
@@ -1098,11 +1124,20 @@ class BlogEditorDashboard extends HTMLElement {
         
         const altText = this._shadow.getElementById('imageAltText').value || 'Image';
         
-        this._dispatchEvent('upload-editor-image', {
-            file: this._selectedImageFile,
-            optimize: optimize,
-            altText: altText
-        });
+        // Convert file to base64
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64Data = reader.result.split(',')[1];
+            
+            this._dispatchEvent('upload-editor-image', {
+                fileData: base64Data,
+                fileName: this._selectedImageFile.name,
+                mimeType: this._selectedImageFile.type,
+                optimize: optimize,
+                altText: altText
+            });
+        };
+        reader.readAsDataURL(this._selectedImageFile);
     }
     
     _handleImageUploadResult(result) {
@@ -1162,7 +1197,31 @@ class BlogEditorDashboard extends HTMLElement {
             modifiedDate: new Date().toISOString()
         };
         
-        this._dispatchEvent('save-blog-post', formData);
+        // Convert File objects to base64
+        const promises = [];
+        
+        ['featuredImage', 'authorImage', 'seoOgImage'].forEach(key => {
+            if (formData[key] && formData[key] instanceof File) {
+                promises.push(
+                    new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            formData[key] = {
+                                data: reader.result.split(',')[1],
+                                name: formData[key].name,
+                                type: formData[key].type
+                            };
+                            resolve();
+                        };
+                        reader.readAsDataURL(formData[key]);
+                    })
+                );
+            }
+        });
+        
+        Promise.all(promises).then(() => {
+            this._dispatchEvent('save-blog-post', formData);
+        });
     }
     
     _cancelEdit() {
