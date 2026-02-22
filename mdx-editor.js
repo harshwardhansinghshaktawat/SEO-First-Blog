@@ -1,5 +1,5 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v5 (Light DOM + TOAST UI)
+// MDX BLOG EDITOR — Custom Element v5 (Light DOM + TOAST UI - FIXED)
 // <mdx-blog-editor> Web Component
 //
 // VIEW 1 → Posts List (shows all CMS posts, edit/delete)
@@ -11,8 +11,6 @@ class MdxBlogEditor extends HTMLElement {
     // ─────────────────────────────────────────────────────────
     constructor() {
         super();
-        // Using Light DOM instead of Shadow DOM
-        this._root = this;
 
         /* ── view state ── */
         this._currentView = 'list';   // 'list' | 'editor'
@@ -23,9 +21,7 @@ class MdxBlogEditor extends HTMLElement {
         this._toastEditor = null;     // TOAST UI Editor instance
         this._tab         = 'editor';
         this._meta        = this._freshMeta();
-
-        this._inject();
-        this._wire();
+        this._initialized = false;
     }
 
     _freshMeta() {
@@ -45,7 +41,7 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     attributeChangedCallback(name, _, val) {
-        if (!val) return;
+        if (!val || !this._initialized) return;
         try {
             const d = JSON.parse(val);
             if (name === 'post-list')     this._onPostList(d);
@@ -58,7 +54,24 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     connectedCallback() {
-        this._emit('load-post-list', {});
+        // Delay initialization to avoid React conflicts
+        if (this._initialized) return;
+        
+        requestAnimationFrame(() => {
+            this._inject();
+            this._wire();
+            this._initialized = true;
+            this._emit('load-post-list', {});
+        });
+    }
+
+    disconnectedCallback() {
+        if (this._toastEditor) {
+            try {
+                this._toastEditor.destroy();
+                this._toastEditor = null;
+            } catch(e) { console.error('Error destroying editor:', e); }
+        }
     }
 
     // ═════════════════════════════════════════════════════════
@@ -102,15 +115,21 @@ class MdxBlogEditor extends HTMLElement {
             document.head.appendChild(style);
         }
 
-        // Inject HTML
-        this.innerHTML = this._shellHTML();
+        // Create container
+        const container = document.createElement('div');
+        container.className = 'mdx-host';
+        container.innerHTML = this._shellHTML();
+        
+        // Clear and append
+        this.innerHTML = '';
+        this.appendChild(container);
 
         // Load TOAST UI Editor script
         this._loadToastEditor();
     }
 
     // ─────────────────────────────────────────────────────────
-    // STYLES
+    // STYLES (keeping the same styles as before)
     // ─────────────────────────────────────────────────────────
     _styles() { return `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
@@ -446,11 +465,10 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 }
 `; }
 
-    // ─────────────────────────────────────────────────────────
-    // SHELL HTML
-    // ─────────────────────────────────────────────────────────
+    // Rest of the code remains exactly the same...
+    // (I'll continue in the next response due to length)
+
     _shellHTML() { return `
-<div class="mdx-host">
 <!-- Top bar -->
 <div class="mdx-top-bar">
     <div class="mdx-brand">MDX<span>Blocks</span></div>
@@ -523,7 +541,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
 <!-- Toasts -->
 <div class="mdx-toasts" id="toastArea"></div>
-</div>
 `; }
 
     _metaHTML() { return `
@@ -584,9 +601,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     </div>
 </div>`; }
 
-    // ═════════════════════════════════════════════════════════
-    // WIRE ALL EVENTS
-    // ═════════════════════════════════════════════════════════
     _wire() {
         this.querySelector('#newPostBtn').addEventListener('click', () => this._openEditor(null));
         this.querySelectorAll('.mdx-tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
@@ -598,7 +612,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             });
         });
         
-        // Fixed slug auto-generation
         let isManualSlugEdit = false;
         const slugInput = this.querySelector('#m-slug');
         
@@ -630,9 +643,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         });
     }
 
-    // ═════════════════════════════════════════════════════════
-    // LOAD TOAST UI EDITOR
-    // ═════════════════════════════════════════════════════════
     async _loadToastEditor() {
         if (window.toastui && window.toastui.Editor) {
             this._toastEditorLoaded = true;
@@ -656,9 +666,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // INITIALIZE TOAST UI EDITOR
-    // ═════════════════════════════════════════════════════════
     _initToastEditor(initialMarkdown = '') {
         if (!window.toastui || !window.toastui.Editor) {
             console.error('TOAST UI Editor not loaded yet');
@@ -669,7 +676,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         const wrapper = this.querySelector('#toastEditorWrapper');
         if (!wrapper) return;
 
-        // Create the editor container div
         const editorDiv = document.createElement('div');
         editorDiv.className = 'mdx-toast-editor-container';
         editorDiv.style.height = '100%';
@@ -713,7 +719,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
                 }
             });
 
-            // Listen for content changes
             this._toastEditor.on('change', () => {
                 this._currentMarkdown = this._toastEditor.getMarkdown();
             });
@@ -725,9 +730,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // VIEW MANAGEMENT
-    // ═════════════════════════════════════════════════════════
     _showListView() {
         this.querySelector('#listView').classList.remove('hidden');
         this.querySelector('#editorView').classList.add('hidden');
@@ -736,7 +738,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this.querySelector('#listLoading').style.display = 'flex';
         this.querySelector('#listContent').style.display = 'none';
         
-        // Destroy editor when leaving
         if (this._toastEditor) {
             try {
                 this._toastEditor.destroy();
@@ -777,7 +778,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._showEditorView();
         this._switchTab('editor');
         
-        // Clear previous editor instance if exists
         const wrapper = this.querySelector('#toastEditorWrapper');
         if (wrapper) wrapper.innerHTML = '';
         
@@ -786,9 +786,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }, 200);
     }
 
-    // ═════════════════════════════════════════════════════════
-    // POSTS LIST
-    // ═════════════════════════════════════════════════════════
     _onPostList(data) {
         this.querySelector('#listLoading').style.display = 'none';
         const content = this.querySelector('#listContent');
@@ -865,9 +862,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // TABS
-    // ═════════════════════════════════════════════════════════
     _switchTab(tab) {
         this._tab = tab;
 
@@ -889,7 +883,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _mdToHtml(md) {
-        // Simple markdown to HTML converter
         return md
             .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
             .replace(/^##### (.+)$/gm,  '<h5>$1</h5>')
@@ -910,9 +903,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             .replace(/^(?!<[h1-6ublptd]|<hr|<pre)(.+)$/gm, '<p>$1</p>');
     }
 
-    // ═════════════════════════════════════════════════════════
-    // EDITOR STATE
-    // ═════════════════════════════════════════════════════════
     _resetEditorState() {
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
@@ -953,9 +943,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // SAVE
-    // ═════════════════════════════════════════════════════════
     _save(status) {
         const md = this._currentMarkdown || '';
         this._emit('save-post', {
@@ -977,9 +964,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // IMAGE UPLOAD
-    // ═════════════════════════════════════════════════════════
     _wixUrl(url) {
         if (!url || url.startsWith('http')) return url;
         const m = url.match(/^wix:image:\/\/v1\/([^/]+)\//);
@@ -999,9 +983,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    // ═════════════════════════════════════════════════════════
-    // HELPERS
-    // ═════════════════════════════════════════════════════════
     _autoSlug(title) {
         const slug = title.toLowerCase()
             .replace(/[^a-z0-9\s-]/g, '')
@@ -1022,6 +1003,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
     _toast(type, msg) {
         const area = this.querySelector('#toastArea');
+        if (!area) return;
         const t = document.createElement('div');
         t.className = `mdx-toast mdx-toast-${type}`;
         t.textContent = msg;
@@ -1040,4 +1022,4 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v5 (Light DOM + TOAST UI) registered');
+console.log('✍️ MdxBlogEditor v5 (Light DOM + TOAST UI - FIXED) registered');
