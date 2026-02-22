@@ -5,6 +5,9 @@ class BlogEditorDashboard extends HTMLElement {
         console.log('📝 Blog Editor: CONSTRUCTOR CALLED');
         console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
         
+        // IMPORTANT: Mark this as already initialized
+        this._initialized = false;
+        
         // Editor state
         this._quill = null;
         this._editorReady = false;
@@ -34,9 +37,6 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
-        console.log('📝 Blog Editor: About to create structure...');
-        this._createStructure();
-        console.log('📝 Blog Editor: Structure created successfully');
         console.log('📝 Blog Editor: Constructor complete');
         console.log('========================================');
     }
@@ -50,9 +50,14 @@ class BlogEditorDashboard extends HTMLElement {
         console.log('========================================');
         console.log('📝 Blog Editor: ATTRIBUTE CHANGED');
         console.log('📝 Blog Editor: Name:', name);
-        console.log('📝 Blog Editor: Old Value:', oldValue ? oldValue.substring(0, 50) + '...' : null);
-        console.log('📝 Blog Editor: New Value:', newValue ? newValue.substring(0, 50) + '...' : null);
+        console.log('📝 Blog Editor: Initialized:', this._initialized);
         console.log('========================================');
+        
+        // Don't process attributes until we're initialized
+        if (!this._initialized) {
+            console.log('📝 Blog Editor: Skipping - not initialized yet');
+            return;
+        }
         
         if (!newValue || newValue === oldValue) {
             console.log('📝 Blog Editor: Skipping - no change or null value');
@@ -104,10 +109,28 @@ class BlogEditorDashboard extends HTMLElement {
         console.log('========================================');
         console.log('📝 Blog Editor: CONNECTED TO DOM');
         console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
+        console.log('📝 Blog Editor: Already initialized:', this._initialized);
         console.log('📝 Blog Editor: Parent element:', this.parentElement?.tagName);
-        console.log('📝 Blog Editor: Is visible:', this.offsetParent !== null);
-        console.log('📝 Blog Editor: Computed display:', window.getComputedStyle(this).display);
+        console.log('📝 Blog Editor: Has children:', this.childElementCount);
         console.log('========================================');
+        
+        // CRITICAL FIX: Only initialize once!
+        if (this._initialized) {
+            console.log('📝 Blog Editor: ⚠️ Already initialized, skipping setup');
+            return;
+        }
+        
+        // Mark as initializing
+        this._initialized = true;
+        console.log('📝 Blog Editor: Starting initialization...');
+        
+        // Create structure ONLY if we don't have children
+        if (this.childElementCount === 0) {
+            console.log('📝 Blog Editor: Creating structure (no children)...');
+            this._createStructure();
+        } else {
+            console.log('📝 Blog Editor: ⚠️ Structure already exists, skipping creation');
+        }
         
         // Check if element structure exists
         const container = this.querySelector('.blog-editor-container');
@@ -121,25 +144,33 @@ class BlogEditorDashboard extends HTMLElement {
         console.log('📝 Blog Editor: Container display:', window.getComputedStyle(container).display);
         console.log('📝 Blog Editor: Container visibility:', window.getComputedStyle(container).visibility);
         
-        // Load Quill only after element is connected
-        console.log('📝 Blog Editor: Starting Quill load process...');
-        this._loadQuill(() => {
-            console.log('📝 Blog Editor: Quill load callback triggered');
-            this._setupEventListeners();
-            this._initializeQuill();
-            
-            console.log('📝 Blog Editor: Dispatching load-blog-posts event');
-            this._dispatchEvent('load-blog-posts', {});
-            
-            console.log('📝 Blog Editor: Connected callback complete');
-        });
+        // Load Quill only if not already loaded
+        if (!this._quillLoaded) {
+            console.log('📝 Blog Editor: Starting Quill load process...');
+            this._loadQuill(() => {
+                console.log('📝 Blog Editor: Quill load callback triggered');
+                this._setupEventListeners();
+                this._initializeQuill();
+                
+                console.log('📝 Blog Editor: Dispatching load-blog-posts event');
+                this._dispatchEvent('load-blog-posts', {});
+                
+                console.log('📝 Blog Editor: Connected callback complete');
+            });
+        } else {
+            console.log('📝 Blog Editor: ⚠️ Quill already loaded, skipping');
+        }
     }
     
     disconnectedCallback() {
         console.log('========================================');
         console.log('📝 Blog Editor: DISCONNECTED FROM DOM');
         console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
+        console.log('📝 Blog Editor: This is likely a React re-render issue!');
         console.log('========================================');
+        
+        // DON'T reset _initialized here - we want to keep our state
+        // this._initialized = false; // REMOVED!
     }
     
     _loadQuill(callback) {
