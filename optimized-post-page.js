@@ -22,7 +22,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
         return ['post-data', 'related-posts', 'style-props'];
     }
 
-    // --- Velo Property Setters (Makes data passing bulletproof in Wix) ---
+    // --- Velo Property Setters ---
     get postData() { return this.state.postData; }
     set postData(value) {
         try {
@@ -46,7 +46,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
             console.error('Error setting related posts:', e);
         }
     }
-    // ---------------------------------------------------------------------
 
     getDefaultStyleProps() {
         return {
@@ -99,9 +98,9 @@ class EnhancedBlogPostViewer extends HTMLElement {
         if (!newValue || oldValue === newValue) return;
 
         if (name === 'post-data') {
-            this.postData = newValue; // Routes through setter
+            this.postData = newValue; 
         } else if (name === 'related-posts') {
-            this.relatedPosts = newValue; // Routes through setter
+            this.relatedPosts = newValue; 
         } else if (name === 'style-props') {
             try {
                 const newStyleProps = JSON.parse(newValue);
@@ -126,10 +125,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
                     </aside>
 
                     <main class="main-content">
-                        <div class="featured-image-container" id="featuredImageContainer" style="display: none;">
-                            <img class="featured-image" id="featuredImage" alt="Blog featured image" width="900" height="500" fetchpriority="high" decoding="async" />
-                        </div>
-                        
                         <div class="blog-content" id="blogContent"></div>
 
                         <footer class="post-footer" id="postFooter" style="display: none;"></footer>
@@ -143,8 +138,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
         `;
 
         this.container = this.shadowRoot.querySelector('.blog-post-container');
-        this.featuredImageContainer = this.shadowRoot.getElementById('featuredImageContainer');
-        this.featuredImage = this.shadowRoot.getElementById('featuredImage');
         this.tocElement = this.shadowRoot.getElementById('tableOfContents');
         this.tocSidebar = this.shadowRoot.getElementById('tocSidebar');
         this.contentElement = this.shadowRoot.getElementById('blogContent');
@@ -182,8 +175,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
                 background-repeat: no-repeat; background-size: 1000px 100%;
                 animation: shimmer 1.5s infinite linear forwards;
             }
-            .sk-hero { width: 100%; height: 400px; border-radius: 12px; margin-bottom: 40px; }
-            .sk-title { width: 80%; height: 48px; border-radius: 6px; margin: 60px 0 30px; }
+            .sk-title { width: 80%; height: 48px; border-radius: 6px; margin: 20px 0 30px; }
             .sk-text { width: 100%; height: 20px; border-radius: 4px; margin-bottom: 16px; }
             .sk-text.short { width: 60%; margin-bottom: 30px; }
             .sk-toc-box { border: 2px solid ${tocBorder}; border-radius: 12px; padding: 28px 24px; min-height: 300px; }
@@ -192,11 +184,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
             /* Content Wrapper */
             #blog-content-wrapper { display: flex; gap: 40px; width: 100%; position: relative; }
             .main-content { flex: 1; min-width: 0; max-width: 900px; }
-            .featured-image-container {
-                width: 100%; margin-bottom: 40px; border-radius: 12px; overflow: hidden;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); aspect-ratio: 16 / 9; background-color: ${tableRowBg};
-            }
-            .featured-image { width: 100%; height: 100%; display: block; object-fit: cover; }
 
             /* TOC Sidebar */
             .toc-sidebar { width: 280px; flex-shrink: 0; position: sticky; top: 20px; align-self: flex-start; max-height: calc(100vh - 40px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -216,7 +203,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
             /* Blog Content */
             .blog-content { font-size: 18px; line-height: 1.8; color: ${paragraphColor}; word-wrap: break-word; overflow-wrap: break-word; }
             .blog-content h1, .blog-content h2, .blog-content h3, .blog-content h4, .blog-content h5, .blog-content h6 { font-weight: 700; line-height: 1.3; margin-top: 40px; margin-bottom: 20px; scroll-margin-top: 20px; }
-            .blog-content h1 { font-size: clamp(32px, 4vw, 42px); color: ${h1Color}; margin-top: 60px; }
+            .blog-content h1 { font-size: clamp(32px, 4vw, 42px); color: ${h1Color}; margin-top: 20px; }
             .blog-content h2 { font-size: clamp(28px, 3.5vw, 36px); color: ${h2Color}; margin-top: 50px; }
             .blog-content h3 { font-size: clamp(24px, 3vw, 30px); color: ${h3Color}; }
             .blog-content h4 { font-size: clamp(20px, 2.5vw, 24px); color: ${h4Color}; }
@@ -311,7 +298,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
         `;
 
         this.contentElement.innerHTML = `
-            <div class="sk-hero skeleton-bg"></div>
             <div class="sk-title skeleton-bg"></div>
             <div class="sk-text skeleton-bg"></div>
             <div class="sk-text skeleton-bg"></div>
@@ -343,13 +329,6 @@ class EnhancedBlogPostViewer extends HTMLElement {
         this.container.setAttribute('aria-busy', 'false');
 
         const post = this.state.postData;
-
-        if (post.featuredImage) {
-            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
-            this.featuredImage.src = featuredImageUrl;
-            this.featuredImage.onerror = () => { this.featuredImageContainer.style.display = 'none'; };
-            this.featuredImageContainer.style.display = 'block';
-        }
 
         this._renderContent(post.content);
 
