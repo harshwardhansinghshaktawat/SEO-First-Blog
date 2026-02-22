@@ -2,11 +2,12 @@ class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
         console.log('========================================');
-        console.log('📝 Blog Editor: CONSTRUCTOR CALLED');
+        console.log('📝 Blog Editor: CONSTRUCTOR CALLED (Shadow DOM)');
         console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
         
-        // IMPORTANT: Mark this as already initialized
-        this._initialized = false;
+        // CRITICAL: Use Shadow DOM to isolate from React
+        this._shadow = this.attachShadow({ mode: 'open' });
+        console.log('📝 Blog Editor: Shadow DOM attached');
         
         // Editor state
         this._quill = null;
@@ -37,37 +38,23 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
+        console.log('📝 Blog Editor: About to create structure...');
+        this._createStructure();
+        console.log('📝 Blog Editor: Structure created successfully');
         console.log('📝 Blog Editor: Constructor complete');
         console.log('========================================');
     }
     
     static get observedAttributes() {
-        console.log('📝 Blog Editor: observedAttributes getter called');
         return ['notification', 'image-upload-result', 'blog-posts-data', 'edit-data'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
-        console.log('========================================');
-        console.log('📝 Blog Editor: ATTRIBUTE CHANGED');
-        console.log('📝 Blog Editor: Name:', name);
-        console.log('📝 Blog Editor: Initialized:', this._initialized);
-        console.log('========================================');
-        
-        // Don't process attributes until we're initialized
-        if (!this._initialized) {
-            console.log('📝 Blog Editor: Skipping - not initialized yet');
-            return;
-        }
-        
-        if (!newValue || newValue === oldValue) {
-            console.log('📝 Blog Editor: Skipping - no change or null value');
-            return;
-        }
+        if (!newValue || newValue === oldValue) return;
         
         if (name === 'notification') {
             try {
                 const notification = JSON.parse(newValue);
-                console.log('📝 Blog Editor: Processing notification:', notification);
                 this._showToast(notification.type, notification.message);
             } catch (e) {
                 console.error('📝 Blog Editor: Notification error:', e);
@@ -77,7 +64,6 @@ class BlogEditorDashboard extends HTMLElement {
         if (name === 'image-upload-result') {
             try {
                 const result = JSON.parse(newValue);
-                console.log('📝 Blog Editor: Processing image upload result:', result);
                 this._handleImageUploadResult(result);
             } catch (e) {
                 console.error('📝 Blog Editor: Image upload result error:', e);
@@ -87,7 +73,6 @@ class BlogEditorDashboard extends HTMLElement {
         if (name === 'blog-posts-data') {
             try {
                 const data = JSON.parse(newValue);
-                console.log('📝 Blog Editor: Processing blog posts data, count:', data.posts?.length || 0);
                 this._renderBlogPosts(data);
             } catch (e) {
                 console.error('📝 Blog Editor: Blog posts data error:', e);
@@ -97,7 +82,6 @@ class BlogEditorDashboard extends HTMLElement {
         if (name === 'edit-data') {
             try {
                 const data = JSON.parse(newValue);
-                console.log('📝 Blog Editor: Processing edit data for post:', data.title);
                 this._loadEditData(data);
             } catch (e) {
                 console.error('📝 Blog Editor: Edit data error:', e);
@@ -107,154 +91,76 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('========================================');
-        console.log('📝 Blog Editor: CONNECTED TO DOM');
+        console.log('📝 Blog Editor: CONNECTED TO DOM (Shadow DOM)');
         console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
-        console.log('📝 Blog Editor: Already initialized:', this._initialized);
-        console.log('📝 Blog Editor: Parent element:', this.parentElement?.tagName);
-        console.log('📝 Blog Editor: Has children:', this.childElementCount);
         console.log('========================================');
         
-        // CRITICAL FIX: Only initialize once!
-        if (this._initialized) {
-            console.log('📝 Blog Editor: ⚠️ Already initialized, skipping setup');
-            return;
-        }
-        
-        // Mark as initializing
-        this._initialized = true;
-        console.log('📝 Blog Editor: Starting initialization...');
-        
-        // Create structure ONLY if we don't have children
-        if (this.childElementCount === 0) {
-            console.log('📝 Blog Editor: Creating structure (no children)...');
-            this._createStructure();
-        } else {
-            console.log('📝 Blog Editor: ⚠️ Structure already exists, skipping creation');
-        }
-        
-        // Check if element structure exists
-        const container = this.querySelector('.blog-editor-container');
-        console.log('📝 Blog Editor: Container found:', !!container);
-        
-        if (!container) {
-            console.error('📝 Blog Editor: CRITICAL - Container not found!');
-            return;
-        }
-        
-        console.log('📝 Blog Editor: Container display:', window.getComputedStyle(container).display);
-        console.log('📝 Blog Editor: Container visibility:', window.getComputedStyle(container).visibility);
-        
-        // Load Quill only if not already loaded
-        if (!this._quillLoaded) {
-            console.log('📝 Blog Editor: Starting Quill load process...');
-            this._loadQuill(() => {
-                console.log('📝 Blog Editor: Quill load callback triggered');
-                this._setupEventListeners();
-                this._initializeQuill();
-                
-                console.log('📝 Blog Editor: Dispatching load-blog-posts event');
-                this._dispatchEvent('load-blog-posts', {});
-                
-                console.log('📝 Blog Editor: Connected callback complete');
-            });
-        } else {
-            console.log('📝 Blog Editor: ⚠️ Quill already loaded, skipping');
-        }
+        // Load Quill only after element is connected
+        this._loadQuill(() => {
+            console.log('📝 Blog Editor: Quill loaded, setting up...');
+            this._setupEventListeners();
+            this._initializeQuill();
+            this._dispatchEvent('load-blog-posts', {});
+        });
     }
     
     disconnectedCallback() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: DISCONNECTED FROM DOM');
-        console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
-        console.log('📝 Blog Editor: This is likely a React re-render issue!');
-        console.log('========================================');
-        
-        // DON'T reset _initialized here - we want to keep our state
-        // this._initialized = false; // REMOVED!
+        console.log('📝 Blog Editor: Disconnected from DOM');
     }
     
     _loadQuill(callback) {
-        console.log('========================================');
-        console.log('📝 Blog Editor: LOADING QUILL');
-        console.log('📝 Blog Editor: Window.Quill exists:', !!window.Quill);
-        console.log('📝 Blog Editor: Already loaded flag:', this._quillLoaded);
-        console.log('========================================');
+        console.log('📝 Blog Editor: Loading Quill.js...');
         
-        // Check if Quill is already loaded
         if (window.Quill) {
-            console.log('📝 Blog Editor: Quill already exists in window');
+            console.log('📝 Blog Editor: Quill already loaded');
             this._quillLoaded = true;
             callback();
             return;
         }
         
-        console.log('📝 Blog Editor: Loading Quill CSS...');
-        // Load CSS
+        // Load Quill CSS
         const quillCss = document.createElement('link');
         quillCss.rel = 'stylesheet';
         quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
-        quillCss.onload = () => {
-            console.log('📝 Blog Editor: ✅ Quill CSS loaded');
-        };
-        quillCss.onerror = () => {
-            console.error('📝 Blog Editor: ❌ Failed to load Quill CSS');
-        };
         document.head.appendChild(quillCss);
         
-        console.log('📝 Blog Editor: Loading Quill JS...');
-        // Load JS
+        // Load Quill JS
         const quillScript = document.createElement('script');
         quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
         quillScript.onload = () => {
-            console.log('========================================');
-            console.log('📝 Blog Editor: ✅ QUILL JS LOADED SUCCESSFULLY');
-            console.log('📝 Blog Editor: Window.Quill exists:', !!window.Quill);
-            console.log('📝 Blog Editor: Quill version:', window.Quill?.version);
-            console.log('========================================');
+            console.log('📝 Blog Editor: ✅ Quill loaded successfully');
             this._quillLoaded = true;
             callback();
         };
         quillScript.onerror = (error) => {
-            console.error('========================================');
-            console.error('📝 Blog Editor: ❌ FAILED TO LOAD QUILL JS');
-            console.error('📝 Blog Editor: Error:', error);
-            console.error('========================================');
+            console.error('📝 Blog Editor: ❌ Failed to load Quill', error);
             this._showToast('error', 'Failed to load editor');
         };
         document.head.appendChild(quillScript);
     }
     
     _createStructure() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: CREATING STRUCTURE');
-        console.log('========================================');
+        console.log('📝 Blog Editor: Creating Shadow DOM structure...');
         
-        // Add styles to document head (only once)
-        if (!document.getElementById('blog-editor-styles')) {
-            console.log('📝 Blog Editor: Adding styles to document head');
-            const style = document.createElement('style');
-            style.id = 'blog-editor-styles';
-            style.textContent = `
+        const root = document.createElement('div');
+        root.innerHTML = `
+            <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                @import url('https://cdn.quilljs.com/1.3.7/quill.snow.css');
                 
-                blog-editor-dashboard {
-                    display: block !important;
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                
+                :host {
+                    display: block;
                     width: 100%;
                     font-family: 'Inter', sans-serif;
                     font-size: 14px;
                     background: #f8f9fa;
-                    visibility: visible !important;
-                    opacity: 1 !important;
                 }
-                
-                blog-editor-dashboard * { box-sizing: border-box; }
                 
                 .blog-editor-container { 
                     width: 100%; 
                     min-height: 100vh;
-                    display: block !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
                 }
                 
                 .blog-editor-header {
@@ -339,8 +245,7 @@ class BlogEditorDashboard extends HTMLElement {
                 
                 .blog-editor-editor-view.active, 
                 .blog-editor-posts-view.active { 
-                    display: block !important;
-                    visibility: visible !important;
+                    display: block;
                 }
                 
                 .blog-editor-layout {
@@ -369,10 +274,8 @@ class BlogEditorDashboard extends HTMLElement {
                 #quillEditor {
                     min-height: 500px;
                     background: white;
-                    display: block !important;
                 }
                 
-                /* Quill customization */
                 .ql-container {
                     font-size: 16px;
                     font-family: 'Inter', sans-serif;
@@ -632,16 +535,8 @@ class BlogEditorDashboard extends HTMLElement {
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
-            `;
-            document.head.appendChild(style);
-            console.log('📝 Blog Editor: ✅ Styles added to document head');
-        } else {
-            console.log('📝 Blog Editor: Styles already exist in document head');
-        }
-        
-        console.log('📝 Blog Editor: Creating HTML structure...');
-        // Create HTML structure in Light DOM
-        this.innerHTML = `
+            </style>
+            
             <div class="blog-editor-container">
                 <div class="blog-editor-header">
                     <div class="blog-editor-header-content">
@@ -805,77 +700,40 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="blog-editor-toast" id="toast"></div>
         `;
         
-        console.log('📝 Blog Editor: ✅ HTML structure created');
-        
-        // Verify structure
-        setTimeout(() => {
-            const container = this.querySelector('.blog-editor-container');
-            const editorView = this.querySelector('.blog-editor-editor-view');
-            const quillEditor = this.querySelector('#quillEditor');
-            
-            console.log('========================================');
-            console.log('📝 Blog Editor: STRUCTURE VERIFICATION (after creation)');
-            console.log('📝 Blog Editor: Container exists:', !!container);
-            console.log('📝 Blog Editor: Editor view exists:', !!editorView);
-            console.log('📝 Blog Editor: Quill element exists:', !!quillEditor);
-            
-            if (container) {
-                console.log('📝 Blog Editor: Container display:', window.getComputedStyle(container).display);
-                console.log('📝 Blog Editor: Container visibility:', window.getComputedStyle(container).visibility);
-            }
-            
-            if (editorView) {
-                console.log('📝 Blog Editor: Editor view classes:', editorView.className);
-                console.log('📝 Blog Editor: Editor view display:', window.getComputedStyle(editorView).display);
-            }
-            console.log('========================================');
-        }, 100);
+        // Append to shadow DOM ONCE
+        this._shadow.appendChild(root);
+        console.log('📝 Blog Editor: ✅ Shadow DOM structure created');
     }
 
     _setupEventListeners() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: SETTING UP EVENT LISTENERS');
-        console.log('========================================');
+        console.log('📝 Blog Editor: Setting up event listeners...');
         
         // View toggle
-        const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
-        console.log('📝 Blog Editor: View buttons found:', viewBtns.length);
-        
-        viewBtns.forEach((btn, index) => {
+        const viewBtns = this._shadow.querySelectorAll('.blog-editor-view-btn');
+        viewBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                console.log('📝 Blog Editor: View button clicked:', index, btn.dataset.view);
                 viewBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
                 const view = btn.dataset.view;
-                const editorView = this.querySelector('.blog-editor-editor-view');
-                const postsView = this.querySelector('.blog-editor-posts-view');
-                
-                editorView.classList.toggle('active', view === 'editor');
-                postsView.classList.toggle('active', view === 'posts');
-                
-                console.log('📝 Blog Editor: Editor view active:', editorView.classList.contains('active'));
-                console.log('📝 Blog Editor: Posts view active:', postsView.classList.contains('active'));
+                this._shadow.querySelector('.blog-editor-editor-view').classList.toggle('active', view === 'editor');
+                this._shadow.querySelector('.blog-editor-posts-view').classList.toggle('active', view === 'posts');
                 
                 if (view === 'posts') {
-                    console.log('📝 Blog Editor: Dispatching load-blog-posts from view toggle');
                     this._dispatchEvent('load-blog-posts', {});
                 }
             });
         });
         
-        // Title to slug auto-generation
-        const titleInput = this.querySelector('#titleInput');
-        console.log('📝 Blog Editor: Title input found:', !!titleInput);
-        
-        titleInput.addEventListener('input', (e) => {
+        // Title to slug
+        this._shadow.querySelector('#titleInput').addEventListener('input', (e) => {
             const slug = this._generateSlug(e.target.value);
-            this.querySelector('#slugInput').value = slug;
+            this._shadow.querySelector('#slugInput').value = slug;
         });
         
         // Tags
-        this.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
-        this.querySelector('#tagInput').addEventListener('keypress', (e) => {
+        this._shadow.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
+        this._shadow.querySelector('#tagInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 this._addTag();
@@ -887,43 +745,29 @@ class BlogEditorDashboard extends HTMLElement {
         this._setupImageUpload('authorImage');
         this._setupImageUpload('seoOgImage');
         
-        // Save post
-        const saveBtn = this.querySelector('#savePost');
-        console.log('📝 Blog Editor: Save button found:', !!saveBtn);
-        saveBtn.addEventListener('click', () => {
-            console.log('📝 Blog Editor: Save button clicked');
-            this._savePost();
-        });
+        // Save & Cancel
+        this._shadow.querySelector('#savePost').addEventListener('click', () => this._savePost());
+        this._shadow.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
         
-        // Cancel edit
-        this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
-        
-        console.log('📝 Blog Editor: ✅ Event listeners set up complete');
+        console.log('📝 Blog Editor: ✅ Event listeners set up');
     }
     
     _initializeQuill() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: INITIALIZING QUILL EDITOR');
-        console.log('📝 Blog Editor: Window.Quill exists:', !!window.Quill);
-        console.log('========================================');
+        console.log('📝 Blog Editor: Initializing Quill...');
         
         if (!window.Quill) {
-            console.error('📝 Blog Editor: ❌ Quill not loaded!');
-            this._showToast('error', 'Editor failed to load');
+            console.error('📝 Blog Editor: Quill not loaded');
             return;
         }
         
-        const editorElement = this.querySelector('#quillEditor');
-        console.log('📝 Blog Editor: Quill element found:', !!editorElement);
+        const editorElement = this._shadow.querySelector('#quillEditor');
         
         if (!editorElement) {
-            console.error('📝 Blog Editor: ❌ Editor element not found!');
+            console.error('📝 Blog Editor: Editor element not found');
             return;
         }
         
-       try {
-            console.log('📝 Blog Editor: Creating Quill instance...');
-            
+        try {
             this._quill = new Quill(editorElement, {
                 theme: 'snow',
                 placeholder: 'Start writing your amazing blog post...',
@@ -942,39 +786,11 @@ class BlogEditorDashboard extends HTMLElement {
                 }
             });
             
-            console.log('📝 Blog Editor: ✅ Quill instance created');
-            console.log('📝 Blog Editor: Quill object:', this._quill);
-            console.log('📝 Blog Editor: Quill toolbar:', !!this._quill.getModule('toolbar'));
-            
             this._editorReady = true;
-            console.log('📝 Blog Editor: Editor ready flag set to true');
-            
-            // Verify editor is visible
-            setTimeout(() => {
-                const toolbar = editorElement.querySelector('.ql-toolbar');
-                const container = editorElement.querySelector('.ql-container');
-                
-                console.log('========================================');
-                console.log('📝 Blog Editor: QUILL VISIBILITY CHECK');
-                console.log('📝 Blog Editor: Toolbar exists:', !!toolbar);
-                console.log('📝 Blog Editor: Container exists:', !!container);
-                
-                if (toolbar) {
-                    console.log('📝 Blog Editor: Toolbar display:', window.getComputedStyle(toolbar).display);
-                }
-                if (container) {
-                    console.log('📝 Blog Editor: Container display:', window.getComputedStyle(container).display);
-                }
-                console.log('========================================');
-            }, 100);
+            console.log('📝 Blog Editor: ✅ Quill initialized');
             
         } catch (error) {
-            console.error('========================================');
-            console.error('📝 Blog Editor: ❌ FAILED TO INITIALIZE QUILL');
-            console.error('📝 Blog Editor: Error:', error);
-            console.error('📝 Blog Editor: Error stack:', error.stack);
-            console.error('========================================');
-            this._showToast('error', 'Failed to initialize editor');
+            console.error('📝 Blog Editor: Quill initialization error:', error);
         }
     }
     
@@ -987,30 +803,17 @@ class BlogEditorDashboard extends HTMLElement {
             if (typeof op.insert === 'string') {
                 let text = op.insert;
                 
-                // Apply formatting
                 if (op.attributes) {
-                    if (op.attributes.bold) {
-                        text = `**${text}**`;
-                    }
-                    if (op.attributes.italic) {
-                        text = `*${text}*`;
-                    }
-                    if (op.attributes.strike) {
-                        text = `~~${text}~~`;
-                    }
-                    if (op.attributes.code) {
-                        text = `\`${text}\``;
-                    }
-                    if (op.attributes.link) {
-                        text = `[${text}](${op.attributes.link})`;
-                    }
+                    if (op.attributes.bold) text = `**${text}**`;
+                    if (op.attributes.italic) text = `*${text}*`;
+                    if (op.attributes.strike) text = `~~${text}~~`;
+                    if (op.attributes.code) text = `\`${text}\``;
+                    if (op.attributes.link) text = `[${text}](${op.attributes.link})`;
                     if (op.attributes.header) {
                         const level = '#'.repeat(op.attributes.header);
                         text = `${level} ${text}\n`;
                     }
-                    if (op.attributes.blockquote) {
-                        text = `> ${text}\n`;
-                    }
+                    if (op.attributes.blockquote) text = `> ${text}\n`;
                     if (op.attributes.list) {
                         const prefix = op.attributes.list === 'ordered' ? '1.' : '-';
                         text = `${prefix} ${text}`;
@@ -1029,8 +832,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _setupImageUpload(type) {
-        const area = this.querySelector(`#${type}Area`);
-        const input = this.querySelector(`#${type}Input`);
+        const area = this._shadow.querySelector(`#${type}Area`);
+        const input = this._shadow.querySelector(`#${type}Input`);
         
         area.addEventListener('click', () => input.click());
         
@@ -1040,7 +843,7 @@ class BlogEditorDashboard extends HTMLElement {
             
             const reader = new FileReader();
             reader.onload = (event) => {
-                const preview = this.querySelector(`#${type}Preview`);
+                const preview = this._shadow.querySelector(`#${type}Preview`);
                 preview.innerHTML = `
                     <img src="${event.target.result}" class="blog-editor-image-preview">
                     <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name}</div>
@@ -1062,7 +865,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _addTag() {
-        const input = this.querySelector('#tagInput');
+        const input = this._shadow.querySelector('#tagInput');
         const tag = input.value.trim();
         
         if (!tag) return;
@@ -1076,7 +879,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _renderTags() {
-        const container = this.querySelector('#tagsDisplay');
+        const container = this._shadow.querySelector('#tagsDisplay');
         container.innerHTML = this._formData.tags.map((tag, index) => `
             <div class="blog-editor-tag-chip">
                 ${tag}
@@ -1094,55 +897,41 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     async _savePost() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: SAVE POST CALLED');
-        console.log('========================================');
-        
-        const title = this.querySelector('#titleInput').value.trim();
-        const slug = this.querySelector('#slugInput').value.trim();
-        
-        console.log('📝 Blog Editor: Title:', title);
-        console.log('📝 Blog Editor: Slug:', slug);
+        const title = this._shadow.querySelector('#titleInput').value.trim();
+        const slug = this._shadow.querySelector('#slugInput').value.trim();
         
         if (!title) {
-            console.log('📝 Blog Editor: ❌ No title provided');
             this._showToast('error', 'Please enter a title');
             return;
         }
         
         if (!this._quill) {
-            console.log('📝 Blog Editor: ❌ Editor not ready');
             this._showToast('error', 'Editor not ready');
             return;
         }
         
         try {
-            console.log('📝 Blog Editor: Getting content from Quill...');
             const delta = this._quill.getContents();
             const htmlContent = this._quill.root.innerHTML;
             const markdown = this._convertQuillToMarkdown(delta);
-            
-            console.log('📝 Blog Editor: Delta blocks:', delta.ops?.length || 0);
-            console.log('📝 Blog Editor: HTML length:', htmlContent.length);
-            console.log('📝 Blog Editor: Markdown length:', markdown.length);
             
             const formData = {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
-                excerpt: this.querySelector('#excerptInput').value,
+                excerpt: this._shadow.querySelector('#excerptInput').value,
                 content: markdown,
                 htmlContent: htmlContent,
                 quillDelta: JSON.stringify(delta),
-                author: this.querySelector('#authorInput').value,
-                category: this.querySelector('#categoryInput').value,
+                author: this._shadow.querySelector('#authorInput').value,
+                category: this._shadow.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
-                status: this.querySelector('#statusSelect').value,
-                readTime: parseInt(this.querySelector('#readTimeInput').value) || 5,
-                isFeatured: this.querySelector('#isFeaturedCheckbox').checked,
-                seoTitle: this.querySelector('#seoTitleInput').value,
-                seoDescription: this.querySelector('#seoDescriptionInput').value,
-                seoKeywords: this.querySelector('#seoKeywordsInput').value,
+                status: this._shadow.querySelector('#statusSelect').value,
+                readTime: parseInt(this._shadow.querySelector('#readTimeInput').value) || 5,
+                isFeatured: this._shadow.querySelector('#isFeaturedCheckbox').checked,
+                seoTitle: this._shadow.querySelector('#seoTitleInput').value,
+                seoDescription: this._shadow.querySelector('#seoDescriptionInput').value,
+                seoKeywords: this._shadow.querySelector('#seoKeywordsInput').value,
                 featuredImage: this._formData.featuredImage,
                 authorImage: this._formData.authorImage,
                 seoOgImage: this._formData.seoOgImage,
@@ -1150,14 +939,10 @@ class BlogEditorDashboard extends HTMLElement {
                 modifiedDate: new Date().toISOString()
             };
             
-            console.log('📝 Blog Editor: Form data prepared');
-            console.log('📝 Blog Editor: Editing ID:', this._editingItemId || 'NEW POST');
-            
             const promises = [];
             
             ['featuredImage', 'authorImage', 'seoOgImage'].forEach(key => {
                 if (formData[key] && formData[key] instanceof File) {
-                    console.log(`📝 Blog Editor: Converting ${key} to base64...`);
                     promises.push(
                         new Promise((resolve) => {
                             const reader = new FileReader();
@@ -1167,7 +952,6 @@ class BlogEditorDashboard extends HTMLElement {
                                     name: formData[key].name,
                                     type: formData[key].type
                                 };
-                                console.log(`📝 Blog Editor: ✅ ${key} converted`);
                                 resolve();
                             };
                             reader.readAsDataURL(formData[key]);
@@ -1177,81 +961,60 @@ class BlogEditorDashboard extends HTMLElement {
             });
             
             await Promise.all(promises);
-            console.log('📝 Blog Editor: All images converted');
             
-            console.log('📝 Blog Editor: Dispatching save-blog-post event...');
             this._dispatchEvent('save-blog-post', formData);
-            console.log('📝 Blog Editor: ✅ Event dispatched');
             
         } catch (error) {
-            console.error('========================================');
-            console.error('📝 Blog Editor: ❌ SAVE ERROR');
-            console.error('📝 Blog Editor: Error:', error);
-            console.error('📝 Blog Editor: Stack:', error.stack);
-            console.error('========================================');
+            console.error('📝 Blog Editor: Save error:', error);
             this._showToast('error', 'Failed to save post');
         }
     }
     
     _cancelEdit() {
-        console.log('📝 Blog Editor: Cancel edit clicked');
         this._editingItemId = null;
         this._resetForm();
-        this.querySelector('#cancelEdit').style.display = 'none';
+        this._shadow.querySelector('#cancelEdit').style.display = 'none';
     }
     
     _resetForm() {
-        console.log('📝 Blog Editor: Resetting form...');
-        
-        this.querySelector('#titleInput').value = '';
-        this.querySelector('#slugInput').value = '';
-        this.querySelector('#excerptInput').value = '';
-        this.querySelector('#authorInput').value = '';
-        this.querySelector('#categoryInput').value = '';
-        this.querySelector('#readTimeInput').value = '5';
-        this.querySelector('#seoTitleInput').value = '';
-        this.querySelector('#seoDescriptionInput').value = '';
-        this.querySelector('#seoKeywordsInput').value = '';
-        this.querySelector('#isFeaturedCheckbox').checked = false;
-        this.querySelector('#statusSelect').value = 'draft';
+        this._shadow.querySelector('#titleInput').value = '';
+        this._shadow.querySelector('#slugInput').value = '';
+        this._shadow.querySelector('#excerptInput').value = '';
+        this._shadow.querySelector('#authorInput').value = '';
+        this._shadow.querySelector('#categoryInput').value = '';
+        this._shadow.querySelector('#readTimeInput').value = '5';
+        this._shadow.querySelector('#seoTitleInput').value = '';
+        this._shadow.querySelector('#seoDescriptionInput').value = '';
+        this._shadow.querySelector('#seoKeywordsInput').value = '';
+        this._shadow.querySelector('#isFeaturedCheckbox').checked = false;
+        this._shadow.querySelector('#statusSelect').value = 'draft';
         
         this._formData.tags = [];
         this._renderTags();
         
-        this.querySelector('#featuredImagePreview').innerHTML = '';
-        this.querySelector('#authorImagePreview').innerHTML = '';
-        this.querySelector('#seoOgImagePreview').innerHTML = '';
+        this._shadow.querySelector('#featuredImagePreview').innerHTML = '';
+        this._shadow.querySelector('#authorImagePreview').innerHTML = '';
+        this._shadow.querySelector('#seoOgImagePreview').innerHTML = '';
         
         this._formData.featuredImage = null;
         this._formData.authorImage = null;
         this._formData.seoOgImage = null;
         
         if (this._quill) {
-            console.log('📝 Blog Editor: Clearing Quill content...');
             this._quill.setContents([]);
         }
-        
-        console.log('📝 Blog Editor: ✅ Form reset complete');
     }
     
     _renderBlogPosts(data) {
-        console.log('========================================');
-        console.log('📝 Blog Editor: RENDERING BLOG POSTS');
-        console.log('📝 Blog Editor: Posts count:', data.posts?.length || 0);
-        console.log('========================================');
-        
-        const loading = this.querySelector('#loadingPosts');
-        const grid = this.querySelector('#postsGrid');
+        const loading = this._shadow.querySelector('#loadingPosts');
+        const grid = this._shadow.querySelector('#postsGrid');
         
         loading.classList.add('hide');
         
         if (!data.posts || data.posts.length === 0) {
-            console.log('📝 Blog Editor: No posts to display');
             grid.innerHTML = '<div style="text-align: center; padding: 60px; color: #6b7280;">No blog posts yet. Create your first post!</div>';
             return;
         }
-        
-        console.log('📝 Blog Editor: Rendering', data.posts.length, 'posts...');
         
         grid.innerHTML = data.posts.map(post => `
             <div class="blog-editor-post-card">
@@ -1272,12 +1035,9 @@ class BlogEditorDashboard extends HTMLElement {
             </div>
         `).join('');
         
-        console.log('📝 Blog Editor: Posts HTML rendered');
-        
         grid.querySelectorAll('.edit-post-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
-                console.log('📝 Blog Editor: Edit post clicked:', id);
                 this._dispatchEvent('load-post-for-edit', { id });
             });
         });
@@ -1285,56 +1045,47 @@ class BlogEditorDashboard extends HTMLElement {
         grid.querySelectorAll('.delete-post-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
-                console.log('📝 Blog Editor: Delete post clicked:', id);
                 if (confirm('Are you sure you want to delete this post?')) {
                     this._dispatchEvent('delete-blog-post', { id });
                 }
             });
         });
-        
-        console.log('📝 Blog Editor: ✅ Posts rendered with event listeners');
     }
     
     _loadEditData(data) {
-        console.log('========================================');
-        console.log('📝 Blog Editor: LOADING EDIT DATA');
-        console.log('📝 Blog Editor: Post ID:', data._id);
-        console.log('📝 Blog Editor: Post Title:', data.title);
-        console.log('========================================');
-        
         this._editingItemId = data._id;
         
-        this.querySelector('#titleInput').value = data.title || '';
-        this.querySelector('#slugInput').value = data.slug || '';
-        this.querySelector('#excerptInput').value = data.excerpt || '';
-        this.querySelector('#authorInput').value = data.author || '';
-        this.querySelector('#categoryInput').value = data.category || '';
-        this.querySelector('#readTimeInput').value = data.readTime || 5;
-        this.querySelector('#seoTitleInput').value = data.seoTitle || '';
-        this.querySelector('#seoDescriptionInput').value = data.seoDescription || '';
-        this.querySelector('#seoKeywordsInput').value = data.seoKeywords || '';
-        this.querySelector('#isFeaturedCheckbox').checked = data.isFeatured || false;
-        this.querySelector('#statusSelect').value = data.status || 'draft';
+        this._shadow.querySelector('#titleInput').value = data.title || '';
+        this._shadow.querySelector('#slugInput').value = data.slug || '';
+        this._shadow.querySelector('#excerptInput').value = data.excerpt || '';
+        this._shadow.querySelector('#authorInput').value = data.author || '';
+        this._shadow.querySelector('#categoryInput').value = data.category || '';
+        this._shadow.querySelector('#readTimeInput').value = data.readTime || 5;
+        this._shadow.querySelector('#seoTitleInput').value = data.seoTitle || '';
+        this._shadow.querySelector('#seoDescriptionInput').value = data.seoDescription || '';
+        this._shadow.querySelector('#seoKeywordsInput').value = data.seoKeywords || '';
+        this._shadow.querySelector('#isFeaturedCheckbox').checked = data.isFeatured || false;
+        this._shadow.querySelector('#statusSelect').value = data.status || 'draft';
         
         this._formData.tags = data.tags || [];
         this._renderTags();
         
         if (data.featuredImage) {
-            this.querySelector('#featuredImagePreview').innerHTML = `
+            this._shadow.querySelector('#featuredImagePreview').innerHTML = `
                 <img src="${data.featuredImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.featuredImage = data.featuredImage;
         }
         
         if (data.authorImage) {
-            this.querySelector('#authorImagePreview').innerHTML = `
+            this._shadow.querySelector('#authorImagePreview').innerHTML = `
                 <img src="${data.authorImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.authorImage = data.authorImage;
         }
         
         if (data.seoOgImage) {
-            this.querySelector('#seoOgImagePreview').innerHTML = `
+            this._shadow.querySelector('#seoOgImagePreview').innerHTML = `
                 <img src="${data.seoOgImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.seoOgImage = data.seoOgImage;
@@ -1342,50 +1093,33 @@ class BlogEditorDashboard extends HTMLElement {
         
         this._formData.publishedDate = data.publishedDate;
         
-        // Load Quill content
         if (this._quill && data.quillDelta) {
             try {
-                console.log('📝 Blog Editor: Loading Quill delta...');
                 const delta = JSON.parse(data.quillDelta);
                 this._quill.setContents(delta);
-                console.log('📝 Blog Editor: ✅ Quill content loaded');
             } catch (e) {
-                console.error('📝 Blog Editor: Failed to load Quill delta:', e);
-                // Fallback to HTML
+                console.error('📝 Blog Editor: Failed to load Quill content:', e);
                 if (data.htmlContent) {
-                    console.log('📝 Blog Editor: Falling back to HTML content...');
                     this._quill.root.innerHTML = data.htmlContent;
                 }
             }
         }
         
-        this.querySelector('[data-view="editor"]').click();
-        this.querySelector('#cancelEdit').style.display = 'inline-block';
-        
-        console.log('📝 Blog Editor: ✅ Edit data loaded');
+        this._shadow.querySelector('[data-view="editor"]').click();
+        this._shadow.querySelector('#cancelEdit').style.display = 'inline-block';
     }
     
     _handleImageUploadResult(result) {
-        console.log('📝 Blog Editor: Image upload result received:', result);
+        console.log('📝 Blog Editor: Image upload result:', result);
     }
     
     _dispatchEvent(name, detail) {
-        console.log('========================================');
-        console.log('📝 Blog Editor: DISPATCHING EVENT');
-        console.log('📝 Blog Editor: Event name:', name);
-        console.log('📝 Blog Editor: Event detail keys:', Object.keys(detail));
-        console.log('========================================');
-        
         this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
     
     _showToast(type, message) {
-        console.log('📝 Blog Editor: Showing toast:', type, message);
-        const toast = this.querySelector('#toast');
-        if (!toast) {
-            console.error('📝 Blog Editor: Toast element not found!');
-            return;
-        }
+        const toast = this._shadow.querySelector('#toast');
+        if (!toast) return;
         
         toast.textContent = message;
         toast.className = `blog-editor-toast blog-editor-toast-${type} show`;
@@ -1394,7 +1128,4 @@ class BlogEditorDashboard extends HTMLElement {
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('========================================');
-console.log('📝 Blog Editor: ✅ CUSTOM ELEMENT REGISTERED');
-console.log('📝 Blog Editor: Element name: blog-editor-dashboard');
-console.log('========================================');
+console.log('📝 Blog Editor: ✅ Custom element registered (Shadow DOM)');
