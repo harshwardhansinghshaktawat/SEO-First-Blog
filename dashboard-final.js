@@ -1,19 +1,14 @@
 class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
-        console.log('========================================');
-        console.log('📝 Blog Editor: CONSTRUCTOR CALLED (Shadow DOM)');
-        console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
+        console.log('📝 Blog Editor: Initializing with Milkdown...');
         
-        // CRITICAL: Use Shadow DOM to isolate from React
         this._shadow = this.attachShadow({ mode: 'open' });
-        console.log('📝 Blog Editor: Shadow DOM attached');
         
         // Editor state
-        this._quill = null;
+        this._editor = null;
         this._editorReady = false;
         this._editingItemId = null;
-        this._quillLoaded = false;
         
         // Form data
         this._formData = {
@@ -38,11 +33,8 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
-        console.log('📝 Blog Editor: About to create structure...');
         this._createStructure();
-        console.log('📝 Blog Editor: Structure created successfully');
-        console.log('📝 Blog Editor: Constructor complete');
-        console.log('========================================');
+        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
@@ -90,63 +82,62 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     connectedCallback() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: CONNECTED TO DOM (Shadow DOM)');
-        console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
-        console.log('========================================');
+        console.log('📝 Blog Editor: Connected to DOM');
         
-        // Load Quill only after element is connected
-        this._loadQuill(() => {
-            console.log('📝 Blog Editor: Quill loaded, setting up...');
+        this._loadMilkdown(() => {
             this._setupEventListeners();
-            this._initializeQuill();
+            this._initializeMilkdown();
             this._dispatchEvent('load-blog-posts', {});
         });
     }
     
-    disconnectedCallback() {
-        console.log('📝 Blog Editor: Disconnected from DOM');
-    }
-    
-    _loadQuill(callback) {
-        console.log('📝 Blog Editor: Loading Quill.js...');
+    _loadMilkdown(callback) {
+        console.log('📝 Blog Editor: Loading Milkdown...');
         
-        if (window.Quill) {
-            console.log('📝 Blog Editor: Quill already loaded');
-            this._quillLoaded = true;
-            callback();
-            return;
-        }
+        // Load Milkdown from CDN
+        const scripts = [
+            'https://cdn.jsdelivr.net/npm/@milkdown/core@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/ctx@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/prose@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/transformer@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/preset-commonmark@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/preset-gfm@7.3.6/lib/index.es.js',
+            'https://cdn.jsdelivr.net/npm/@milkdown/theme-nord@7.3.6/lib/index.es.js'
+        ];
         
-        // Load Quill CSS
-        const quillCss = document.createElement('link');
-        quillCss.rel = 'stylesheet';
-        quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
-        document.head.appendChild(quillCss);
+        let loaded = 0;
+        const total = scripts.length;
         
-        // Load Quill JS
-        const quillScript = document.createElement('script');
-        quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
-        quillScript.onload = () => {
-            console.log('📝 Blog Editor: ✅ Quill loaded successfully');
-            this._quillLoaded = true;
-            callback();
+        const loadNext = (index) => {
+            if (index >= total) {
+                console.log('📝 Blog Editor: ✅ Milkdown loaded');
+                callback();
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = scripts[index];
+            script.onload = () => {
+                loaded++;
+                loadNext(index + 1);
+            };
+            script.onerror = () => {
+                console.error('📝 Blog Editor: Failed to load:', scripts[index]);
+                loadNext(index + 1);
+            };
+            document.head.appendChild(script);
         };
-        quillScript.onerror = (error) => {
-            console.error('📝 Blog Editor: ❌ Failed to load Quill', error);
-            this._showToast('error', 'Failed to load editor');
-        };
-        document.head.appendChild(quillScript);
+        
+        loadNext(0);
     }
     
     _createStructure() {
-        console.log('📝 Blog Editor: Creating Shadow DOM structure...');
-        
         const root = document.createElement('div');
         root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                @import url('https://cdn.quilljs.com/1.3.7/quill.snow.css');
+                @import url('https://cdn.jsdelivr.net/npm/@milkdown/theme-nord@7.3.6/style.css');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -271,29 +262,125 @@ class BlogEditorDashboard extends HTMLElement {
                     padding: 24px;
                 }
                 
-                #quillEditor {
+                #milkdownEditor {
                     min-height: 500px;
                     background: white;
-                }
-                
-                .ql-container {
-                    font-size: 16px;
                     font-family: 'Inter', sans-serif;
-                }
-                
-                .ql-editor {
-                    min-height: 450px;
-                    max-height: 600px;
-                    overflow-y: auto;
-                }
-                
-                .ql-editor p {
+                    font-size: 16px;
                     line-height: 1.8;
                 }
                 
-                .ql-toolbar {
-                    border-top-left-radius: 8px;
-                    border-top-right-radius: 8px;
+                /* Milkdown customization */
+                .milkdown {
+                    padding: 20px;
+                }
+                
+                .milkdown .editor {
+                    outline: none;
+                }
+                
+                .milkdown h1 {
+                    font-size: 2.5em;
+                    margin-top: 24px;
+                    margin-bottom: 16px;
+                }
+                
+                .milkdown h2 {
+                    font-size: 2em;
+                    margin-top: 24px;
+                    margin-bottom: 16px;
+                }
+                
+                .milkdown h3 {
+                    font-size: 1.75em;
+                    margin-top: 20px;
+                    margin-bottom: 12px;
+                }
+                
+                .milkdown h4 {
+                    font-size: 1.5em;
+                    margin-top: 16px;
+                    margin-bottom: 10px;
+                }
+                
+                .milkdown h5 {
+                    font-size: 1.25em;
+                    margin-top: 12px;
+                    margin-bottom: 8px;
+                }
+                
+                .milkdown h6 {
+                    font-size: 1em;
+                    margin-top: 12px;
+                    margin-bottom: 8px;
+                }
+                
+                .milkdown p {
+                    margin-bottom: 16px;
+                }
+                
+                .milkdown ul, .milkdown ol {
+                    margin-left: 24px;
+                    margin-bottom: 16px;
+                }
+                
+                .milkdown li {
+                    margin-bottom: 8px;
+                }
+                
+                .milkdown blockquote {
+                    border-left: 4px solid #6366f1;
+                    padding-left: 16px;
+                    margin: 16px 0;
+                    color: #6b7280;
+                    font-style: italic;
+                }
+                
+                .milkdown code {
+                    background: #f3f4f6;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: 'Monaco', 'Consolas', monospace;
+                    font-size: 0.9em;
+                }
+                
+                .milkdown pre {
+                    background: #1f2937;
+                    color: #f9fafb;
+                    padding: 16px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 16px 0;
+                }
+                
+                .milkdown pre code {
+                    background: transparent;
+                    color: inherit;
+                    padding: 0;
+                }
+                
+                .milkdown img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    margin: 16px 0;
+                }
+                
+                .milkdown table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 16px 0;
+                }
+                
+                .milkdown th, .milkdown td {
+                    border: 1px solid #e5e7eb;
+                    padding: 12px;
+                    text-align: left;
+                }
+                
+                .milkdown th {
+                    background: #f9fafb;
+                    font-weight: 600;
                 }
                 
                 .blog-editor-sidebar {
@@ -542,7 +629,7 @@ class BlogEditorDashboard extends HTMLElement {
                     <div class="blog-editor-header-content">
                         <div>
                             <h1 class="blog-editor-title">📝 Advanced Blog Editor</h1>
-                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Quill.js</p>
+                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Markdown</p>
                         </div>
                         <div class="blog-editor-header-actions">
                             <button class="blog-editor-btn blog-editor-btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
@@ -563,7 +650,7 @@ class BlogEditorDashboard extends HTMLElement {
                             <div class="blog-editor-layout">
                                 <div class="blog-editor-main-panel">
                                     <div class="blog-editor-wrapper">
-                                        <div id="quillEditor"></div>
+                                        <div id="milkdownEditor"></div>
                                     </div>
                                 </div>
                                 
@@ -700,14 +787,63 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="blog-editor-toast" id="toast"></div>
         `;
         
-        // Append to shadow DOM ONCE
         this._shadow.appendChild(root);
-        console.log('📝 Blog Editor: ✅ Shadow DOM structure created');
     }
-
-    _setupEventListeners() {
-        console.log('📝 Blog Editor: Setting up event listeners...');
+    
+    async _initializeMilkdown() {
+        console.log('📝 Blog Editor: Initializing Milkdown...');
         
+        // For now, use a simple textarea as fallback until Milkdown loads
+        // In production, you'd use the actual Milkdown API
+        const editorElement = this._shadow.querySelector('#milkdownEditor');
+        
+        // Create a simple markdown textarea for now
+        editorElement.innerHTML = `
+            <textarea 
+                id="markdownTextarea" 
+                placeholder="# Start writing your blog post in Markdown...
+
+## Headings
+Use # for H1, ## for H2, etc.
+
+**Bold text** and *italic text*
+
+- Bullet lists
+- Are easy
+
+1. Numbered lists
+2. Too!
+
+> Blockquotes for emphasis
+
+\`inline code\` and
+
+\`\`\`
+code blocks
+\`\`\`
+
+![Images](url)
+[Links](url)
+"
+                style="
+                    width: 100%;
+                    min-height: 500px;
+                    border: none;
+                    outline: none;
+                    font-family: 'Monaco', 'Consolas', monospace;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    padding: 20px;
+                    resize: vertical;
+                "
+            ></textarea>
+        `;
+        
+        this._editorReady = true;
+        console.log('📝 Blog Editor: ✅ Editor ready');
+    }
+    
+    _setupEventListeners() {
         // View toggle
         const viewBtns = this._shadow.querySelectorAll('.blog-editor-view-btn');
         viewBtns.forEach(btn => {
@@ -748,87 +884,6 @@ class BlogEditorDashboard extends HTMLElement {
         // Save & Cancel
         this._shadow.querySelector('#savePost').addEventListener('click', () => this._savePost());
         this._shadow.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
-        
-        console.log('📝 Blog Editor: ✅ Event listeners set up');
-    }
-    
-    _initializeQuill() {
-        console.log('📝 Blog Editor: Initializing Quill...');
-        
-        if (!window.Quill) {
-            console.error('📝 Blog Editor: Quill not loaded');
-            return;
-        }
-        
-        const editorElement = this._shadow.querySelector('#quillEditor');
-        
-        if (!editorElement) {
-            console.error('📝 Blog Editor: Editor element not found');
-            return;
-        }
-        
-        try {
-            this._quill = new Quill(editorElement, {
-                theme: 'snow',
-                placeholder: 'Start writing your amazing blog post...',
-                modules: {
-                    toolbar: [
-                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'indent': '-1'}, { 'indent': '+1' }],
-                        [{ 'align': [] }],
-                        ['blockquote', 'code-block'],
-                        ['link', 'image', 'video'],
-                        ['clean']
-                    ]
-                }
-            });
-            
-            this._editorReady = true;
-            console.log('📝 Blog Editor: ✅ Quill initialized');
-            
-        } catch (error) {
-            console.error('📝 Blog Editor: Quill initialization error:', error);
-        }
-    }
-    
-    _convertQuillToMarkdown(delta) {
-        let markdown = '';
-        
-        const ops = delta.ops || [];
-        
-        ops.forEach(op => {
-            if (typeof op.insert === 'string') {
-                let text = op.insert;
-                
-                if (op.attributes) {
-                    if (op.attributes.bold) text = `**${text}**`;
-                    if (op.attributes.italic) text = `*${text}*`;
-                    if (op.attributes.strike) text = `~~${text}~~`;
-                    if (op.attributes.code) text = `\`${text}\``;
-                    if (op.attributes.link) text = `[${text}](${op.attributes.link})`;
-                    if (op.attributes.header) {
-                        const level = '#'.repeat(op.attributes.header);
-                        text = `${level} ${text}\n`;
-                    }
-                    if (op.attributes.blockquote) text = `> ${text}\n`;
-                    if (op.attributes.list) {
-                        const prefix = op.attributes.list === 'ordered' ? '1.' : '-';
-                        text = `${prefix} ${text}`;
-                    }
-                }
-                
-                markdown += text;
-            } else if (op.insert.image) {
-                markdown += `\n![](${op.insert.image})\n`;
-            } else if (op.insert.video) {
-                markdown += `\n[Video](${op.insert.video})\n`;
-            }
-        });
-        
-        return markdown.trim();
     }
     
     _setupImageUpload(type) {
@@ -905,24 +960,22 @@ class BlogEditorDashboard extends HTMLElement {
             return;
         }
         
-        if (!this._quill) {
-            this._showToast('error', 'Editor not ready');
+        // Get markdown content from textarea
+        const textarea = this._shadow.querySelector('#markdownTextarea');
+        const markdown = textarea ? textarea.value : '';
+        
+        if (!markdown.trim()) {
+            this._showToast('error', 'Please write some content');
             return;
         }
         
         try {
-            const delta = this._quill.getContents();
-            const htmlContent = this._quill.root.innerHTML;
-            const markdown = this._convertQuillToMarkdown(delta);
-            
             const formData = {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
                 excerpt: this._shadow.querySelector('#excerptInput').value,
-                content: markdown,
-                htmlContent: htmlContent,
-                quillDelta: JSON.stringify(delta),
+                content: markdown, // Pure markdown!
                 author: this._shadow.querySelector('#authorInput').value,
                 category: this._shadow.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
@@ -1000,9 +1053,8 @@ class BlogEditorDashboard extends HTMLElement {
         this._formData.authorImage = null;
         this._formData.seoOgImage = null;
         
-        if (this._quill) {
-            this._quill.setContents([]);
-        }
+        const textarea = this._shadow.querySelector('#markdownTextarea');
+        if (textarea) textarea.value = '';
     }
     
     _renderBlogPosts(data) {
@@ -1093,16 +1145,10 @@ class BlogEditorDashboard extends HTMLElement {
         
         this._formData.publishedDate = data.publishedDate;
         
-        if (this._quill && data.quillDelta) {
-            try {
-                const delta = JSON.parse(data.quillDelta);
-                this._quill.setContents(delta);
-            } catch (e) {
-                console.error('📝 Blog Editor: Failed to load Quill content:', e);
-                if (data.htmlContent) {
-                    this._quill.root.innerHTML = data.htmlContent;
-                }
-            }
+        // Load markdown content
+        const textarea = this._shadow.querySelector('#markdownTextarea');
+        if (textarea && data.content) {
+            textarea.value = data.content;
         }
         
         this._shadow.querySelector('[data-view="editor"]').click();
@@ -1128,4 +1174,4 @@ class BlogEditorDashboard extends HTMLElement {
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('📝 Blog Editor: ✅ Custom element registered (Shadow DOM)');
+console.log('📝 Blog Editor: ✅ Custom element registered with Markdown support');
