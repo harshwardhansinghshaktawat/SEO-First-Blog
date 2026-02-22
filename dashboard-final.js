@@ -4,7 +4,7 @@ class BlogEditorDashboard extends HTMLElement {
         console.log('📝 Blog Editor: Initializing...');
         
         // Editor state
-        this._editor = null;
+        this._quill = null;
         this._editorReady = false;
         this._editingItemId = null;
         
@@ -32,7 +32,7 @@ class BlogEditorDashboard extends HTMLElement {
         };
         
         this._createStructure();
-        this._loadEditorJS(() => {
+        this._loadQuill(() => {
             this._setupEventListeners();
         });
         console.log('📝 Blog Editor: Complete');
@@ -87,48 +87,26 @@ class BlogEditorDashboard extends HTMLElement {
         this._dispatchEvent('load-blog-posts', {});
     }
     
-    _loadEditorJS(callback) {
-        console.log('📝 Blog Editor: Loading Editor.js and plugins...');
+    _loadQuill(callback) {
+        console.log('📝 Blog Editor: Loading Quill.js...');
         
-        const scripts = [
-            'https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/header@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/list@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/checklist@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/quote@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/code@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/delimiter@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/table@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/link@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/marker@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/inline-code@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/embed@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/warning@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/raw@latest'
-        ];
+        // Load CSS
+        const quillCss = document.createElement('link');
+        quillCss.rel = 'stylesheet';
+        quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
+        document.head.appendChild(quillCss);
         
-        let loaded = 0;
-        const total = scripts.length;
-        
-        scripts.forEach(src => {
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = () => {
-                loaded++;
-                if (loaded === total) {
-                    console.log('📝 Blog Editor: All scripts loaded');
-                    callback();
-                }
-            };
-            script.onerror = () => {
-                console.error('📝 Blog Editor: Failed to load script:', src);
-                loaded++;
-                if (loaded === total) {
-                    callback();
-                }
-            };
-            document.head.appendChild(script);
-        });
+        // Load JS
+        const quillScript = document.createElement('script');
+        quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
+        quillScript.onload = () => {
+            console.log('📝 Blog Editor: Quill loaded');
+            callback();
+        };
+        quillScript.onerror = () => {
+            console.error('📝 Blog Editor: Failed to load Quill');
+        };
+        document.head.appendChild(quillScript);
     }
     
     _createStructure() {
@@ -248,31 +226,27 @@ class BlogEditorDashboard extends HTMLElement {
             
             .blog-editor-wrapper {
                 padding: 24px;
-                min-height: 600px;
             }
             
-            #editorjs {
+            #quillEditor {
+                min-height: 500px;
                 background: white;
             }
             
-            /* Editor.js Overrides */
-            .ce-block__content,
-            .ce-toolbar__content {
-                max-width: 100% !important;
+            /* Quill customization */
+            .ql-container {
+                font-size: 16px;
+                font-family: 'Inter', sans-serif;
             }
             
-            .codex-editor__redactor {
-                padding-bottom: 100px !important;
+            .ql-editor {
+                min-height: 450px;
+                max-height: 600px;
+                overflow-y: auto;
             }
             
-            .ce-paragraph {
-                line-height: 1.8 !important;
-                font-size: 16px !important;
-            }
-            
-            .ce-header {
-                margin-top: 24px !important;
-                margin-bottom: 16px !important;
+            .ql-editor p {
+                line-height: 1.8;
             }
             
             .blog-editor-sidebar {
@@ -524,7 +498,7 @@ class BlogEditorDashboard extends HTMLElement {
                     <div class="blog-editor-header-content">
                         <div>
                             <h1 class="blog-editor-title">📝 Advanced Blog Editor</h1>
-                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Editor.js</p>
+                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Quill.js</p>
                         </div>
                         <div class="blog-editor-header-actions">
                             <button class="blog-editor-btn blog-editor-btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
@@ -545,7 +519,7 @@ class BlogEditorDashboard extends HTMLElement {
                             <div class="blog-editor-layout">
                                 <div class="blog-editor-main-panel">
                                     <div class="blog-editor-wrapper">
-                                        <div id="editorjs"></div>
+                                        <div id="quillEditor"></div>
                                     </div>
                                 </div>
                                 
@@ -684,8 +658,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
 
     _setupEventListeners() {
-        // Initialize Editor.js
-        this._initializeEditor();
+        // Initialize Quill
+        this._initializeQuill();
         
         // View toggle
         const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
@@ -731,204 +705,84 @@ class BlogEditorDashboard extends HTMLElement {
         this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
     }
     
-    _initializeEditor() {
-        const editorElement = this.querySelector('#editorjs');
-        
-        if (!window.EditorJS) {
-            console.error('📝 Blog Editor: Editor.js not loaded');
+    _initializeQuill() {
+        if (!window.Quill) {
+            console.error('📝 Blog Editor: Quill not loaded');
             return;
         }
         
-        // Create custom element reference
-        const customElementRef = this;
+        const editorElement = this.querySelector('#quillEditor');
         
-        // Custom image uploader
-        class ImageTool {
-            static get toolbox() {
-                return {
-                    title: 'Image',
-                    icon: '<svg width="17" height="15" viewBox="0 0 336 276" xmlns="http://www.w3.org/2000/svg"><path d="M291 150.242V79c0-18.778-15.222-34-34-34H79c-18.778 0-34 15.222-34 34v42.264l67.179-44.192 80.398 71.614 56.686-29.14L291 150.242zm-.345 51.622l-42.3-30.246-56.3 29.884-80.773-66.925L45 174.187V197c0 18.778 15.222 34 34 34h178c17.126 0 31.295-12.663 33.655-29.136zM79 0h178c43.63 0 79 35.37 79 79v118c0 43.63-35.37 79-79 79H79c-43.63 0-79-35.37-79-79V79C0 35.37 35.37 0 79 0z"/></svg>'
-                };
-            }
-            
-            constructor({data, api, config}) {
-                this.api = api;
-                this.data = data || {};
-                this.wrapper = null;
-                this.config = config;
-            }
-            
-            render() {
-                const wrapper = document.createElement('div');
-                wrapper.classList.add('simple-image');
-                
-                if (this.data && this.data.url) {
-                    const img = document.createElement('img');
-                    img.src = this.data.url;
-                    img.alt = this.data.caption || '';
-                    img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
-                    wrapper.appendChild(img);
-                    
-                    const caption = document.createElement('div');
-                    caption.contentEditable = true;
-                    caption.innerHTML = this.data.caption || 'Enter image caption...';
-                    caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
-                    wrapper.appendChild(caption);
-                } else {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.style.cssText = 'padding: 12px; border: 2px dashed #e5e7eb; border-radius: 8px; width: 100%; cursor: pointer;';
-                    
-                    input.addEventListener('change', (e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                            this._uploadImage(file, wrapper);
-                        }
-                    });
-                    
-                    wrapper.appendChild(input);
-                }
-                
-                this.wrapper = wrapper;
-                return wrapper;
-            }
-            
-            _uploadImage(file, wrapper) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const base64Data = event.target.result.split(',')[1];
-                    
-                    customElementRef._uploadEditorImage(base64Data, file.name, file.type, (result) => {
-                        if (result.success) {
-                            wrapper.innerHTML = '';
-                            
-                            const img = document.createElement('img');
-                            img.src = result.url;
-                            img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
-                            wrapper.appendChild(img);
-                            
-                            const caption = document.createElement('div');
-                            caption.contentEditable = true;
-                            caption.innerHTML = 'Enter image caption...';
-                            caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
-                            wrapper.appendChild(caption);
-                            
-                            this.data = {
-                                url: result.url,
-                                caption: 'Enter image caption...'
-                            };
-                        }
-                    });
-                };
-                reader.readAsDataURL(file);
-            }
-            
-            save(blockContent) {
-                const img = blockContent.querySelector('img');
-                const caption = blockContent.querySelector('div[contenteditable]');
-                
-                return {
-                    url: img ? img.src : '',
-                    caption: caption ? caption.innerHTML : ''
-                };
-            }
-        }
-        
-        this._editor = new EditorJS({
-            holder: editorElement,
+        this._quill = new Quill(editorElement, {
+            theme: 'snow',
             placeholder: 'Start writing your amazing blog post...',
-            tools: {
-                header: {
-                    class: window.Header,
-                    config: {
-                        placeholder: 'Enter a header',
-                        levels: [1, 2, 3, 4, 5, 6],
-                        defaultLevel: 2
-                    }
-                },
-                list: {
-                    class: window.List,
-                    inlineToolbar: true
-                },
-                checklist: {
-                    class: window.Checklist,
-                    inlineToolbar: true
-                },
-                quote: {
-                    class: window.Quote,
-                    inlineToolbar: true,
-                    config: {
-                        quotePlaceholder: 'Enter a quote',
-                        captionPlaceholder: 'Quote author'
-                    }
-                },
-                code: {
-                    class: window.CodeTool
-                },
-                delimiter: window.Delimiter,
-                table: {
-                    class: window.Table,
-                    inlineToolbar: true
-                },
-                linkTool: {
-                    class: window.LinkTool,
-                    config: {
-                        endpoint: '#'
-                    }
-                },
-                marker: {
-                    class: window.Marker
-                },
-                inlineCode: {
-                    class: window.InlineCode
-                },
-                embed: {
-                    class: window.Embed,
-                    config: {
-                        services: {
-                            youtube: true,
-                            coub: true,
-                            codepen: true,
-                            twitter: true
-                        }
-                    }
-                },
-                warning: {
-                    class: window.Warning,
-                    inlineToolbar: true,
-                    config: {
-                        titlePlaceholder: 'Title',
-                        messagePlaceholder: 'Message'
-                    }
-                },
-                raw: window.RawTool,
-                image: ImageTool
-            },
-            onChange: () => {
-                console.log('📝 Blog Editor: Content changed');
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'indent': '-1'}, { 'indent': '+1' }],
+                    [{ 'align': [] }],
+                    ['blockquote', 'code-block'],
+                    ['link', 'image', 'video'],
+                    ['clean']
+                ]
             }
         });
         
         this._editorReady = true;
-        console.log('📝 Blog Editor: Editor initialized');
+        console.log('📝 Blog Editor: Quill initialized');
     }
     
-    _uploadEditorImage(base64Data, fileName, mimeType, callback) {
-        this._dispatchEvent('upload-editor-image', {
-            fileData: base64Data,
-            fileName: fileName,
-            mimeType: mimeType
+    _convertQuillToMarkdown(delta) {
+        let markdown = '';
+        
+        const ops = delta.ops || [];
+        
+        ops.forEach(op => {
+            if (typeof op.insert === 'string') {
+                let text = op.insert;
+                
+                // Apply formatting
+                if (op.attributes) {
+                    if (op.attributes.bold) {
+                        text = `**${text}**`;
+                    }
+                    if (op.attributes.italic) {
+                        text = `*${text}*`;
+                    }
+                    if (op.attributes.strike) {
+                        text = `~~${text}~~`;
+                    }
+                    if (op.attributes.code) {
+                        text = `\`${text}\``;
+                    }
+                    if (op.attributes.link) {
+                        text = `[${text}](${op.attributes.link})`;
+                    }
+                    if (op.attributes.header) {
+                        const level = '#'.repeat(op.attributes.header);
+                        text = `${level} ${text}\n`;
+                    }
+                    if (op.attributes.blockquote) {
+                        text = `> ${text}\n`;
+                    }
+                    if (op.attributes.list) {
+                        const prefix = op.attributes.list === 'ordered' ? '1.' : '-';
+                        text = `${prefix} ${text}`;
+                    }
+                }
+                
+                markdown += text;
+            } else if (op.insert.image) {
+                markdown += `\n![](${op.insert.image})\n`;
+            } else if (op.insert.video) {
+                markdown += `\n[Video](${op.insert.video})\n`;
+            }
         });
         
-        this._imageUploadCallback = callback;
-    }
-    
-    _handleImageUploadResult(result) {
-        if (this._imageUploadCallback) {
-            this._imageUploadCallback(result);
-            this._imageUploadCallback = null;
-        }
+        return markdown.trim();
     }
     
     _setupImageUpload(type) {
@@ -1005,14 +859,15 @@ class BlogEditorDashboard extends HTMLElement {
             return;
         }
         
-        if (!this._editor) {
+        if (!this._quill) {
             this._showToast('error', 'Editor not ready');
             return;
         }
         
         try {
-            const editorData = await this._editor.save();
-            const markdown = this._convertToMarkdown(editorData);
+            const delta = this._quill.getContents();
+            const htmlContent = this._quill.root.innerHTML;
+            const markdown = this._convertQuillToMarkdown(delta);
             
             const formData = {
                 _id: this._editingItemId,
@@ -1020,7 +875,8 @@ class BlogEditorDashboard extends HTMLElement {
                 slug: slug,
                 excerpt: this.querySelector('#excerptInput').value,
                 content: markdown,
-                editorData: JSON.stringify(editorData),
+                htmlContent: htmlContent,
+                quillDelta: JSON.stringify(delta),
                 author: this.querySelector('#authorInput').value,
                 category: this.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
@@ -1068,91 +924,6 @@ class BlogEditorDashboard extends HTMLElement {
         }
     }
     
-    _convertToMarkdown(editorData) {
-        let markdown = '';
-        
-        editorData.blocks.forEach(block => {
-            switch (block.type) {
-                case 'header':
-                    const level = '#'.repeat(block.data.level);
-                    markdown += `${level} ${block.data.text}\n\n`;
-                    break;
-                    
-                case 'paragraph':
-                    markdown += `${block.data.text}\n\n`;
-                    break;
-                    
-                case 'list':
-                    block.data.items.forEach(item => {
-                        const prefix = block.data.style === 'ordered' ? '1.' : '-';
-                        markdown += `${prefix} ${item}\n`;
-                    });
-                    markdown += '\n';
-                    break;
-                    
-                case 'checklist':
-                    block.data.items.forEach(item => {
-                        const checked = item.checked ? 'x' : ' ';
-                        markdown += `- [${checked}] ${item.text}\n`;
-                    });
-                    markdown += '\n';
-                    break;
-                    
-                case 'quote':
-                    markdown += `> ${block.data.text}\n`;
-                    if (block.data.caption) {
-                        markdown += `>\n> — ${block.data.caption}\n`;
-                    }
-                    markdown += '\n';
-                    break;
-                    
-                case 'code':
-                    markdown += `\`\`\`\n${block.data.code}\n\`\`\`\n\n`;
-                    break;
-                    
-                case 'delimiter':
-                    markdown += `---\n\n`;
-                    break;
-                    
-                case 'table':
-                    if (block.data.content && block.data.content.length > 0) {
-                        markdown += '| ' + block.data.content[0].join(' | ') + ' |\n';
-                        markdown += '|' + block.data.content[0].map(() => '---').join('|') + '|\n';
-                        for (let i = 1; i < block.data.content.length; i++) {
-                            markdown += '| ' + block.data.content[i].join(' | ') + ' |\n';
-                        }
-                        markdown += '\n';
-                    }
-                    break;
-                    
-                case 'image':
-                    markdown += `![${block.data.caption || ''}](${block.data.url})\n\n`;
-                    break;
-                    
-                case 'linkTool':
-                    markdown += `[${block.data.meta.title || block.data.link}](${block.data.link})\n\n`;
-                    break;
-                    
-                case 'embed':
-                    markdown += `[Embedded Content](${block.data.embed})\n\n`;
-                    break;
-                    
-                case 'warning':
-                    markdown += `> ⚠️ **${block.data.title}**\n>\n> ${block.data.message}\n\n`;
-                    break;
-                    
-                case 'raw':
-                    markdown += `${block.data.html}\n\n`;
-                    break;
-                    
-                default:
-                    break;
-            }
-        });
-        
-        return markdown.trim();
-    }
-    
     _cancelEdit() {
         this._editingItemId = null;
         this._resetForm();
@@ -1183,8 +954,8 @@ class BlogEditorDashboard extends HTMLElement {
         this._formData.authorImage = null;
         this._formData.seoOgImage = null;
         
-        if (this._editor) {
-            this._editor.clear();
+        if (this._quill) {
+            this._quill.setContents([]);
         }
     }
     
@@ -1235,7 +1006,7 @@ class BlogEditorDashboard extends HTMLElement {
         });
     }
     
-    async _loadEditData(data) {
+    _loadEditData(data) {
         this._editingItemId = data._id;
         
         this.querySelector('#titleInput').value = data.title || '';
@@ -1276,12 +1047,17 @@ class BlogEditorDashboard extends HTMLElement {
         
         this._formData.publishedDate = data.publishedDate;
         
-        if (this._editor && data.editorData) {
+        // Load Quill content
+        if (this._quill && data.quillDelta) {
             try {
-                const editorData = JSON.parse(data.editorData);
-                await this._editor.render(editorData);
+                const delta = JSON.parse(data.quillDelta);
+                this._quill.setContents(delta);
             } catch (e) {
-                console.error('📝 Blog Editor: Failed to load editor data:', e);
+                console.error('📝 Blog Editor: Failed to load Quill content:', e);
+                // Fallback to HTML
+                if (data.htmlContent) {
+                    this._quill.root.innerHTML = data.htmlContent;
+                }
             }
         }
         
@@ -1302,4 +1078,4 @@ class BlogEditorDashboard extends HTMLElement {
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('📝 Blog Editor: ✅ Custom element registered');
+console.log('📝 Blog Editor: ✅ Custom element registered with Quill.js');
