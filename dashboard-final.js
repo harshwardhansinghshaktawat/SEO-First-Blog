@@ -1,68 +1,96 @@
-class BlogDashboard extends HTMLElement {
+class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
-        console.log('📝 Blog Dashboard: Initializing...');
+        console.log('📝 Blog Editor: Initializing...');
         this._shadow = this.attachShadow({ mode: 'open' });
-        this._posts = [];
-        this._currentPage = 0;
-        this._pageSize = 10;
-        this._totalPosts = 0;
-        this._selectedPost = null;
-        this._featuredImageFile = null;
-        this._authorImageFile = null;
-        this._editorContent = '';
         this._root = document.createElement('div');
+        
+        // Editor state
+        this._content = '';
+        this._cursorPosition = 0;
+        this._selectedImageFile = null;
+        this._editingItemId = null;
+        
+        // Form data
+        this._formData = {
+            title: '',
+            slug: '',
+            excerpt: '',
+            content: '',
+            featuredImage: null,
+            author: '',
+            authorImage: null,
+            category: '',
+            tags: [],
+            status: 'draft',
+            publishedDate: new Date().toISOString(),
+            modifiedDate: new Date().toISOString(),
+            readTime: 0,
+            viewCount: 0,
+            seoTitle: '',
+            seoDescription: '',
+            seoOgImage: null,
+            seoKeywords: '',
+            isFeatured: false
+        };
         
         this._createStructure();
         this._setupEventListeners();
-        console.log('📝 Blog Dashboard: Complete');
+        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
-        return ['blog-posts', 'notification', 'upload-progress'];
+        return ['notification', 'image-upload-result', 'blog-posts-data', 'edit-data'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
-        if (name === 'blog-posts' && newValue && newValue !== oldValue) {
-            try {
-                const data = JSON.parse(newValue);
-                this.setPosts(data);
-            } catch (e) {
-                console.error('📝 Dashboard: Parse error:', e);
-            }
-        }
-        
         if (name === 'notification' && newValue && newValue !== oldValue) {
             try {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
-                if (notification.type === 'success') {
-                    this._hideModal();
-                }
             } catch (e) {
-                console.error('📝 Dashboard: Notification error:', e);
+                console.error('📝 Blog Editor: Notification error:', e);
             }
         }
         
-        if (name === 'upload-progress' && newValue && newValue !== oldValue) {
+        if (name === 'image-upload-result' && newValue && newValue !== oldValue) {
             try {
-                const progress = JSON.parse(newValue);
-                this._updateUploadProgress(progress);
+                const result = JSON.parse(newValue);
+                this._handleImageUploadResult(result);
             } catch (e) {
-                console.error('📝 Dashboard: Progress error:', e);
+                console.error('📝 Blog Editor: Image upload result error:', e);
+            }
+        }
+        
+        if (name === 'blog-posts-data' && newValue && newValue !== oldValue) {
+            try {
+                const data = JSON.parse(newValue);
+                this._renderBlogPosts(data);
+            } catch (e) {
+                console.error('📝 Blog Editor: Blog posts data error:', e);
+            }
+        }
+        
+        if (name === 'edit-data' && newValue && newValue !== oldValue) {
+            try {
+                const data = JSON.parse(newValue);
+                this._loadEditData(data);
+            } catch (e) {
+                console.error('📝 Blog Editor: Edit data error:', e);
             }
         }
     }
     
     connectedCallback() {
-        console.log('📝 Dashboard: Connected to DOM');
+        console.log('📝 Blog Editor: Connected to DOM');
+        this._dispatchEvent('load-blog-posts', {});
     }
     
     _createStructure() {
         this._root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+                @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -71,345 +99,122 @@ class BlogDashboard extends HTMLElement {
                     width: 100%;
                     font-family: 'Inter', sans-serif;
                     font-size: 14px;
-                    background: #f9fafb;
+                    background: #f8f9fa;
                 }
                 
-                .material-icons {
-                    font-family: 'Material Icons';
-                    font-weight: normal;
-                    font-style: normal;
-                    font-size: 20px;
-                    display: inline-block;
-                    line-height: 1;
-                    text-transform: none;
-                    letter-spacing: normal;
-                    word-wrap: normal;
-                    white-space: nowrap;
-                    direction: ltr;
-                }
-                
-                .container { width: 100%; min-height: 600px; }
+                .container { width: 100%; min-height: 100vh; }
                 
                 .header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
                     color: white;
-                    padding: 32px;
+                    padding: 24px 32px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                 }
                 
-                .header-content { 
-                    max-width: 1400px; 
+                .header-content {
+                    max-width: 1400px;
                     margin: 0 auto;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                 }
                 
-                .header-left { flex: 1; }
-                
                 .title {
-                    font-size: 32px;
+                    font-size: 28px;
                     font-weight: 700;
-                    margin-bottom: 8px;
                 }
                 
                 .subtitle {
-                    font-size: 16px;
-                    opacity: 0.95;
+                    font-size: 14px;
+                    opacity: 0.9;
+                    margin-top: 4px;
                 }
                 
-                .btn-create {
-                    background: white;
-                    color: #667eea;
-                    padding: 14px 28px;
+                .header-actions {
+                    display: flex;
+                    gap: 12px;
+                }
+                
+                .btn {
+                    padding: 10px 20px;
                     border: none;
-                    border-radius: 12px;
-                    font-size: 15px;
+                    border-radius: 8px;
+                    font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
+                    font-family: inherit;
                 }
                 
-                .btn-create:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-                }
+                .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
                 
-                .stats {
-                    display: flex;
-                    gap: 24px;
-                    margin-top: 24px;
-                    flex-wrap: wrap;
-                }
-                
-                .stat {
-                    background: rgba(255,255,255,0.15);
-                    padding: 16px 20px;
-                    border-radius: 12px;
-                    min-width: 140px;
-                }
-                
-                .stat-label { font-size: 13px; opacity: 0.9; }
-                .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+                .btn-primary { background: #8b5cf6; color: white; }
+                .btn-success { background: #10b981; color: white; }
+                .btn-secondary { background: white; color: #6366f1; }
+                .btn-danger { background: #ef4444; color: white; }
+                .btn-warning { background: #f59e0b; color: white; }
                 
                 .main { padding: 32px; }
                 
                 .content { max-width: 1400px; margin: 0 auto; }
                 
-                .posts-table {
+                .view-toggle {
+                    display: flex;
+                    gap: 12px;
+                    margin-bottom: 24px;
+                }
+                
+                .view-btn {
+                    padding: 10px 20px;
+                    border: 2px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: all 0.2s;
+                }
+                
+                .view-btn.active {
+                    background: #6366f1;
+                    color: white;
+                    border-color: #6366f1;
+                }
+                
+                .editor-view, .posts-view { display: none; }
+                .editor-view.active, .posts-view.active { display: block; }
+                
+                /* Editor Layout */
+                .editor-container {
+                    display: grid;
+                    grid-template-columns: 1fr 400px;
+                    gap: 24px;
+                }
+                
+                .editor-main {
                     background: white;
                     border-radius: 16px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    border: 1px solid #e5e7eb;
-                }
-                
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                
-                thead {
-                    background: #f9fafb;
-                    border-bottom: 2px solid #e5e7eb;
-                }
-                
-                th {
-                    padding: 16px;
-                    text-align: left;
-                    font-weight: 600;
-                    color: #374151;
-                    font-size: 13px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-                
-                tbody tr {
-                    border-bottom: 1px solid #f3f4f6;
-                    transition: background 0.2s;
-                }
-                
-                tbody tr:hover {
-                    background: #f9fafb;
-                }
-                
-                td {
-                    padding: 16px;
-                    color: #6b7280;
-                    font-size: 14px;
-                }
-                
-                .post-title {
-                    font-weight: 600;
-                    color: #111827;
-                    font-size: 15px;
-                    max-width: 300px;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-                
-                .post-image {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 8px;
-                    object-fit: cover;
-                    border: 2px solid #e5e7eb;
-                }
-                
-                .badge {
-                    display: inline-flex;
-                    padding: 4px 10px;
-                    border-radius: 12px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                }
-                
-                .badge-published { background: #d1fae5; color: #065f46; }
-                .badge-draft { background: #fef3c7; color: #92400e; }
-                
-                .btn {
-                    padding: 8px 16px;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    font-family: inherit;
-                    margin-right: 8px;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                
-                .btn:hover { transform: translateY(-1px); }
-                
-                .btn-primary { background: #8b5cf6; color: white; }
-                .btn-warning { background: #f59e0b; color: white; }
-                .btn-danger { background: #ef4444; color: white; }
-                
-                .modal {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0,0,0,0.7);
-                    display: none;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                    overflow-y: auto;
-                    padding: 20px;
-                }
-                
-                .modal.active { display: flex; }
-                
-                .modal-content {
-                    background: white;
-                    border-radius: 20px;
-                    max-width: 1000px;
-                    width: 100%;
-                    max-height: 90vh;
-                    overflow-y: auto;
-                    margin: auto;
-                }
-                
-                .modal-header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 24px 32px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                }
-                
-                .modal-title { font-size: 24px; font-weight: 700; }
-                
-                .modal-close {
-                    background: rgba(255,255,255,0.2);
-                    border: none;
-                    color: white;
-                    font-size: 24px;
-                    cursor: pointer;
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                
-                .modal-body { padding: 32px; }
-                
-                .form-row {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 20px;
-                    margin-bottom: 20px;
-                }
-                
-                .form-group { margin-bottom: 20px; }
-                .form-group.full { grid-column: 1 / -1; }
-                
-                .label {
-                    display: block;
-                    font-weight: 600;
-                    margin-bottom: 8px;
-                    color: #374151;
-                    font-size: 14px;
-                }
-                
-                .input, .textarea, .select {
-                    width: 100%;
-                    padding: 12px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-family: inherit;
-                    transition: border-color 0.2s;
-                }
-                
-                .input:focus, .textarea:focus, .select:focus {
-                    outline: none;
-                    border-color: #8b5cf6;
-                }
-                
-                .textarea {
-                    min-height: 100px;
-                    resize: vertical;
-                }
-                
-                .file-upload {
-                    border: 2px dashed #e5e7eb;
-                    border-radius: 12px;
-                    padding: 24px;
-                    text-align: center;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    background: #f9fafb;
-                }
-                
-                .file-upload:hover {
-                    border-color: #8b5cf6;
-                    background: #ede9fe;
-                }
-                
-                .file-upload input {
-                    display: none;
-                }
-                
-                .file-preview {
-                    margin-top: 12px;
-                    display: none;
-                }
-                
-                .file-preview.active {
-                    display: block;
-                }
-                
-                .file-preview img {
-                    max-width: 200px;
-                    border-radius: 8px;
-                    border: 2px solid #e5e7eb;
-                }
-
-                /* Rich Content Editor */
-                .rich-editor {
-                    border: 2px solid #e5e7eb;
-                    border-radius: 12px;
-                    background: white;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     overflow: hidden;
                 }
-
+                
                 .editor-toolbar {
                     background: #f9fafb;
-                    border-bottom: 2px solid #e5e7eb;
-                    padding: 12px;
+                    border-bottom: 1px solid #e5e7eb;
+                    padding: 12px 16px;
                     display: flex;
                     flex-wrap: wrap;
                     gap: 8px;
                 }
-
+                
                 .toolbar-group {
                     display: flex;
                     gap: 4px;
-                    padding: 4px;
-                    border-right: 1px solid #e5e7eb;
                     padding-right: 12px;
+                    border-right: 1px solid #e5e7eb;
                 }
-
-                .toolbar-group:last-child {
-                    border-right: none;
-                }
-
+                
+                .toolbar-group:last-child { border-right: none; }
+                
                 .toolbar-btn {
                     width: 36px;
                     height: 36px;
@@ -421,117 +226,238 @@ class BlogDashboard extends HTMLElement {
                     align-items: center;
                     justify-content: center;
                     transition: all 0.2s;
-                    color: #374151;
+                    position: relative;
                 }
-
+                
                 .toolbar-btn:hover {
-                    background: #e5e7eb;
+                    background: #f3f4f6;
                     transform: translateY(-1px);
                 }
-
-                .toolbar-btn.active {
-                    background: #8b5cf6;
+                
+                .toolbar-btn:active { transform: translateY(0); }
+                
+                .toolbar-btn svg {
+                    width: 18px;
+                    height: 18px;
+                    fill: #374151;
+                }
+                
+                .toolbar-btn:hover::after {
+                    content: attr(data-tooltip);
+                    position: absolute;
+                    bottom: -32px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
                     color: white;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    white-space: nowrap;
+                    z-index: 100;
                 }
-
-                .toolbar-btn .material-icons {
-                    font-size: 20px;
-                }
-
-                .editor-content {
+                
+                .editor-textarea {
+                    width: 100%;
+                    min-height: 600px;
                     padding: 24px;
-                    min-height: 400px;
-                    max-height: 500px;
-                    overflow-y: auto;
-                    font-size: 16px;
-                    line-height: 1.7;
-                    color: #111827;
-                }
-
-                .editor-content:focus {
+                    border: none;
+                    font-family: 'JetBrains Mono', monospace;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    resize: vertical;
                     outline: none;
                 }
-
-                .editor-content[contenteditable]:empty:before {
-                    content: attr(data-placeholder);
-                    color: #9ca3af;
-                    font-style: italic;
+                
+                .editor-sidebar {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
                 }
-
-                .editor-content h1 {
-                    font-size: 2em;
+                
+                .sidebar-section {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                
+                .section-title {
+                    font-size: 16px;
                     font-weight: 700;
-                    margin: 0.67em 0;
+                    margin-bottom: 16px;
+                    color: #1f2937;
                 }
-
-                .editor-content h2 {
-                    font-size: 1.5em;
+                
+                .form-group { margin-bottom: 16px; }
+                .form-group:last-child { margin-bottom: 0; }
+                
+                .label {
+                    display: block;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                    color: #374151;
+                    font-size: 13px;
+                }
+                
+                .input, .textarea, .select {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    transition: border-color 0.2s;
+                }
+                
+                .input:focus, .textarea:focus, .select:focus {
+                    outline: none;
+                    border-color: #6366f1;
+                }
+                
+                .textarea { resize: vertical; min-height: 80px; }
+                
+                .checkbox-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .checkbox {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+                
+                .image-upload-area {
+                    border: 2px dashed #e5e7eb;
+                    border-radius: 8px;
+                    padding: 20px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                
+                .image-upload-area:hover {
+                    border-color: #6366f1;
+                    background: #f9fafb;
+                }
+                
+                .image-preview {
+                    width: 100%;
+                    max-height: 200px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    margin-top: 12px;
+                }
+                
+                .tag-input-wrapper {
+                    display: flex;
+                    gap: 8px;
+                }
+                
+                .tags-display {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    margin-top: 8px;
+                }
+                
+                .tag-chip {
+                    background: #ede9fe;
+                    color: #6366f1;
+                    padding: 4px 12px;
+                    border-radius: 16px;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                .tag-remove {
+                    cursor: pointer;
                     font-weight: 700;
-                    margin: 0.75em 0;
                 }
-
-                .editor-content h3 {
-                    font-size: 1.17em;
+                
+                /* Posts Grid */
+                .posts-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                    gap: 24px;
+                }
+                
+                .post-card {
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    transition: all 0.3s;
+                }
+                
+                .post-card:hover {
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                    transform: translateY(-4px);
+                }
+                
+                .post-card-image {
+                    width: 100%;
+                    height: 180px;
+                    object-fit: cover;
+                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                }
+                
+                .post-card-body { padding: 20px; }
+                
+                .post-status {
+                    display: inline-block;
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 11px;
                     font-weight: 700;
-                    margin: 0.83em 0;
+                    text-transform: uppercase;
+                    margin-bottom: 12px;
                 }
-
-                .editor-content ul, .editor-content ol {
-                    margin: 1em 0;
-                    padding-left: 2em;
+                
+                .status-published { background: #d1fae5; color: #065f46; }
+                .status-draft { background: #fee2e2; color: #991b1b; }
+                
+                .post-card-title {
+                    font-size: 18px;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                    line-height: 1.4;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
                 }
-
-                .editor-content blockquote {
-                    border-left: 4px solid #8b5cf6;
-                    padding-left: 1em;
-                    margin: 1em 0;
+                
+                .post-card-excerpt {
+                    font-size: 14px;
                     color: #6b7280;
-                    font-style: italic;
+                    margin-bottom: 16px;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
                 }
-
-                .editor-content code {
-                    background: #f3f4f6;
-                    padding: 2px 6px;
-                    border-radius: 4px;
-                    font-family: 'Courier New', monospace;
-                    font-size: 0.9em;
+                
+                .post-card-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 12px;
+                    color: #9ca3af;
+                    margin-bottom: 16px;
                 }
-
-                .editor-content pre {
-                    background: #1f2937;
-                    color: #f3f4f6;
-                    padding: 16px;
-                    border-radius: 8px;
-                    overflow-x: auto;
-                    margin: 1em 0;
+                
+                .post-card-actions {
+                    display: flex;
+                    gap: 8px;
                 }
-
-                .editor-content pre code {
-                    background: none;
-                    padding: 0;
-                    color: inherit;
-                }
-
-                .editor-content img {
-                    max-width: 100%;
-                    height: auto;
-                    border-radius: 8px;
-                    margin: 1em 0;
-                }
-
-                .editor-content a {
-                    color: #8b5cf6;
-                    text-decoration: underline;
-                }
-
-                .editor-content hr {
-                    border: none;
-                    border-top: 2px solid #e5e7eb;
-                    margin: 2em 0;
-                }
-
-                /* Image Upload Modal */
-                .image-modal {
+                
+                /* Modal */
+                .modal {
                     position: fixed;
                     top: 0;
                     left: 0;
@@ -541,86 +467,57 @@ class BlogDashboard extends HTMLElement {
                     display: none;
                     align-items: center;
                     justify-content: center;
-                    z-index: 2000;
-                }
-
-                .image-modal.active {
-                    display: flex;
-                }
-
-                .image-modal-content {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 32px;
-                    max-width: 500px;
-                    width: 90%;
-                }
-
-                .image-modal-title {
-                    font-size: 20px;
-                    font-weight: 700;
-                    margin-bottom: 20px;
-                    color: #111827;
-                }
-
-                .image-upload-area {
-                    border: 2px dashed #e5e7eb;
-                    border-radius: 12px;
-                    padding: 40px;
-                    text-align: center;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    background: #f9fafb;
-                    margin-bottom: 20px;
-                }
-
-                .image-upload-area:hover {
-                    border-color: #8b5cf6;
-                    background: #ede9fe;
-                }
-
-                .image-upload-area.dragover {
-                    border-color: #8b5cf6;
-                    background: #ede9fe;
-                }
-
-                .upload-icon {
-                    font-size: 48px;
-                    color: #9ca3af;
-                    margin-bottom: 12px;
-                }
-
-                .image-preview-area {
-                    display: none;
-                    margin-top: 16px;
-                }
-
-                .image-preview-area.active {
-                    display: block;
-                }
-
-                .image-preview-area img {
-                    max-width: 100%;
-                    border-radius: 8px;
-                    border: 2px solid #e5e7eb;
-                }
-
-                .button-group {
-                    display: flex;
-                    gap: 12px;
-                    justify-content: flex-end;
-                    margin-top: 20px;
+                    z-index: 1000;
                 }
                 
+                .modal.active { display: flex; }
+                
+                .modal-content {
+                    background: white;
+                    border-radius: 16px;
+                    max-width: 500px;
+                    width: 90%;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                }
+                
+                .modal-header {
+                    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                    color: white;
+                    padding: 20px 24px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .modal-title { font-size: 20px; font-weight: 700; }
+                
+                .modal-close {
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    font-size: 24px;
+                    cursor: pointer;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 8px;
+                }
+                
+                .modal-body { padding: 24px; }
+                
                 .modal-footer {
-                    padding: 20px 32px;
+                    padding: 16px 24px;
                     background: #f9fafb;
                     border-top: 1px solid #e5e7eb;
                     display: flex;
                     gap: 12px;
                     justify-content: flex-end;
-                    position: sticky;
-                    bottom: 0;
+                }
+                
+                .image-upload-options {
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 16px;
                 }
                 
                 .toast {
@@ -629,9 +526,9 @@ class BlogDashboard extends HTMLElement {
                     right: 20px;
                     padding: 16px 20px;
                     border-radius: 12px;
-                    box-shadow: 0 20px 25px rgba(0,0,0,0.1);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
                     display: none;
-                    z-index: 3000;
+                    z-index: 2000;
                     min-width: 320px;
                     animation: slideIn 0.3s;
                 }
@@ -657,20 +554,16 @@ class BlogDashboard extends HTMLElement {
                 
                 .loading {
                     display: flex;
-                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    padding: 80px 20px;
-                    min-height: 400px;
+                    padding: 60px 20px;
                 }
                 
-                .loading.hide { display: none; }
-                
                 .spinner {
-                    width: 48px;
-                    height: 48px;
+                    width: 40px;
+                    height: 40px;
                     border: 4px solid #e5e7eb;
-                    border-top-color: #8b5cf6;
+                    border-top-color: #6366f1;
                     border-radius: 50%;
                     animation: spin 0.8s linear infinite;
                 }
@@ -678,403 +571,263 @@ class BlogDashboard extends HTMLElement {
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
-                
-                .pagination {
-                    display: flex;
-                    justify-content: center;
-                    gap: 16px;
-                    margin-top: 32px;
-                    align-items: center;
-                }
-                
-                .empty-state {
-                    text-align: center;
-                    padding: 80px 20px;
-                }
-                
-                .empty-icon {
-                    font-size: 64px;
-                    margin-bottom: 16px;
-                    opacity: 0.5;
-                }
-                
-                .empty-title {
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: #111827;
-                    margin-bottom: 8px;
-                }
-                
-                .empty-text {
-                    color: #6b7280;
-                    font-size: 14px;
-                }
-
-                .progress-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0,0,0,0.8);
-                    display: none;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 3000;
-                }
-
-                .progress-overlay.active {
-                    display: flex;
-                }
-
-                .progress-box {
-                    background: white;
-                    padding: 32px;
-                    border-radius: 16px;
-                    min-width: 400px;
-                    text-align: center;
-                }
-
-                .progress-bar-bg {
-                    width: 100%;
-                    height: 12px;
-                    background: #f3f4f6;
-                    border-radius: 6px;
-                    overflow: hidden;
-                    margin-top: 16px;
-                }
-
-                .progress-bar {
-                    height: 100%;
-                    background: linear-gradient(90deg, #8b5cf6, #7c3aed);
-                    width: 0%;
-                    transition: width 0.3s ease;
-                }
-
-                .progress-text {
-                    margin-top: 12px;
-                    color: #6b7280;
-                    font-size: 14px;
-                }
-
-                .link-modal {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0,0,0,0.7);
-                    display: none;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 2000;
-                }
-
-                .link-modal.active {
-                    display: flex;
-                }
-
-                .link-modal-content {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 32px;
-                    max-width: 500px;
-                    width: 90%;
-                }
             </style>
             
             <div class="container">
                 <div class="header">
                     <div class="header-content">
-                        <div class="header-left">
-                            <h1 class="title">📝 Blog Dashboard</h1>
-                            <p class="subtitle">Create and manage your blog posts</p>
-                            <div class="stats">
-                                <div class="stat">
-                                    <div class="stat-label">Total Posts</div>
-                                    <div class="stat-value" id="totalPosts">0</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-label">Published</div>
-                                    <div class="stat-value" id="publishedCount">0</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-label">Drafts</div>
-                                    <div class="stat-value" id="draftCount">0</div>
-                                </div>
-                            </div>
+                        <div>
+                            <h1 class="title">📝 Advanced Blog Editor</h1>
+                            <p class="subtitle">Create SEO-optimized blog posts with markdown support</p>
                         </div>
-                        <button class="btn-create" id="createBtn">
-                            <span class="material-icons">edit</span>
-                            Create New Post
-                        </button>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
+                            <button class="btn btn-success" id="savePost">Save Post</button>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="main">
                     <div class="content">
-                        <div id="loading" class="loading">
-                            <div class="spinner"></div>
-                            <p style="margin-top: 16px; color: #6b7280;">Loading posts...</p>
+                        <div class="view-toggle">
+                            <button class="view-btn active" data-view="editor">✏️ Editor</button>
+                            <button class="view-btn" data-view="posts">📚 All Posts</button>
                         </div>
                         
-                        <div id="postsTable" class="posts-table" style="display: none;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Image</th>
-                                        <th>Title</th>
-                                        <th>Category</th>
-                                        <th>Status</th>
-                                        <th>Date</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="postsBody"></tbody>
-                            </table>
-                        </div>
-
-                        <div id="emptyState" class="empty-state" style="display: none;">
-                            <div class="empty-icon">📝</div>
-                            <h3 class="empty-title">No blog posts yet</h3>
-                            <p class="empty-text">Create your first blog post to get started</p>
+                        <!-- Editor View -->
+                        <div class="editor-view active">
+                            <div class="editor-container">
+                                <div class="editor-main">
+                                    <div class="editor-toolbar">
+                                        <div class="toolbar-group">
+                                            <button class="toolbar-btn" data-action="h1" data-tooltip="Heading 1">
+                                                <svg viewBox="0 0 24 24"><text x="4" y="18" font-size="16" font-weight="bold">H1</text></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="h2" data-tooltip="Heading 2">
+                                                <svg viewBox="0 0 24 24"><text x="4" y="18" font-size="14" font-weight="bold">H2</text></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="h3" data-tooltip="Heading 3">
+                                                <svg viewBox="0 0 24 24"><text x="4" y="18" font-size="12" font-weight="bold">H3</text></svg>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="toolbar-group">
+                                            <button class="toolbar-btn" data-action="bold" data-tooltip="Bold">
+                                                <svg viewBox="0 0 24 24"><path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="italic" data-tooltip="Italic">
+                                                <svg viewBox="0 0 24 24"><path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4h-8z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="strikethrough" data-tooltip="Strikethrough">
+                                                <svg viewBox="0 0 24 24"><path d="M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z"/></svg>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="toolbar-group">
+                                            <button class="toolbar-btn" data-action="ul" data-tooltip="Bullet List">
+                                                <svg viewBox="0 0 24 24"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="ol" data-tooltip="Numbered List">
+                                                <svg viewBox="0 0 24 24"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="task" data-tooltip="Task List">
+                                                <svg viewBox="0 0 24 24"><path d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zM12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8c1.57 0 3.04.46 4.28 1.25l1.45-1.45C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10c1.73 0 3.36-.44 4.78-1.22l-1.5-1.5c-1 .46-2.11.72-3.28.72zm7-5h-3v2h3v3h2v-3h3v-2h-3v-3h-2v3z"/></svg>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="toolbar-group">
+                                            <button class="toolbar-btn" data-action="link" data-tooltip="Insert Link">
+                                                <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="image" data-tooltip="Insert Image">
+                                                <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="code" data-tooltip="Inline Code">
+                                                <svg viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="codeblock" data-tooltip="Code Block">
+                                                <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="toolbar-group">
+                                            <button class="toolbar-btn" data-action="quote" data-tooltip="Blockquote">
+                                                <svg viewBox="0 0 24 24"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="hr" data-tooltip="Horizontal Rule">
+                                                <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+                                            </button>
+                                            <button class="toolbar-btn" data-action="table" data-tooltip="Insert Table">
+                                                <svg viewBox="0 0 24 24"><path d="M10 10.02h5V21h-5zM17 21h3c1.1 0 2-.9 2-2v-9h-5v11zm3-18H5c-1.1 0-2 .9-2 2v3h19V5c0-1.1-.9-2-2-2zM3 19c0 1.1.9 2 2 2h3V10.02H3V19z"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <textarea 
+                                        class="editor-textarea" 
+                                        id="contentEditor"
+                                        placeholder="Start writing your blog post in markdown..."
+                                    ></textarea>
+                                </div>
+                                
+                                <div class="editor-sidebar">
+                                    <!-- Basic Info -->
+                                    <div class="sidebar-section">
+                                        <div class="section-title">📄 Basic Information</div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Title *</label>
+                                            <input type="text" class="input" id="titleInput" placeholder="Enter post title">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Slug (URL)</label>
+                                            <input type="text" class="input" id="slugInput" placeholder="auto-generated-from-title">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Excerpt</label>
+                                            <textarea class="textarea" id="excerptInput" placeholder="Brief summary..."></textarea>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Category</label>
+                                            <input type="text" class="input" id="categoryInput" placeholder="e.g., Technology">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Tags</label>
+                                            <div class="tag-input-wrapper">
+                                                <input type="text" class="input" id="tagInput" placeholder="Add tag">
+                                                <button class="btn btn-primary" id="addTagBtn">+</button>
+                                            </div>
+                                            <div class="tags-display" id="tagsDisplay"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Featured Image -->
+                                    <div class="sidebar-section">
+                                        <div class="section-title">🖼️ Featured Image</div>
+                                        <input type="file" id="featuredImageInput" accept="image/*" style="display: none;">
+                                        <div class="image-upload-area" id="featuredImageArea">
+                                            <div>📸 Click to upload featured image</div>
+                                        </div>
+                                        <div id="featuredImagePreview"></div>
+                                    </div>
+                                    
+                                    <!-- Author Info -->
+                                    <div class="sidebar-section">
+                                        <div class="section-title">✍️ Author Information</div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Author Name</label>
+                                            <input type="text" class="input" id="authorInput" placeholder="John Doe">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Author Image</label>
+                                            <input type="file" id="authorImageInput" accept="image/*" style="display: none;">
+                                            <div class="image-upload-area" id="authorImageArea">
+                                                <div>👤 Click to upload author image</div>
+                                            </div>
+                                            <div id="authorImagePreview"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Publishing -->
+                                    <div class="sidebar-section">
+                                        <div class="section-title">🚀 Publishing</div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Status</label>
+                                            <select class="select" id="statusSelect">
+                                                <option value="draft">Draft</option>
+                                                <option value="published">Published</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Read Time (minutes)</label>
+                                            <input type="number" class="input" id="readTimeInput" value="5" min="1">
+                                        </div>
+                                        
+                                        <div class="form-group checkbox-group">
+                                            <input type="checkbox" class="checkbox" id="isFeaturedCheckbox">
+                                            <label class="label" style="margin-bottom: 0;">⭐ Featured Post</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- SEO -->
+                                    <div class="sidebar-section">
+                                        <div class="section-title">🔍 SEO Settings</div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">SEO Title</label>
+                                            <input type="text" class="input" id="seoTitleInput" placeholder="Optimized title for search engines">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">SEO Description</label>
+                                            <textarea class="textarea" id="seoDescriptionInput" placeholder="Meta description for search results"></textarea>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">Keywords (comma-separated)</label>
+                                            <input type="text" class="input" id="seoKeywordsInput" placeholder="seo, blog, marketing">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="label">OG Image</label>
+                                            <input type="file" id="seoOgImageInput" accept="image/*" style="display: none;">
+                                            <div class="image-upload-area" id="seoOgImageArea">
+                                                <div>🌐 Click to upload OG image</div>
+                                            </div>
+                                            <div id="seoOgImagePreview"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="pagination" id="pagination" style="display: none;">
-                            <button class="btn btn-primary" id="prevBtn" disabled>
-                                <span class="material-icons">chevron_left</span>
-                                Previous
-                            </button>
-                            <span id="pageInfo" style="font-weight: 600;">Page 1</span>
-                            <button class="btn btn-primary" id="nextBtn">
-                                Next
-                                <span class="material-icons">chevron_right</span>
-                            </button>
+                        <!-- Posts View -->
+                        <div class="posts-view">
+                            <div id="loadingPosts" class="loading">
+                                <div class="spinner"></div>
+                            </div>
+                            <div class="posts-grid" id="postsGrid"></div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div id="modal" class="modal">
+            <!-- Image Upload Modal -->
+            <div class="modal" id="imageModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h2 class="modal-title" id="modalTitle">Create New Post</h2>
-                        <button class="modal-close" id="closeModal">
-                            <span class="material-icons">close</span>
-                        </button>
+                        <h2 class="modal-title">Upload Image to Editor</h2>
+                        <button class="modal-close" id="closeImageModal">×</button>
                     </div>
-                    
                     <div class="modal-body">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="label">Post Title *</label>
-                                <input type="text" class="input" id="postTitle" placeholder="Enter post title" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="label">Slug (URL) *</label>
-                                <input type="text" class="input" id="postSlug" placeholder="auto-generated-from-title">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="label">Category</label>
-                                <input type="text" class="input" id="postCategory" placeholder="e.g., Technology, Tutorial">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="label">Tags (comma-separated)</label>
-                                <input type="text" class="input" id="postTags" placeholder="react, javascript, tutorial">
-                            </div>
-                        </div>
-                        
-                        <div class="form-group full">
-                            <label class="label">Excerpt (Short Description)</label>
-                            <textarea class="textarea" id="postExcerpt" placeholder="Brief summary of the post..." maxlength="200"></textarea>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="label">Featured Image</label>
-                                <div class="file-upload" id="featuredImageUpload">
-                                    <input type="file" id="featuredImageInput" accept="image/*">
-                                    <div><span class="material-icons" style="font-size: 32px; color: #9ca3af;">image</span></div>
-                                    <div style="margin-top: 8px;">Click to upload featured image</div>
-                                    <small style="color: #6b7280;">Recommended: 1200x630px</small>
-                                </div>
-                                <div class="file-preview" id="featuredImagePreview"></div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="label">Author Image</label>
-                                <div class="file-upload" id="authorImageUpload">
-                                    <input type="file" id="authorImageInput" accept="image/*">
-                                    <div><span class="material-icons" style="font-size: 32px; color: #9ca3af;">account_circle</span></div>
-                                    <div style="margin-top: 8px;">Click to upload author image</div>
-                                    <small style="color: #6b7280;">Recommended: Square image</small>
-                                </div>
-                                <div class="file-preview" id="authorImagePreview"></div>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="label">Author Name</label>
-                                <input type="text" class="input" id="postAuthor" placeholder="John Doe">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="label">Status</label>
-                                <select class="select" id="postStatus">
-                                    <option value="draft">Draft</option>
-                                    <option value="published">Published</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group full">
-                            <label class="label">Content (Rich Editor) *</label>
-                            <div class="rich-editor">
-                                <div class="editor-toolbar">
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" data-command="bold" title="Bold">
-                                            <span class="material-icons">format_bold</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="italic" title="Italic">
-                                            <span class="material-icons">format_italic</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="underline" title="Underline">
-                                            <span class="material-icons">format_underlined</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="strikeThrough" title="Strikethrough">
-                                            <span class="material-icons">format_strikethrough</span>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" data-command="h1" title="Heading 1">
-                                            <span class="material-icons">title</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="h2" title="Heading 2">
-                                            <span class="material-icons">format_size</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="h3" title="Heading 3">
-                                            <span class="material-icons">text_fields</span>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" data-command="insertUnorderedList" title="Bullet List">
-                                            <span class="material-icons">format_list_bulleted</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="insertOrderedList" title="Numbered List">
-                                            <span class="material-icons">format_list_numbered</span>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" data-command="blockquote" title="Quote">
-                                            <span class="material-icons">format_quote</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" data-command="code" title="Code">
-                                            <span class="material-icons">code</span>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" id="insertImageBtn" title="Insert Image">
-                                            <span class="material-icons">image</span>
-                                        </button>
-                                        <button type="button" class="toolbar-btn" id="insertLinkBtn" title="Insert Link">
-                                            <span class="material-icons">link</span>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="toolbar-group">
-                                        <button type="button" class="toolbar-btn" data-command="insertHorizontalRule" title="Horizontal Line">
-                                            <span class="material-icons">horizontal_rule</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="editor-content" 
-                                     id="richEditor" 
-                                     contenteditable="true"
-                                     data-placeholder="Start writing your blog post here...">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="modal-footer">
-                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelBtn">
-                            <span class="material-icons">close</span>
-                            Cancel
-                        </button>
-                        <button class="btn btn-primary" id="saveBtn">
-                            <span class="material-icons">save</span>
-                            Save Post
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Image Upload Modal -->
-            <div id="imageModal" class="image-modal">
-                <div class="image-modal-content">
-                    <h3 class="image-modal-title">Insert Image</h3>
-                    <div class="image-upload-area" id="imageUploadArea">
                         <input type="file" id="editorImageInput" accept="image/*" style="display: none;">
-                        <div class="upload-icon">
-                            <span class="material-icons" style="font-size: 48px;">cloud_upload</span>
+                        <div class="image-upload-area" id="editorImageUploadArea">
+                            <div style="font-size: 48px; margin-bottom: 12px;">📷</div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">Click to select image</div>
+                            <div style="font-size: 12px; color: #6b7280;">Supported: JPG, PNG, GIF, WebP</div>
                         </div>
-                        <div style="font-weight: 600; margin-bottom: 4px;">Click to upload or drag and drop</div>
-                        <div style="font-size: 13px; color: #6b7280;">PNG, JPG, GIF up to 10MB</div>
+                        <div id="editorImagePreview"></div>
+                        
+                        <div id="imageOptionsSection" style="display: none;">
+                            <div class="form-group">
+                                <label class="label">Alt Text</label>
+                                <input type="text" class="input" id="imageAltText" placeholder="Describe the image">
+                            </div>
+                            
+                            <div class="image-upload-options">
+                                <button class="btn btn-primary" id="uploadImageBtn">📤 Upload Image</button>
+                                <button class="btn btn-success" id="optimizeUploadBtn">⚡ Optimize & Upload</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="image-preview-area" id="editorImagePreview"></div>
-                    <div class="button-group">
-                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelImageBtn">
-                            Cancel
-                        </button>
-                        <button class="btn btn-primary" id="insertImageConfirmBtn" style="display: none;">
-                            Insert Image
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Link Modal -->
-            <div id="linkModal" class="link-modal">
-                <div class="link-modal-content">
-                    <h3 class="image-modal-title">Insert Link</h3>
-                    <div class="form-group">
-                        <label class="label">URL</label>
-                        <input type="url" class="input" id="linkUrl" placeholder="https://example.com">
-                    </div>
-                    <div class="form-group">
-                        <label class="label">Link Text (optional)</label>
-                        <input type="text" class="input" id="linkText" placeholder="Click here">
-                    </div>
-                    <div class="button-group">
-                        <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelLinkBtn">
-                            Cancel
-                        </button>
-                        <button class="btn btn-primary" id="insertLinkConfirmBtn">
-                            Insert Link
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="progress-overlay" id="progressOverlay">
-                <div class="progress-box">
-                    <h3 style="margin-bottom: 16px; color: #111827;">Uploading Images...</h3>
-                    <div class="spinner"></div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar" id="uploadProgressBar"></div>
-                    </div>
-                    <div class="progress-text" id="progressText">Preparing...</div>
                 </div>
             </div>
             
@@ -1085,770 +838,462 @@ class BlogDashboard extends HTMLElement {
     }
 
     _setupEventListeners() {
-        // Header button
-        this._shadow.getElementById('createBtn').addEventListener('click', () => {
-            this._showModal();
+        // View toggle
+        const viewBtns = this._shadow.querySelectorAll('.view-btn');
+        viewBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                viewBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const view = btn.dataset.view;
+                this._shadow.querySelector('.editor-view').classList.toggle('active', view === 'editor');
+                this._shadow.querySelector('.posts-view').classList.toggle('active', view === 'posts');
+                
+                if (view === 'posts') {
+                    this._dispatchEvent('load-blog-posts', {});
+                }
+            });
         });
         
-        // Modal controls
-        this._shadow.getElementById('closeModal').addEventListener('click', () => this._hideModal());
-        this._shadow.getElementById('cancelBtn').addEventListener('click', () => this._hideModal());
-        this._shadow.getElementById('saveBtn').addEventListener('click', () => this._savePost());
+        // Toolbar buttons
+        const toolbarBtns = this._shadow.querySelectorAll('.toolbar-btn');
+        toolbarBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                this._handleToolbarAction(action);
+            });
+        });
         
-        // Title -> Slug auto-generation
-        this._shadow.getElementById('postTitle').addEventListener('input', (e) => {
+        // Title to slug auto-generation
+        this._shadow.getElementById('titleInput').addEventListener('input', (e) => {
             const slug = this._generateSlug(e.target.value);
-            this._shadow.getElementById('postSlug').value = slug;
+            this._shadow.getElementById('slugInput').value = slug;
+        });
+        
+        // Tags
+        this._shadow.getElementById('addTagBtn').addEventListener('click', () => this._addTag());
+        this._shadow.getElementById('tagInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this._addTag();
+            }
         });
         
         // Image uploads
-        this._shadow.getElementById('featuredImageUpload').addEventListener('click', () => {
-            this._shadow.getElementById('featuredImageInput').click();
+        this._setupImageUpload('featuredImage');
+        this._setupImageUpload('authorImage');
+        this._setupImageUpload('seoOgImage');
+        
+        // Editor image upload
+        this._shadow.getElementById('editorImageUploadArea').addEventListener('click', () => {
+            this._shadow.getElementById('editorImageInput').click();
         });
         
-        this._shadow.getElementById('authorImageUpload').addEventListener('click', () => {
-            this._shadow.getElementById('authorImageInput').click();
+        this._shadow.getElementById('editorImageInput').addEventListener('change', (e) => {
+            this._handleEditorImageSelect(e);
         });
         
-        this._shadow.getElementById('featuredImageInput').addEventListener('change', (e) => {
-            this._handleImageSelect(e, 'featured');
+        this._shadow.getElementById('uploadImageBtn').addEventListener('click', () => {
+            this._uploadEditorImage(false);
         });
         
-        this._shadow.getElementById('authorImageInput').addEventListener('change', (e) => {
-            this._handleImageSelect(e, 'author');
+        this._shadow.getElementById('optimizeUploadBtn').addEventListener('click', () => {
+            this._uploadEditorImage(true);
         });
         
-        // Pagination
-        this._shadow.getElementById('prevBtn').addEventListener('click', () => {
-            if (this._currentPage > 0) {
-                this._currentPage--;
-                this._loadPosts();
-            }
+        this._shadow.getElementById('closeImageModal').addEventListener('click', () => {
+            this._hideImageModal();
         });
         
-        this._shadow.getElementById('nextBtn').addEventListener('click', () => {
-            this._currentPage++;
-            this._loadPosts();
-        });
-
-        // Rich Editor Toolbar
-        this._setupRichEditorToolbar();
-
-        // Image Modal
-        this._setupImageModal();
-
-        // Link Modal
-        this._setupLinkModal();
+        // Save post
+        this._shadow.getElementById('savePost').addEventListener('click', () => this._savePost());
+        
+        // Cancel edit
+        this._shadow.getElementById('cancelEdit').addEventListener('click', () => this._cancelEdit());
     }
-
-    _setupRichEditorToolbar() {
-        const toolbar = this._shadow.querySelector('.editor-toolbar');
-        const editor = this._shadow.getElementById('richEditor');
-
-        // Handle toolbar button clicks
-        toolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
-            if (btn.id === 'insertImageBtn' || btn.id === 'insertLinkBtn') {
-                return; // These are handled separately
-            }
-
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const command = btn.getAttribute('data-command');
-                this._executeEditorCommand(command);
-            });
+    
+    _setupImageUpload(type) {
+        const area = this._shadow.getElementById(`${type}Area`);
+        const input = this._shadow.getElementById(`${type}Input`);
+        
+        area.addEventListener('click', () => input.click());
+        
+        input.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const preview = this._shadow.getElementById(`${type}Preview`);
+                preview.innerHTML = `
+                    <img src="${event.target.result}" class="image-preview">
+                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name}</div>
+                `;
+                
+                // Store file for upload
+                this._formData[type] = file;
+            };
+            reader.readAsDataURL(file);
         });
-
-        // Update toolbar state on selection change
-        editor.addEventListener('mouseup', () => this._updateToolbarState());
-        editor.addEventListener('keyup', () => this._updateToolbarState());
     }
-
-    _executeEditorCommand(command) {
-        const editor = this._shadow.getElementById('richEditor');
-        editor.focus();
-
-        switch(command) {
+    
+    _handleToolbarAction(action) {
+        const textarea = this._shadow.getElementById('contentEditor');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = textarea.value.substring(start, end);
+        const beforeText = textarea.value.substring(0, start);
+        const afterText = textarea.value.substring(end);
+        
+        let newText = '';
+        let cursorOffset = 0;
+        
+        switch(action) {
             case 'h1':
-                document.execCommand('formatBlock', false, '<h1>');
+                newText = `# ${selectedText || 'Heading 1'}`;
+                cursorOffset = selectedText ? 0 : -9;
                 break;
             case 'h2':
-                document.execCommand('formatBlock', false, '<h2>');
+                newText = `## ${selectedText || 'Heading 2'}`;
+                cursorOffset = selectedText ? 0 : -9;
                 break;
             case 'h3':
-                document.execCommand('formatBlock', false, '<h3>');
+                newText = `### ${selectedText || 'Heading 3'}`;
+                cursorOffset = selectedText ? 0 : -9;
                 break;
-            case 'blockquote':
-                document.execCommand('formatBlock', false, '<blockquote>');
+            case 'bold':
+                newText = `**${selectedText || 'bold text'}**`;
+                cursorOffset = selectedText ? 0 : -11;
                 break;
-            case 'code':
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const code = document.createElement('code');
-                    code.textContent = range.toString();
-                    range.deleteContents();
-                    range.insertNode(code);
-                }
+            case 'italic':
+                newText = `*${selectedText || 'italic text'}*`;
+                cursorOffset = selectedText ? 0 : -12;
                 break;
-            default:
-                document.execCommand(command, false, null);
-        }
-    }
-
-    _updateToolbarState() {
-        const toolbar = this._shadow.querySelector('.editor-toolbar');
-        
-        toolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
-            const command = btn.getAttribute('data-command');
-            
-            let isActive = false;
-            try {
-                if (command === 'h1' || command === 'h2' || command === 'h3') {
-                    const tagName = command.toUpperCase();
-                    isActive = document.queryCommandValue('formatBlock') === tagName;
-                } else if (command === 'blockquote') {
-                    isActive = document.queryCommandValue('formatBlock') === 'BLOCKQUOTE';
-                } else {
-                    isActive = document.queryCommandState(command);
-                }
-            } catch (e) {
-                // Some commands may not support queryCommandState
-            }
-            
-            if (isActive) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-    }
-
-    _setupImageModal() {
-        const imageBtn = this._shadow.getElementById('insertImageBtn');
-        const imageModal = this._shadow.getElementById('imageModal');
-        const imageUploadArea = this._shadow.getElementById('imageUploadArea');
-        const imageInput = this._shadow.getElementById('editorImageInput');
-        const cancelBtn = this._shadow.getElementById('cancelImageBtn');
-        const confirmBtn = this._shadow.getElementById('insertImageConfirmBtn');
-        const preview = this._shadow.getElementById('editorImagePreview');
-
-        let selectedImageFile = null;
-
-        imageBtn.addEventListener('click', () => {
-            imageModal.classList.add('active');
-            selectedImageFile = null;
-            preview.classList.remove('active');
-            preview.innerHTML = '';
-            confirmBtn.style.display = 'none';
-        });
-
-        imageUploadArea.addEventListener('click', () => {
-            imageInput.click();
-        });
-
-        // Drag and drop
-        imageUploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            imageUploadArea.classList.add('dragover');
-        });
-
-        imageUploadArea.addEventListener('dragleave', () => {
-            imageUploadArea.classList.remove('dragover');
-        });
-
-        imageUploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            imageUploadArea.classList.remove('dragover');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].type.startsWith('image/')) {
-                selectedImageFile = files[0];
-                this._showImagePreview(files[0], preview, confirmBtn);
-            }
-        });
-
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                selectedImageFile = file;
-                this._showImagePreview(file, preview, confirmBtn);
-            }
-        });
-
-        cancelBtn.addEventListener('click', () => {
-            imageModal.classList.remove('active');
-        });
-
-        confirmBtn.addEventListener('click', async () => {
-            if (selectedImageFile) {
-                // Show progress
-                const progressOverlay = this._shadow.getElementById('progressOverlay');
-                progressOverlay.classList.add('active');
-                this._updateUploadProgress({ status: 'uploading', progress: 30, message: 'Uploading image...' });
-
-                // Upload to media manager
-                try {
-                    const imageUrl = await this._uploadImageToMediaManager(selectedImageFile);
-                    
-                    // Insert image into editor
-                    const editor = this._shadow.getElementById('richEditor');
-                    editor.focus();
-                    
-                    const img = document.createElement('img');
-                    img.src = imageUrl;
-                    img.alt = selectedImageFile.name.replace(/\.[^/.]+$/, '');
-                    img.style.maxWidth = '100%';
-                    
-                    const selection = window.getSelection();
-                    if (selection.rangeCount > 0) {
-                        const range = selection.getRangeAt(0);
-                        range.insertNode(img);
-                        range.collapse(false);
-                    } else {
-                        editor.appendChild(img);
-                    }
-
-                    progressOverlay.classList.remove('active');
-                    imageModal.classList.remove('active');
-                    this._showToast('success', 'Image uploaded successfully!');
-                } catch (error) {
-                    progressOverlay.classList.remove('active');
-                    this._showToast('error', 'Failed to upload image: ' + error.message);
-                }
-            }
-        });
-    }
-
-    _showImagePreview(file, previewElement, confirmBtn) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            previewElement.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-            previewElement.classList.add('active');
-            confirmBtn.style.display = 'inline-flex';
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async _uploadImageToMediaManager(file) {
-        return new Promise((resolve, reject) => {
-            // Dispatch event to widget to handle upload
-            const eventDetail = {
-                file: file,
-                callback: (url, error) => {
-                    if (error) {
-                        reject(new Error(error));
-                    } else {
-                        resolve(url);
-                    }
-                }
-            };
-            
-            this.dispatchEvent(new CustomEvent('upload-editor-image', {
-                detail: eventDetail,
-                bubbles: true,
-                composed: true
-            }));
-        });
-    }
-
-    _setupLinkModal() {
-        const linkBtn = this._shadow.getElementById('insertLinkBtn');
-        const linkModal = this._shadow.getElementById('linkModal');
-        const linkUrl = this._shadow.getElementById('linkUrl');
-        const linkText = this._shadow.getElementById('linkText');
-        const cancelBtn = this._shadow.getElementById('cancelLinkBtn');
-        const confirmBtn = this._shadow.getElementById('insertLinkConfirmBtn');
-
-        linkBtn.addEventListener('click', () => {
-            // Get selected text
-            const selection = window.getSelection();
-            const selectedText = selection.toString();
-            
-            linkUrl.value = '';
-            linkText.value = selectedText;
-            linkModal.classList.add('active');
-        });
-
-        cancelBtn.addEventListener('click', () => {
-            linkModal.classList.remove('active');
-        });
-
-        confirmBtn.addEventListener('click', () => {
-            const url = linkUrl.value.trim();
-            const text = linkText.value.trim();
-
-            if (!url) {
-                this._showToast('error', 'Please enter a URL');
+            case 'strikethrough':
+                newText = `~~${selectedText || 'strikethrough'}~~`;
+                cursorOffset = selectedText ? 0 : -15;
+                break;
+            case 'ul':
+                newText = `- ${selectedText || 'List item'}`;
+                cursorOffset = selectedText ? 0 : -9;
+                break;
+            case 'ol':
+                newText = `1. ${selectedText || 'List item'}`;
+                cursorOffset = selectedText ? 0 : -9;
+                break;
+            case 'task':
+                newText = `- [ ] ${selectedText || 'Task item'}`;
+                cursorOffset = selectedText ? 0 : -9;
+                break;
+            case 'link':
+                newText = `[${selectedText || 'link text'}](url)`;
+                cursorOffset = selectedText ? -4 : -13;
+                break;
+            case 'image':
+                this._showImageModal();
                 return;
-            }
-
-            const editor = this._shadow.getElementById('richEditor');
-            editor.focus();
-
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                
-                const link = document.createElement('a');
-                link.href = url;
-                link.textContent = text || url;
-                link.target = '_blank';
-                
-                range.deleteContents();
-                range.insertNode(link);
-                range.collapse(false);
-            }
-
-            linkModal.classList.remove('active');
-        });
+            case 'code':
+                newText = `\`${selectedText || 'code'}\``;
+                cursorOffset = selectedText ? 0 : -5;
+                break;
+            case 'codeblock':
+                newText = `\`\`\`javascript\n${selectedText || 'code here'}\n\`\`\``;
+                cursorOffset = selectedText ? 0 : -14;
+                break;
+            case 'quote':
+                newText = `> ${selectedText || 'quote'}`;
+                cursorOffset = selectedText ? 0 : -5;
+                break;
+            case 'hr':
+                newText = `---`;
+                break;
+            case 'table':
+                newText = `| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |`;
+                break;
+        }
+        
+        textarea.value = beforeText + newText + afterText;
+        const newCursorPos = start + newText.length + cursorOffset;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+        
+        this._content = textarea.value;
     }
-
+    
     _generateSlug(title) {
         return title
             .toLowerCase()
-            .trim()
-            .replace(/[^\w\s-]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
-            .replace(/-+/g, '-');
+            .replace(/-+/g, '-')
+            .substring(0, 100);
     }
-
-    _handleImageSelect(e, type) {
+    
+    _addTag() {
+        const input = this._shadow.getElementById('tagInput');
+        const tag = input.value.trim();
+        
+        if (!tag) return;
+        
+        if (!this._formData.tags.includes(tag)) {
+            this._formData.tags.push(tag);
+            this._renderTags();
+        }
+        
+        input.value = '';
+    }
+    
+    _renderTags() {
+        const container = this._shadow.getElementById('tagsDisplay');
+        container.innerHTML = this._formData.tags.map((tag, index) => `
+            <div class="tag-chip">
+                ${tag}
+                <span class="tag-remove" data-index="${index}">×</span>
+            </div>
+        `).join('');
+        
+        container.querySelectorAll('.tag-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const index = parseInt(btn.dataset.index);
+                this._formData.tags.splice(index, 1);
+                this._renderTags();
+            });
+        });
+    }
+    
+    _showImageModal() {
+        this._shadow.getElementById('imageModal').classList.add('active');
+    }
+    
+    _hideImageModal() {
+        this._shadow.getElementById('imageModal').classList.remove('active');
+        this._shadow.getElementById('editorImageInput').value = '';
+        this._shadow.getElementById('editorImagePreview').innerHTML = '';
+        this._shadow.getElementById('imageOptionsSection').style.display = 'none';
+        this._shadow.getElementById('imageAltText').value = '';
+        this._selectedImageFile = null;
+    }
+    
+    _handleEditorImageSelect(e) {
         const file = e.target.files[0];
         if (!file) return;
         
-        if (type === 'featured') {
-            this._featuredImageFile = file;
-            const preview = this._shadow.getElementById('featuredImagePreview');
-            preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Featured">`;
-            preview.classList.add('active');
-        } else {
-            this._authorImageFile = file;
-            const preview = this._shadow.getElementById('authorImagePreview');
-            preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Author">`;
-            preview.classList.add('active');
-        }
-    }
-
-    _convertWixImageUrl(wixUrl) {
-        if (!wixUrl || typeof wixUrl !== 'string') {
-            return 'https://via.placeholder.com/60';
-        }
-
-        if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
-            return wixUrl;
-        }
-
-        if (wixUrl.startsWith('wix:image://')) {
-            try {
-                const parts = wixUrl.split('/');
-                const fileId = parts[3]?.split('#')[0];
-                
-                if (fileId) {
-                    return `https://static.wixstatic.com/media/${fileId}`;
-                }
-            } catch (e) {
-                console.error('📝 Dashboard: Error parsing Wix image URL:', wixUrl, e);
-            }
-        }
-
-        return 'https://via.placeholder.com/60';
-    }
-
-    _dispatchEvent(name, detail) {
-        this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
-    }
-    
-    _loadPosts() {
-        const loading = this._shadow.getElementById('loading');
-        loading.classList.remove('hide');
+        this._selectedImageFile = file;
         
-        this._dispatchEvent('load-posts', {
-            limit: this._pageSize,
-            skip: this._currentPage * this._pageSize
-        });
-    }
-    
-    setPosts(data) {
-        this._posts = data.posts || [];
-        this._totalPosts = data.totalCount || 0;
-        
-        this._shadow.getElementById('loading').classList.add('hide');
-        
-        if (this._posts.length === 0) {
-            this._shadow.getElementById('emptyState').style.display = 'block';
-            this._shadow.getElementById('postsTable').style.display = 'none';
-            this._shadow.getElementById('pagination').style.display = 'none';
-        } else {
-            this._shadow.getElementById('emptyState').style.display = 'none';
-            this._renderPosts();
-            this._updatePagination(data.hasMore);
-        }
-        
-        this._updateStats();
-    }
-    
-    _updatePagination(hasMore) {
-        const prevBtn = this._shadow.getElementById('prevBtn');
-        const nextBtn = this._shadow.getElementById('nextBtn');
-        const pageInfo = this._shadow.getElementById('pageInfo');
-        const pagination = this._shadow.getElementById('pagination');
-        
-        pagination.style.display = 'flex';
-        prevBtn.disabled = this._currentPage === 0;
-        nextBtn.disabled = !hasMore;
-        
-        const currentPageNum = this._currentPage + 1;
-        const totalPages = Math.ceil(this._totalPosts / this._pageSize);
-        pageInfo.textContent = `Page ${currentPageNum} of ${totalPages}`;
-    }
-    
-    _renderPosts() {
-        const tbody = this._shadow.getElementById('postsBody');
-        const table = this._shadow.getElementById('postsTable');
-        
-        table.style.display = 'block';
-        tbody.innerHTML = '';
-        
-        this._posts.forEach(post => {
-            const row = document.createElement('tr');
-            
-            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
-            
-            row.innerHTML = `
-                <td>
-                    <img src="${featuredImageUrl}" 
-                         class="post-image" 
-                         alt="${this._escapeHtml(post.title)}"
-                         loading="lazy"
-                         onerror="this.src='https://via.placeholder.com/60'">
-                </td>
-                <td>
-                    <div class="post-title">${this._escapeHtml(post.title)}</div>
-                </td>
-                <td>${this._escapeHtml(post.category || 'Uncategorized')}</td>
-                <td>
-                    <span class="badge badge-${post.status === 'published' ? 'published' : 'draft'}">
-                        ${post.status === 'published' ? '✓ Published' : '✎ Draft'}
-                    </span>
-                </td>
-                <td>${this._formatDate(post.publishedDate || post._createdDate)}</td>
-                <td>
-                    <button class="btn btn-warning edit-btn" data-id="${post._id}">
-                        <span class="material-icons">edit</span>
-                        Edit
-                    </button>
-                    <button class="btn btn-danger delete-btn" data-id="${post._id}">
-                        <span class="material-icons">delete</span>
-                        Delete
-                    </button>
-                </td>
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const preview = this._shadow.getElementById('editorImagePreview');
+            preview.innerHTML = `
+                <img src="${event.target.result}" class="image-preview" style="margin-top: 16px;">
+                <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name} (${(file.size / 1024).toFixed(2)} KB)</div>
             `;
             
-            tbody.appendChild(row);
+            this._shadow.getElementById('imageOptionsSection').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    _uploadEditorImage(optimize) {
+        if (!this._selectedImageFile) return;
+        
+        const altText = this._shadow.getElementById('imageAltText').value || 'Image';
+        
+        this._dispatchEvent('upload-editor-image', {
+            file: this._selectedImageFile,
+            optimize: optimize,
+            altText: altText
         });
+    }
+    
+    _handleImageUploadResult(result) {
+        if (result.success) {
+            const textarea = this._shadow.getElementById('contentEditor');
+            const markdownImage = `![${result.altText}](${result.url})`;
+            
+            const cursorPos = textarea.selectionStart;
+            const beforeText = textarea.value.substring(0, cursorPos);
+            const afterText = textarea.value.substring(cursorPos);
+            
+            textarea.value = beforeText + '\n' + markdownImage + '\n' + afterText;
+            this._content = textarea.value;
+            
+            this._hideImageModal();
+            this._showToast('success', 'Image uploaded and inserted!');
+        } else {
+            this._showToast('error', result.error || 'Image upload failed');
+        }
+    }
+    
+    _savePost() {
+        // Gather all form data
+        const title = this._shadow.getElementById('titleInput').value.trim();
+        const slug = this._shadow.getElementById('slugInput').value.trim();
+        const content = this._shadow.getElementById('contentEditor').value;
+        
+        if (!title) {
+            this._showToast('error', 'Please enter a title');
+            return;
+        }
+        
+        if (!content) {
+            this._showToast('error', 'Please write some content');
+            return;
+        }
+        
+        const formData = {
+            _id: this._editingItemId,
+            title: title,
+            slug: slug,
+            excerpt: this._shadow.getElementById('excerptInput').value,
+            content: content,
+            author: this._shadow.getElementById('authorInput').value,
+            category: this._shadow.getElementById('categoryInput').value,
+            tags: this._formData.tags,
+            status: this._shadow.getElementById('statusSelect').value,
+            readTime: parseInt(this._shadow.getElementById('readTimeInput').value) || 5,
+            isFeatured: this._shadow.getElementById('isFeaturedCheckbox').checked,
+            seoTitle: this._shadow.getElementById('seoTitleInput').value,
+            seoDescription: this._shadow.getElementById('seoDescriptionInput').value,
+            seoKeywords: this._shadow.getElementById('seoKeywordsInput').value,
+            featuredImage: this._formData.featuredImage,
+            authorImage: this._formData.authorImage,
+            seoOgImage: this._formData.seoOgImage,
+            publishedDate: this._formData.publishedDate || new Date().toISOString(),
+            modifiedDate: new Date().toISOString()
+        };
+        
+        this._dispatchEvent('save-blog-post', formData);
+    }
+    
+    _cancelEdit() {
+        this._editingItemId = null;
+        this._resetForm();
+        this._shadow.getElementById('cancelEdit').style.display = 'none';
+    }
+    
+    _resetForm() {
+        this._shadow.getElementById('titleInput').value = '';
+        this._shadow.getElementById('slugInput').value = '';
+        this._shadow.getElementById('excerptInput').value = '';
+        this._shadow.getElementById('contentEditor').value = '';
+        this._shadow.getElementById('authorInput').value = '';
+        this._shadow.getElementById('categoryInput').value = '';
+        this._shadow.getElementById('readTimeInput').value = '5';
+        this._shadow.getElementById('seoTitleInput').value = '';
+        this._shadow.getElementById('seoDescriptionInput').value = '';
+        this._shadow.getElementById('seoKeywordsInput').value = '';
+        this._shadow.getElementById('isFeaturedCheckbox').checked = false;
+        this._shadow.getElementById('statusSelect').value = 'draft';
+        
+        this._formData.tags = [];
+        this._renderTags();
+        
+        this._shadow.getElementById('featuredImagePreview').innerHTML = '';
+        this._shadow.getElementById('authorImagePreview').innerHTML = '';
+        this._shadow.getElementById('seoOgImagePreview').innerHTML = '';
+        
+        this._formData.featuredImage = null;
+        this._formData.authorImage = null;
+        this._formData.seoOgImage = null;
+    }
+    
+    _renderBlogPosts(data) {
+        const loading = this._shadow.getElementById('loadingPosts');
+        const grid = this._shadow.getElementById('postsGrid');
+        
+        loading.style.display = 'none';
+        
+        if (!data.posts || data.posts.length === 0) {
+            grid.innerHTML = '<div style="text-align: center; padding: 60px; color: #6b7280;">No blog posts yet. Create your first post!</div>';
+            return;
+        }
+        
+        grid.innerHTML = data.posts.map(post => `
+            <div class="post-card">
+                <img src="${post.featuredImage?.url || 'https://via.placeholder.com/400x300?text=No+Image'}" class="post-card-image">
+                <div class="post-card-body">
+                    <div class="post-status status-${post.status}">${post.status}</div>
+                    <div class="post-card-title">${post.title}</div>
+                    <div class="post-card-excerpt">${post.excerpt || 'No excerpt available'}</div>
+                    <div class="post-card-meta">
+                        <span>📅 ${new Date(post.publishedDate).toLocaleDateString()}</span>
+                        <span>👁️ ${post.viewCount || 0} views</span>
+                    </div>
+                    <div class="post-card-actions">
+                        <button class="btn btn-primary" data-id="${post._id}">✏️ Edit</button>
+                        <button class="btn btn-danger" data-id="${post._id}">🗑️ Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
         
         // Add event listeners
-        this._shadow.querySelectorAll('.edit-btn').forEach(btn => {
+        grid.querySelectorAll('.btn-primary').forEach(btn => {
             btn.addEventListener('click', () => {
-                const postId = btn.getAttribute('data-id');
-                const post = this._posts.find(p => p._id === postId);
-                if (post) {
-                    this._showModal(post);
-                }
+                const id = btn.dataset.id;
+                this._dispatchEvent('load-post-for-edit', { id });
             });
         });
         
-        this._shadow.querySelectorAll('.delete-btn').forEach(btn => {
+        grid.querySelectorAll('.btn-danger').forEach(btn => {
             btn.addEventListener('click', () => {
-                const postId = btn.getAttribute('data-id');
-                const post = this._posts.find(p => p._id === postId);
-                if (post) {
-                    this._deletePost(postId);
+                const id = btn.dataset.id;
+                if (confirm('Are you sure you want to delete this post?')) {
+                    this._dispatchEvent('delete-blog-post', { id });
                 }
             });
         });
     }
     
-    _showModal(post = null) {
-        this._selectedPost = post;
+    _loadEditData(data) {
+        this._editingItemId = data._id;
         
-        // Reset modal
-        this._shadow.getElementById('modalTitle').textContent = post ? 'Edit Post' : 'Create New Post';
-        this._shadow.getElementById('postTitle').value = post?.title || '';
-        this._shadow.getElementById('postSlug').value = post?.slug || '';
-        this._shadow.getElementById('postCategory').value = post?.category || '';
-        this._shadow.getElementById('postTags').value = post?.tags || '';
-        this._shadow.getElementById('postExcerpt').value = post?.excerpt || '';
-        this._shadow.getElementById('postAuthor').value = post?.author || '';
-        this._shadow.getElementById('postStatus').value = post?.status || 'draft';
+        this._shadow.getElementById('titleInput').value = data.title || '';
+        this._shadow.getElementById('slugInput').value = data.slug || '';
+        this._shadow.getElementById('excerptInput').value = data.excerpt || '';
+        this._shadow.getElementById('contentEditor').value = data.content || '';
+        this._shadow.getElementById('authorInput').value = data.author || '';
+        this._shadow.getElementById('categoryInput').value = data.category || '';
+        this._shadow.getElementById('readTimeInput').value = data.readTime || 5;
+        this._shadow.getElementById('seoTitleInput').value = data.seoTitle || '';
+        this._shadow.getElementById('seoDescriptionInput').value = data.seoDescription || '';
+        this._shadow.getElementById('seoKeywordsInput').value = data.seoKeywords || '';
+        this._shadow.getElementById('isFeaturedCheckbox').checked = data.isFeatured || false;
+        this._shadow.getElementById('statusSelect').value = data.status || 'draft';
         
-        // Reset editor
-        const editor = this._shadow.getElementById('richEditor');
-        editor.innerHTML = post?.content ? this._markdownToHtml(post.content) : '';
+        this._formData.tags = data.tags || [];
+        this._renderTags();
         
-        // Reset images
-        this._featuredImageFile = null;
-        this._authorImageFile = null;
-        this._shadow.getElementById('featuredImageInput').value = '';
-        this._shadow.getElementById('authorImageInput').value = '';
-        this._shadow.getElementById('featuredImagePreview').classList.remove('active');
-        this._shadow.getElementById('authorImagePreview').classList.remove('active');
-        
-        if (post?.featuredImage) {
-            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
-            this._shadow.getElementById('featuredImagePreview').innerHTML = 
-                `<img src="${featuredImageUrl}" alt="Featured" onerror="this.src='https://via.placeholder.com/200'">`;
-            this._shadow.getElementById('featuredImagePreview').classList.add('active');
+        if (data.featuredImage) {
+            this._shadow.getElementById('featuredImagePreview').innerHTML = `
+                <img src="${data.featuredImage.url}" class="image-preview">
+            `;
+            this._formData.featuredImage = data.featuredImage;
         }
         
-        if (post?.authorImage) {
-            const authorImageUrl = this._convertWixImageUrl(post.authorImage);
-            this._shadow.getElementById('authorImagePreview').innerHTML = 
-                `<img src="${authorImageUrl}" alt="Author" onerror="this.src='https://via.placeholder.com/200'">`;
-            this._shadow.getElementById('authorImagePreview').classList.add('active');
+        if (data.authorImage) {
+            this._shadow.getElementById('authorImagePreview').innerHTML = `
+                <img src="${data.authorImage.url}" class="image-preview">
+            `;
+            this._formData.authorImage = data.authorImage;
         }
         
-        // Show modal
-        this._shadow.getElementById('modal').classList.add('active');
+        if (data.seoOgImage) {
+            this._shadow.getElementById('seoOgImagePreview').innerHTML = `
+                <img src="${data.seoOgImage.url}" class="image-preview">
+            `;
+            this._formData.seoOgImage = data.seoOgImage;
+        }
+        
+        this._formData.publishedDate = data.publishedDate;
+        
+        // Switch to editor view
+        this._shadow.querySelector('[data-view="editor"]').click();
+        this._shadow.getElementById('cancelEdit').style.display = 'inline-block';
     }
     
-    _hideModal() {
-        this._shadow.getElementById('modal').classList.remove('active');
-    }
-    
-    async _savePost() {
-        const title = this._shadow.getElementById('postTitle').value.trim();
-        const slug = this._shadow.getElementById('postSlug').value.trim();
-        
-        if (!title || !slug) {
-            this._showToast('error', 'Please fill in title and slug');
-            return;
-        }
-        
-        const editor = this._shadow.getElementById('richEditor');
-        const htmlContent = editor.innerHTML;
-        
-        if (!htmlContent || htmlContent === '') {
-            this._showToast('error', 'Please add some content to your post');
-            return;
-        }
-        
-        // Convert HTML to Markdown
-        const markdown = this._htmlToMarkdown(htmlContent);
-        
-        const postData = {
-            title,
-            slug,
-            category: this._shadow.getElementById('postCategory').value.trim(),
-            tags: this._shadow.getElementById('postTags').value.trim(),
-            excerpt: this._shadow.getElementById('postExcerpt').value.trim(),
-            author: this._shadow.getElementById('postAuthor').value.trim() || 'Anonymous',
-            status: this._shadow.getElementById('postStatus').value,
-            content: markdown,
-            featuredImageFile: this._featuredImageFile,
-            authorImageFile: this._authorImageFile,
-            existingFeaturedImage: this._selectedPost?.featuredImage,
-            existingAuthorImage: this._selectedPost?.authorImage,
-            isEdit: !!this._selectedPost,
-            postId: this._selectedPost?._id
-        };
-        
-        this._dispatchEvent('save-post', postData);
-    }
-
-    _htmlToMarkdown(html) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        
-        let markdown = '';
-        
-        const processNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                return node.textContent;
-            }
-            
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-                return '';
-            }
-            
-            const tagName = node.tagName.toLowerCase();
-            let text = '';
-            
-            // Process children first
-            for (let child of node.childNodes) {
-                text += processNode(child);
-            }
-            
-            switch(tagName) {
-                case 'h1':
-                    return `\n# ${text}\n\n`;
-                case 'h2':
-                    return `\n## ${text}\n\n`;
-                case 'h3':
-                    return `\n### ${text}\n\n`;
-                case 'h4':
-                    return `\n#### ${text}\n\n`;
-                case 'h5':
-                    return `\n##### ${text}\n\n`;
-                case 'h6':
-                    return `\n###### ${text}\n\n`;
-                case 'p':
-                    return `${text}\n\n`;
-                case 'br':
-                    return '\n';
-                case 'strong':
-                case 'b':
-                    return `**${text}**`;
-                case 'em':
-                case 'i':
-                    return `*${text}*`;
-                case 'u':
-                    return `<u>${text}</u>`;
-                case 'strike':
-                case 'del':
-                    return `~~${text}~~`;
-                case 'code':
-                    return `\`${text}\``;
-                case 'pre':
-                    return `\n\`\`\`\n${text}\n\`\`\`\n\n`;
-                case 'blockquote':
-                    return `\n> ${text}\n\n`;
-                case 'ul':
-                    return `\n${text}\n`;
-                case 'ol':
-                    return `\n${text}\n`;
-                case 'li':
-                    const parent = node.parentElement;
-                    if (parent && parent.tagName.toLowerCase() === 'ol') {
-                        const index = Array.from(parent.children).indexOf(node) + 1;
-                        return `${index}. ${text}\n`;
-                    } else {
-                        return `- ${text}\n`;
-                    }
-                case 'a':
-                    const href = node.getAttribute('href') || '';
-                    return `[${text}](${href})`;
-                case 'img':
-                    const src = node.getAttribute('src') || '';
-                    const alt = node.getAttribute('alt') || '';
-                    return `\n![${alt}](${src})\n\n`;
-                case 'hr':
-                    return '\n---\n\n';
-                case 'div':
-                    return text + '\n\n';
-                default:
-                    return text;
-            }
-        };
-        
-        markdown = processNode(tempDiv);
-        
-        // Clean up extra whitespace
-        markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
-        
-        return markdown;
-    }
-
-    _markdownToHtml(markdown) {
-        let html = markdown;
-        
-        // Headers
-        html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
-        html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
-        html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
-        html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-        html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
-        html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
-        
-        // Bold
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        
-        // Italic
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        
-        // Strikethrough
-        html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-        
-        // Inline code
-        html = html.replace(/`(.+?)`/g, '<code>$1</code>');
-        
-        // Code blocks
-        html = html.replace(/```\n([\s\S]+?)\n```/g, '<pre><code>$1</code></pre>');
-        
-        // Images
-        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;">');
-        
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-        
-        // Blockquotes
-        html = html.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
-        
-        // Horizontal rule
-        html = html.replace(/^---$/gm, '<hr>');
-        
-        // Lists
-        html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
-        html = html.replace(/^-\s+(.+)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-        
-        // Paragraphs
-        html = html.replace(/\n\n/g, '</p><p>');
-        html = '<p>' + html + '</p>';
-        
-        // Clean up
-        html = html.replace(/<p><\/p>/g, '');
-        html = html.replace(/<p>(<h[1-6]>)/g, '$1');
-        html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
-        html = html.replace(/<p>(<ul>)/g, '$1');
-        html = html.replace(/(<\/ul>)<\/p>/g, '$1');
-        html = html.replace(/<p>(<blockquote>)/g, '$1');
-        html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
-        html = html.replace(/<p>(<pre>)/g, '$1');
-        html = html.replace(/(<\/pre>)<\/p>/g, '$1');
-        html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
-        html = html.replace(/<p>(<img[^>]+>)<\/p>/g, '$1');
-        
-        return html;
-    }
-    
-    _deletePost(postId) {
-        const post = this._posts.find(p => p._id === postId);
-        if (!post) return;
-        
-        if (confirm(`Delete "${post.title}"?\n\nThis action cannot be undone.`)) {
-            this._dispatchEvent('delete-post', { postId });
-        }
-    }
-    
-    _updateStats() {
-        const published = this._posts.filter(p => p.status === 'published').length;
-        const drafts = this._posts.filter(p => p.status === 'draft').length;
-        
-        this._shadow.getElementById('totalPosts').textContent = this._totalPosts;
-        this._shadow.getElementById('publishedCount').textContent = published;
-        this._shadow.getElementById('draftCount').textContent = drafts;
-    }
-    
-    _updateUploadProgress(progress) {
-        const overlay = this._shadow.getElementById('progressOverlay');
-        const progressBar = this._shadow.getElementById('uploadProgressBar');
-        const progressText = this._shadow.getElementById('progressText');
-        
-        if (progress.status === 'uploading') {
-            overlay.classList.add('active');
-            progressBar.style.width = progress.progress + '%';
-            progressText.textContent = progress.message || 'Uploading...';
-        } else if (progress.status === 'complete') {
-            progressBar.style.width = '100%';
-            progressText.textContent = 'Upload complete!';
-            setTimeout(() => {
-                overlay.classList.remove('active');
-            }, 1000);
-        } else if (progress.status === 'error') {
-            overlay.classList.remove('active');
-            this._showToast('error', progress.message || 'Upload failed');
-        }
+    _dispatchEvent(name, detail) {
+        this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
     
     _showToast(type, message) {
@@ -1857,24 +1302,7 @@ class BlogDashboard extends HTMLElement {
         toast.className = `toast toast-${type} show`;
         setTimeout(() => toast.classList.remove('show'), 5000);
     }
-    
-    _formatDate(dateString) {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-        });
-    }
-    
-    _escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
-customElements.define('blog-dashboard', BlogDashboard);
-console.log('📝 Dashboard: ✅ Custom element registered');
+customElements.define('blog-editor-dashboard', BlogEditorDashboard);
+console.log('📝 Blog Editor: ✅ Custom element registered');
