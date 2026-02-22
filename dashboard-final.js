@@ -1,14 +1,15 @@
 class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
-        console.log('📝 Blog Editor: Initializing with MDXEditor...');
+        console.log('📝 Blog Editor: Initializing with Quill...');
         
         this._shadow = this.attachShadow({ mode: 'open' });
         
         // Editor state
-        this._editor = null;
+        this._quill = null;
         this._editorReady = false;
         this._editingItemId = null;
+        this._quillLoaded = false;
         
         // Form data
         this._formData = {
@@ -84,74 +85,42 @@ class BlogEditorDashboard extends HTMLElement {
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
         
-        this._loadMDXEditor(() => {
+        this._loadQuill(() => {
             this._setupEventListeners();
-            this._initializeMDXEditor();
+            this._initializeQuill();
             this._dispatchEvent('load-blog-posts', {});
         });
     }
     
-    _loadMDXEditor(callback) {
-        console.log('📝 Blog Editor: Loading MDXEditor...');
+    _loadQuill(callback) {
+        console.log('📝 Blog Editor: Loading Quill...');
         
-        // Check if React and MDXEditor are already loaded
-        if (window.React && window.MDXEditor) {
-            console.log('📝 Blog Editor: MDXEditor already loaded');
+        if (window.Quill) {
+            console.log('📝 Blog Editor: Quill already loaded');
+            this._quillLoaded = true;
             callback();
             return;
         }
         
-        // Load React first
-        const reactScript = document.createElement('script');
-        reactScript.src = 'https://unpkg.com/react@18/umd/react.production.min.js';
-        reactScript.crossOrigin = 'anonymous';
+        // Load Quill CSS to document head
+        const quillCss = document.createElement('link');
+        quillCss.rel = 'stylesheet';
+        quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
+        document.head.appendChild(quillCss);
         
-        reactScript.onload = () => {
-            console.log('📝 Blog Editor: React loaded');
-            
-            // Load React DOM
-            const reactDOMScript = document.createElement('script');
-            reactDOMScript.src = 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';
-            reactDOMScript.crossOrigin = 'anonymous';
-            
-            reactDOMScript.onload = () => {
-                console.log('📝 Blog Editor: React DOM loaded');
-                
-                // Load MDXEditor
-                const mdxScript = document.createElement('script');
-                mdxScript.src = 'https://unpkg.com/@mdxeditor/editor@3.9.0/dist/index.umd.js';
-                mdxScript.crossOrigin = 'anonymous';
-                
-                mdxScript.onload = () => {
-                    console.log('📝 Blog Editor: ✅ MDXEditor loaded');
-                    callback();
-                };
-                
-                mdxScript.onerror = () => {
-                    console.error('📝 Blog Editor: Failed to load MDXEditor');
-                };
-                
-                document.head.appendChild(mdxScript);
-            };
-            
-            reactDOMScript.onerror = () => {
-                console.error('📝 Blog Editor: Failed to load React DOM');
-            };
-            
-            document.head.appendChild(reactDOMScript);
+        // Load Quill JS
+        const quillScript = document.createElement('script');
+        quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
+        quillScript.onload = () => {
+            console.log('📝 Blog Editor: ✅ Quill loaded');
+            this._quillLoaded = true;
+            callback();
         };
-        
-        reactScript.onerror = () => {
-            console.error('📝 Blog Editor: Failed to load React');
+        quillScript.onerror = (error) => {
+            console.error('📝 Blog Editor: ❌ Failed to load Quill', error);
+            this._showToast('error', 'Failed to load editor');
         };
-        
-        document.head.appendChild(reactScript);
-        
-        // Load MDXEditor CSS
-        const mdxCSS = document.createElement('link');
-        mdxCSS.rel = 'stylesheet';
-        mdxCSS.href = 'https://unpkg.com/@mdxeditor/editor@3.9.0/dist/style.css';
-        document.head.appendChild(mdxCSS);
+        document.head.appendChild(quillScript);
     }
     
     _createStructure() {
@@ -159,6 +128,7 @@ class BlogEditorDashboard extends HTMLElement {
         root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                @import url('https://cdn.quilljs.com/1.3.7/quill.snow.css');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -206,7 +176,6 @@ class BlogEditorDashboard extends HTMLElement {
                 .blog-editor-header-actions {
                     display: flex;
                     gap: 12px;
-                    flex-wrap: wrap;
                 }
                 
                 .blog-editor-btn {
@@ -283,30 +252,110 @@ class BlogEditorDashboard extends HTMLElement {
                 }
                 
                 .blog-editor-wrapper {
-                    padding: 24px;
+                    padding: 0;
                 }
                 
-                #mdxEditorContainer {
-                    min-height: 500px;
+                #quillEditor {
+                    min-height: 600px;
                     background: white;
                 }
                 
-                /* MDXEditor Customization */
-                .mdxeditor {
-                    border: none !important;
-                }
-                
-                .mdxeditor-toolbar {
+                /* Quill Toolbar Styling */
+                .ql-toolbar {
                     background: #f9fafb !important;
+                    border: none !important;
                     border-bottom: 2px solid #e5e7eb !important;
-                    padding: 12px !important;
+                    padding: 16px !important;
                 }
                 
-                .mdxeditor-root-contenteditable {
-                    font-family: 'Inter', sans-serif !important;
-                    font-size: 16px !important;
-                    line-height: 1.8 !important;
-                    padding: 24px !important;
+                .ql-container {
+                    border: none !important;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 16px;
+                }
+                
+                .ql-editor {
+                    min-height: 550px;
+                    padding: 32px !important;
+                    line-height: 1.8;
+                }
+                
+                .ql-editor h1 { font-size: 2.5em; margin: 24px 0 16px; }
+                .ql-editor h2 { font-size: 2em; margin: 24px 0 16px; }
+                .ql-editor h3 { font-size: 1.75em; margin: 20px 0 12px; }
+                .ql-editor h4 { font-size: 1.5em; margin: 16px 0 10px; }
+                .ql-editor h5 { font-size: 1.25em; margin: 12px 0 8px; }
+                .ql-editor h6 { font-size: 1em; margin: 12px 0 8px; font-weight: 600; }
+                
+                .ql-editor p { margin-bottom: 16px; }
+                
+                .ql-editor ul, .ql-editor ol { 
+                    padding-left: 24px;
+                    margin-bottom: 16px;
+                }
+                
+                .ql-editor li { margin-bottom: 8px; }
+                
+                .ql-editor blockquote {
+                    border-left: 4px solid #6366f1;
+                    padding-left: 16px;
+                    margin: 16px 0;
+                    color: #6b7280;
+                    font-style: italic;
+                }
+                
+                .ql-editor pre {
+                    background: #1f2937;
+                    color: #f9fafb;
+                    padding: 16px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 16px 0;
+                }
+                
+                .ql-editor code {
+                    background: #f3f4f6;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: 'Monaco', 'Consolas', monospace;
+                }
+                
+                .ql-editor pre code {
+                    background: transparent;
+                    color: inherit;
+                    padding: 0;
+                }
+                
+                .ql-editor img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    margin: 16px 0;
+                }
+                
+                /* Toolbar button styling */
+                .ql-toolbar button:hover,
+                .ql-toolbar button:focus,
+                .ql-toolbar button.ql-active {
+                    color: #6366f1 !important;
+                }
+                
+                .ql-toolbar .ql-stroke {
+                    stroke: #374151;
+                }
+                
+                .ql-toolbar button:hover .ql-stroke,
+                .ql-toolbar button.ql-active .ql-stroke {
+                    stroke: #6366f1;
+                }
+                
+                .ql-toolbar .ql-fill {
+                    fill: #374151;
+                }
+                
+                .ql-toolbar button:hover .ql-fill,
+                .ql-toolbar button.ql-active .ql-fill {
+                    fill: #6366f1;
                 }
                 
                 .blog-editor-sidebar {
@@ -555,7 +604,7 @@ class BlogEditorDashboard extends HTMLElement {
                     <div class="blog-editor-header-content">
                         <div>
                             <h1 class="blog-editor-title">📝 Advanced Blog Editor</h1>
-                            <p class="blog-editor-subtitle">Visual markdown editor with blocks</p>
+                            <p class="blog-editor-subtitle">Visual WYSIWYG editor with markdown output</p>
                         </div>
                         <div class="blog-editor-header-actions">
                             <button class="blog-editor-btn blog-editor-btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
@@ -576,7 +625,7 @@ class BlogEditorDashboard extends HTMLElement {
                             <div class="blog-editor-layout">
                                 <div class="blog-editor-main-panel">
                                     <div class="blog-editor-wrapper">
-                                        <div id="mdxEditorContainer"></div>
+                                        <div id="quillEditor"></div>
                                     </div>
                                 </div>
                                 
@@ -716,160 +765,6 @@ class BlogEditorDashboard extends HTMLElement {
         this._shadow.appendChild(root);
     }
     
-    _initializeMDXEditor() {
-        console.log('📝 Blog Editor: Initializing MDXEditor...');
-        
-        const container = this._shadow.querySelector('#mdxEditorContainer');
-        
-        if (!window.React || !window.ReactDOM || !window.MDXEditor) {
-            console.error('📝 Blog Editor: MDXEditor libraries not loaded');
-            
-            // Fallback to simple textarea
-            container.innerHTML = `
-                <div style="border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                    <div style="background: #f9fafb; padding: 12px; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #374151;">
-                        Markdown Editor (Loading visual editor...)
-                    </div>
-                    <textarea 
-                        id="markdownTextarea" 
-                        placeholder="# Start writing your blog post in Markdown...
-
-## Headings
-Use # for H1, ## for H2, etc.
-
-**Bold text** and *italic text*
-
-- Bullet lists
-- Are easy
-
-1. Numbered lists
-2. Too!
-
-> Blockquotes for emphasis
-
-\`inline code\` and code blocks
-
-![Images](url)
-[Links](url)
-"
-                        style="
-                            width: 100%;
-                            min-height: 500px;
-                            border: none;
-                            outline: none;
-                            font-family: 'Monaco', 'Consolas', monospace;
-                            font-size: 14px;
-                            line-height: 1.6;
-                            padding: 20px;
-                            resize: vertical;
-                        "
-                    ></textarea>
-                </div>
-            `;
-            
-            this._editorReady = true;
-            return;
-        }
-        
-        try {
-            const React = window.React;
-            const ReactDOM = window.ReactDOM;
-            const { MDXEditor, headingsPlugin, listsPlugin, quotePlugin, thematicBreakPlugin, markdownShortcutPlugin, linkPlugin, linkDialogPlugin, imagePlugin, tablePlugin, codeBlockPlugin, codeMirrorPlugin, diffSourcePlugin, frontmatterPlugin, toolbarPlugin, UndoRedo, BoldItalicUnderlineToggles, BlockTypeSelect, CreateLink, InsertImage, InsertTable, InsertThematicBreak, ListsToggle, Separator } = window.MDXEditor;
-            
-            // Image upload handler
-            const imageUploadHandler = async (file) => {
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        // For now, return base64 data URL
-                        // In production, upload to server and return URL
-                        resolve(reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                });
-            };
-            
-            // Create MDXEditor component
-            const editorElement = React.createElement(MDXEditor, {
-                markdown: '# Start Writing Your Blog Post\n\nClick here to start editing...',
-                contentEditableClassName: 'mdxeditor-root-contenteditable',
-                plugins: [
-                    headingsPlugin(),
-                    listsPlugin(),
-                    quotePlugin(),
-                    thematicBreakPlugin(),
-                    markdownShortcutPlugin(),
-                    linkPlugin(),
-                    linkDialogPlugin(),
-                    imagePlugin({
-                        imageUploadHandler: imageUploadHandler
-                    }),
-                    tablePlugin(),
-                    codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
-                    codeMirrorPlugin({ codeBlockLanguages: {
-                        javascript: 'JavaScript',
-                        typescript: 'TypeScript',
-                        python: 'Python',
-                        java: 'Java',
-                        css: 'CSS',
-                        html: 'HTML',
-                        json: 'JSON',
-                        bash: 'Bash',
-                        sql: 'SQL'
-                    }}),
-                    diffSourcePlugin({ viewMode: 'rich-text' }),
-                    frontmatterPlugin(),
-                    toolbarPlugin({
-                        toolbarContents: () => React.createElement(
-                            React.Fragment,
-                            null,
-                            React.createElement(UndoRedo),
-                            React.createElement(Separator),
-                            React.createElement(BoldItalicUnderlineToggles),
-                            React.createElement(Separator),
-                            React.createElement(BlockTypeSelect),
-                            React.createElement(Separator),
-                            React.createElement(CreateLink),
-                            React.createElement(InsertImage),
-                            React.createElement(Separator),
-                            React.createElement(ListsToggle),
-                            React.createElement(Separator),
-                            React.createElement(InsertTable),
-                            React.createElement(InsertThematicBreak)
-                        )
-                    })
-                ],
-                onChange: (markdown) => {
-                    this._currentMarkdown = markdown;
-                }
-            });
-            
-            // Render using ReactDOM
-            const root = ReactDOM.createRoot(container);
-            root.render(editorElement);
-            
-            // Store reference for getting markdown
-            this._editorRoot = root;
-            this._currentMarkdown = '# Start Writing Your Blog Post\n\nClick here to start editing...';
-            
-            this._editorReady = true;
-            console.log('📝 Blog Editor: ✅ MDXEditor initialized');
-            
-        } catch (error) {
-            console.error('📝 Blog Editor: MDXEditor initialization error:', error);
-            
-            // Fallback to textarea
-            container.innerHTML = `
-                <textarea 
-                    id="markdownTextarea" 
-                    placeholder="# Start writing..."
-                    style="width: 100%; min-height: 500px; padding: 20px; border: 2px solid #e5e7eb; border-radius: 8px; font-family: monospace;"
-                ></textarea>
-            `;
-            this._editorReady = true;
-        }
-    }
-    
     _setupEventListeners() {
         // View toggle
         const viewBtns = this._shadow.querySelectorAll('.blog-editor-view-btn');
@@ -911,6 +806,79 @@ Use # for H1, ## for H2, etc.
         // Save & Cancel
         this._shadow.querySelector('#savePost').addEventListener('click', () => this._savePost());
         this._shadow.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
+    }
+    
+    _initializeQuill() {
+        console.log('📝 Blog Editor: Initializing Quill...');
+        
+        if (!window.Quill) {
+            console.error('📝 Blog Editor: Quill not loaded');
+            return;
+        }
+        
+        const editorElement = this._shadow.querySelector('#quillEditor');
+        
+        try {
+            this._quill = new Quill(editorElement, {
+                theme: 'snow',
+                placeholder: 'Start writing your amazing blog post...',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'align': [] }],
+                        ['blockquote', 'code-block'],
+                        ['link', 'image', 'video'],
+                        ['clean']
+                    ]
+                }
+            });
+            
+            this._editorReady = true;
+            console.log('📝 Blog Editor: ✅ Quill initialized');
+            
+        } catch (error) {
+            console.error('📝 Blog Editor: Quill initialization error:', error);
+        }
+    }
+    
+    _convertQuillToMarkdown(delta) {
+        let markdown = '';
+        const ops = delta.ops || [];
+        
+        ops.forEach(op => {
+            if (typeof op.insert === 'string') {
+                let text = op.insert;
+                
+                if (op.attributes) {
+                    if (op.attributes.bold) text = `**${text}**`;
+                    if (op.attributes.italic) text = `*${text}*`;
+                    if (op.attributes.strike) text = `~~${text}~~`;
+                    if (op.attributes.code) text = `\`${text}\``;
+                    if (op.attributes.link) text = `[${text}](${op.attributes.link})`;
+                    if (op.attributes.header) {
+                        const level = '#'.repeat(op.attributes.header);
+                        text = `${level} ${text}\n`;
+                    }
+                    if (op.attributes.blockquote) text = `> ${text}\n`;
+                    if (op.attributes.list) {
+                        const prefix = op.attributes.list === 'ordered' ? '1.' : '-';
+                        text = `${prefix} ${text}`;
+                    }
+                }
+                
+                markdown += text;
+            } else if (op.insert.image) {
+                markdown += `\n![](${op.insert.image})\n`;
+            } else if (op.insert.video) {
+                markdown += `\n[Video](${op.insert.video})\n`;
+            }
+        });
+        
+        return markdown.trim();
     }
     
     _setupImageUpload(type) {
@@ -987,29 +955,24 @@ Use # for H1, ## for H2, etc.
             return;
         }
         
-        // Get markdown content
-        let markdown = '';
-        if (this._currentMarkdown) {
-            // From MDXEditor
-            markdown = this._currentMarkdown;
-        } else {
-            // From fallback textarea
-            const textarea = this._shadow.querySelector('#markdownTextarea');
-            markdown = textarea ? textarea.value : '';
-        }
-        
-        if (!markdown.trim()) {
-            this._showToast('error', 'Please write some content');
+        if (!this._quill) {
+            this._showToast('error', 'Editor not ready');
             return;
         }
         
         try {
+            const delta = this._quill.getContents();
+            const htmlContent = this._quill.root.innerHTML;
+            const markdown = this._convertQuillToMarkdown(delta);
+            
             const formData = {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
                 excerpt: this._shadow.querySelector('#excerptInput').value,
                 content: markdown,
+                htmlContent: htmlContent,
+                quillDelta: JSON.stringify(delta),
                 author: this._shadow.querySelector('#authorInput').value,
                 category: this._shadow.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
@@ -1087,11 +1050,9 @@ Use # for H1, ## for H2, etc.
         this._formData.authorImage = null;
         this._formData.seoOgImage = null;
         
-        // Reset editor content
-        this._currentMarkdown = '# Start Writing Your Blog Post\n\nClick here to start editing...';
-        
-        const textarea = this._shadow.querySelector('#markdownTextarea');
-        if (textarea) textarea.value = '';
+        if (this._quill) {
+            this._quill.setContents([]);
+        }
     }
     
     _renderBlogPosts(data) {
@@ -1107,7 +1068,7 @@ Use # for H1, ## for H2, etc.
         
         grid.innerHTML = data.posts.map(post => `
             <div class="blog-editor-post-card">
-                <img src="${post.featuredImage?.url || 'https://via.placeholder.com/400x300?text=No+Image'}" class="blog-editor-post-card-image">
+                <img src="${post.featuredImage?.url || 'https://placehold.co/400x300/e5e7eb/6b7280?text=No+Image'}" class="blog-editor-post-card-image">
                 <div class="blog-editor-post-card-body">
                     <div class="blog-editor-post-status blog-editor-status-${post.status}">${post.status}</div>
                     <div class="blog-editor-post-card-title">${post.title}</div>
@@ -1182,18 +1143,16 @@ Use # for H1, ## for H2, etc.
         
         this._formData.publishedDate = data.publishedDate;
         
-        // Load markdown content
-        if (data.content) {
-            this._currentMarkdown = data.content;
-            
-            const textarea = this._shadow.querySelector('#markdownTextarea');
-            if (textarea) {
-                textarea.value = data.content;
+        if (this._quill && data.quillDelta) {
+            try {
+                const delta = JSON.parse(data.quillDelta);
+                this._quill.setContents(delta);
+            } catch (e) {
+                console.error('📝 Blog Editor: Failed to load Quill content:', e);
+                if (data.htmlContent) {
+                    this._quill.root.innerHTML = data.htmlContent;
+                }
             }
-            
-            // If MDXEditor is loaded, re-initialize with content
-            // Note: This requires recreating the React component
-            // For simplicity in this example, we'll just use the textarea
         }
         
         this._shadow.querySelector('[data-view="editor"]').click();
@@ -1219,4 +1178,4 @@ Use # for H1, ## for H2, etc.
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('📝 Blog Editor: ✅ Custom element registered with MDXEditor');
+console.log('📝 Blog Editor: ✅ Custom element registered with Quill');
