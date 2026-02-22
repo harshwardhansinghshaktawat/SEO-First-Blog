@@ -7,7 +7,6 @@ class BlogEditorDashboard extends HTMLElement {
         this._editor = null;
         this._editorReady = false;
         this._editingItemId = null;
-        this._rendered = false; // Flag to prevent double rendering
         
         // Form data
         this._formData = {
@@ -31,6 +30,12 @@ class BlogEditorDashboard extends HTMLElement {
             seoKeywords: '',
             isFeatured: false
         };
+        
+        this._createStructure();
+        this._loadEditorJS(() => {
+            this._setupEventListeners();
+        });
+        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
@@ -79,21 +84,7 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
-        
-        // Only render the HTML and load scripts once the element is actually on the page
-        if (!this._rendered) {
-            this._createStructure();
-            this._loadEditorJS(() => {
-                this._setupEventListeners();
-                // Dispatch the load event AFTER everything is set up
-                this._dispatchEvent('load-blog-posts', {});
-            });
-            this._rendered = true;
-            console.log('📝 Blog Editor: Complete');
-        } else {
-            // If it's already rendered (e.g., moved in the DOM), just request posts again
-            this._dispatchEvent('load-blog-posts', {});
-        }
+        this._dispatchEvent('load-blog-posts', {});
     }
     
     _loadEditorJS(callback) {
@@ -111,7 +102,9 @@ class BlogEditorDashboard extends HTMLElement {
             'https://cdn.jsdelivr.net/npm/@editorjs/link@latest',
             'https://cdn.jsdelivr.net/npm/@editorjs/marker@latest',
             'https://cdn.jsdelivr.net/npm/@editorjs/inline-code@latest',
-            'https://cdn.jsdelivr.net/npm/@editorjs/embed@latest'
+            'https://cdn.jsdelivr.net/npm/@editorjs/embed@latest',
+            'https://cdn.jsdelivr.net/npm/@editorjs/warning@latest',
+            'https://cdn.jsdelivr.net/npm/@editorjs/raw@latest'
         ];
         
         let loaded = 0;
@@ -139,527 +132,533 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _createStructure() {
-        const root = document.createElement('div');
-        root.innerHTML = `
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                
-                * { box-sizing: border-box; margin: 0; padding: 0; }
-                
-                blog-editor-dashboard {
-                    display: block;
-                    width: 100%;
-                    font-family: 'Inter', sans-serif;
-                    font-size: 14px;
-                    background: #f8f9fa;
-                }
-                
-                .container { width: 100%; min-height: 100vh; }
-                
-                .header {
-                    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-                    color: white;
-                    padding: 24px 32px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                
-                .header-content {
-                    max-width: 1400px;
-                    margin: 0 auto;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                
-                .title {
-                    font-size: 28px;
-                    font-weight: 700;
-                }
-                
-                .subtitle {
-                    font-size: 14px;
-                    opacity: 0.9;
-                    margin-top: 4px;
-                }
-                
-                .header-actions {
-                    display: flex;
-                    gap: 12px;
-                }
-                
-                .btn {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    font-family: inherit;
-                }
-                
-                .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-                
-                .btn-primary { background: #8b5cf6; color: white; }
-                .btn-success { background: #10b981; color: white; }
-                .btn-secondary { background: white; color: #6366f1; }
-                .btn-danger { background: #ef4444; color: white; }
-                .btn-warning { background: #f59e0b; color: white; }
-                
-                .main { padding: 32px; }
-                
-                .content { max-width: 1400px; margin: 0 auto; }
-                
-                .view-toggle {
-                    display: flex;
-                    gap: 12px;
-                    margin-bottom: 24px;
-                }
-                
-                .view-btn {
-                    padding: 10px 20px;
-                    border: 2px solid #e5e7eb;
-                    background: white;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    transition: all 0.2s;
-                }
-                
-                .view-btn.active {
-                    background: #6366f1;
-                    color: white;
-                    border-color: #6366f1;
-                }
-                
-                .editor-view, .posts-view { display: none; }
-                .editor-view.active, .posts-view.active { display: block; }
-                
-                /* Editor Layout */
-                .editor-container {
-                    display: grid;
-                    grid-template-columns: 1fr 400px;
-                    gap: 24px;
-                }
-                
-                @media (max-width: 1200px) {
-                    .editor-container {
-                        grid-template-columns: 1fr;
-                    }
-                }
-                
-                .editor-main {
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                    overflow: hidden;
-                }
-                
-                .editor-wrapper {
-                    padding: 24px;
-                    min-height: 600px;
-                }
-                
-                #editorjs {
-                    background: white;
-                }
-                
-                /* Editor.js Custom Styles */
-                .ce-block__content,
-                .ce-toolbar__content {
-                    max-width: 100%;
-                }
-                
-                .codex-editor__redactor {
-                    padding-bottom: 100px !important;
-                }
-                
-                .ce-paragraph {
-                    line-height: 1.8;
-                    font-size: 16px;
-                }
-                
-                .ce-header {
-                    margin-top: 24px;
-                    margin-bottom: 16px;
-                }
-                
-                .editor-sidebar {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 16px;
-                }
-                
-                .sidebar-section {
-                    background: white;
-                    border-radius: 12px;
-                    padding: 20px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                
-                .section-title {
-                    font-size: 16px;
-                    font-weight: 700;
-                    margin-bottom: 16px;
-                    color: #1f2937;
-                }
-                
-                .form-group { margin-bottom: 16px; }
-                .form-group:last-child { margin-bottom: 0; }
-                
-                .label {
-                    display: block;
-                    font-weight: 600;
-                    margin-bottom: 6px;
-                    color: #374151;
-                    font-size: 13px;
-                }
-                
-                .input, .textarea, .select {
-                    width: 100%;
-                    padding: 10px 12px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-family: inherit;
-                    transition: border-color 0.2s;
-                }
-                
-                .input:focus, .textarea:focus, .select:focus {
-                    outline: none;
-                    border-color: #6366f1;
-                }
-                
-                .textarea { resize: vertical; min-height: 80px; }
-                
-                .checkbox-group {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                
-                .checkbox {
-                    width: 18px;
-                    height: 18px;
-                    cursor: pointer;
-                }
-                
-                .image-upload-area {
-                    border: 2px dashed #e5e7eb;
-                    border-radius: 8px;
-                    padding: 20px;
-                    text-align: center;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-                
-                .image-upload-area:hover {
-                    border-color: #6366f1;
-                    background: #f9fafb;
-                }
-                
-                .image-preview {
-                    width: 100%;
-                    max-height: 200px;
-                    object-fit: cover;
-                    border-radius: 8px;
-                    margin-top: 12px;
-                }
-                
-                .tag-input-wrapper {
-                    display: flex;
-                    gap: 8px;
-                }
-                
-                .tags-display {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 6px;
-                    margin-top: 8px;
-                }
-                
-                .tag-chip {
-                    background: #ede9fe;
-                    color: #6366f1;
-                    padding: 4px 12px;
-                    border-radius: 16px;
-                    font-size: 12px;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                
-                .tag-remove {
-                    cursor: pointer;
-                    font-weight: 700;
-                }
-                
-                /* Posts Grid */
-                .posts-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-                    gap: 24px;
-                }
-                
-                .post-card {
-                    background: white;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                    transition: all 0.3s;
-                }
-                
-                .post-card:hover {
-                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-                    transform: translateY(-4px);
-                }
-                
-                .post-card-image {
-                    width: 100%;
-                    height: 180px;
-                    object-fit: cover;
-                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-                }
-                
-                .post-card-body { padding: 20px; }
-                
-                .post-status {
-                    display: inline-block;
-                    padding: 4px 12px;
-                    border-radius: 12px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    margin-bottom: 12px;
-                }
-                
-                .status-published { background: #d1fae5; color: #065f46; }
-                .status-draft { background: #fee2e2; color: #991b1b; }
-                
-                .post-card-title {
-                    font-size: 18px;
-                    font-weight: 700;
-                    margin-bottom: 8px;
-                    line-height: 1.4;
-                    display: -webkit-box;
-                    -webkit-line-clamp: 2;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
-                
-                .post-card-excerpt {
-                    font-size: 14px;
-                    color: #6b7280;
-                    margin-bottom: 16px;
-                    display: -webkit-box;
-                    -webkit-line-clamp: 3;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
-                
-                .post-card-meta {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    font-size: 12px;
-                    color: #9ca3af;
-                    margin-bottom: 16px;
-                }
-                
-                .post-card-actions {
-                    display: flex;
-                    gap: 8px;
-                }
-                
-                .toast {
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    padding: 16px 20px;
-                    border-radius: 12px;
-                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-                    display: none;
-                    z-index: 2000;
-                    min-width: 320px;
-                    animation: slideIn 0.3s;
-                }
-                
-                .toast.show { display: block; }
-                
-                .toast-success {
-                    background: #f0fdf4;
-                    border-left: 4px solid #10b981;
-                    color: #166534;
-                }
-                
-                .toast-error {
-                    background: #fef2f2;
-                    border-left: 4px solid #ef4444;
-                    color: #991b1b;
-                }
-                
-                @keyframes slideIn {
-                    from { transform: translateX(400px); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-                
-                .loading {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 60px 20px;
-                }
-                
-                .loading.hide { display: none; }
-                
-                .spinner {
-                    width: 40px;
-                    height: 40px;
-                    border: 4px solid #e5e7eb;
-                    border-top-color: #6366f1;
-                    border-radius: 50%;
-                    animation: spin 0.8s linear infinite;
-                }
-                
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            </style>
+        // Add styles to document head
+        const style = document.createElement('style');
+        style.textContent = `
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
             
-            <div class="container">
-                <div class="header">
-                    <div class="header-content">
+            blog-editor-dashboard {
+                display: block;
+                width: 100%;
+                font-family: 'Inter', sans-serif;
+                font-size: 14px;
+                background: #f8f9fa;
+            }
+            
+            blog-editor-dashboard * { box-sizing: border-box; }
+            
+            .blog-editor-container { width: 100%; min-height: 100vh; }
+            
+            .blog-editor-header {
+                background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                color: white;
+                padding: 24px 32px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            
+            .blog-editor-header-content {
+                max-width: 1400px;
+                margin: 0 auto;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .blog-editor-title {
+                font-size: 28px;
+                font-weight: 700;
+            }
+            
+            .blog-editor-subtitle {
+                font-size: 14px;
+                opacity: 0.9;
+                margin-top: 4px;
+            }
+            
+            .blog-editor-header-actions {
+                display: flex;
+                gap: 12px;
+            }
+            
+            .blog-editor-btn {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-family: inherit;
+            }
+            
+            .blog-editor-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+            
+            .blog-editor-btn-primary { background: #8b5cf6; color: white; }
+            .blog-editor-btn-success { background: #10b981; color: white; }
+            .blog-editor-btn-secondary { background: white; color: #6366f1; }
+            .blog-editor-btn-danger { background: #ef4444; color: white; }
+            
+            .blog-editor-main { padding: 32px; }
+            
+            .blog-editor-content { max-width: 1400px; margin: 0 auto; }
+            
+            .blog-editor-view-toggle {
+                display: flex;
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+            
+            .blog-editor-view-btn {
+                padding: 10px 20px;
+                border: 2px solid #e5e7eb;
+                background: white;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.2s;
+            }
+            
+            .blog-editor-view-btn.active {
+                background: #6366f1;
+                color: white;
+                border-color: #6366f1;
+            }
+            
+            .blog-editor-editor-view, .blog-editor-posts-view { display: none; }
+            .blog-editor-editor-view.active, .blog-editor-posts-view.active { display: block; }
+            
+            .blog-editor-layout {
+                display: grid;
+                grid-template-columns: 1fr 400px;
+                gap: 24px;
+            }
+            
+            @media (max-width: 1200px) {
+                .blog-editor-layout {
+                    grid-template-columns: 1fr;
+                }
+            }
+            
+            .blog-editor-main-panel {
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            
+            .blog-editor-wrapper {
+                padding: 24px;
+                min-height: 600px;
+            }
+            
+            #editorjs {
+                background: white;
+            }
+            
+            /* Editor.js Overrides */
+            .ce-block__content,
+            .ce-toolbar__content {
+                max-width: 100% !important;
+            }
+            
+            .codex-editor__redactor {
+                padding-bottom: 100px !important;
+            }
+            
+            .ce-paragraph {
+                line-height: 1.8 !important;
+                font-size: 16px !important;
+            }
+            
+            .ce-header {
+                margin-top: 24px !important;
+                margin-bottom: 16px !important;
+            }
+            
+            .blog-editor-sidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+            
+            .blog-editor-section {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            
+            .blog-editor-section-title {
+                font-size: 16px;
+                font-weight: 700;
+                margin-bottom: 16px;
+                color: #1f2937;
+            }
+            
+            .blog-editor-form-group { margin-bottom: 16px; }
+            .blog-editor-form-group:last-child { margin-bottom: 0; }
+            
+            .blog-editor-label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 6px;
+                color: #374151;
+                font-size: 13px;
+            }
+            
+            .blog-editor-input, .blog-editor-textarea, .blog-editor-select {
+                width: 100%;
+                padding: 10px 12px;
+                border: 2px solid #e5e7eb;
+                border-radius: 8px;
+                font-size: 14px;
+                font-family: inherit;
+                transition: border-color 0.2s;
+            }
+            
+            .blog-editor-input:focus, .blog-editor-textarea:focus, .blog-editor-select:focus {
+                outline: none;
+                border-color: #6366f1;
+            }
+            
+            .blog-editor-textarea { resize: vertical; min-height: 80px; }
+            
+            .blog-editor-checkbox-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .blog-editor-checkbox {
+                width: 18px;
+                height: 18px;
+                cursor: pointer;
+            }
+            
+            .blog-editor-image-upload-area {
+                border: 2px dashed #e5e7eb;
+                border-radius: 8px;
+                padding: 20px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .blog-editor-image-upload-area:hover {
+                border-color: #6366f1;
+                background: #f9fafb;
+            }
+            
+            .blog-editor-image-preview {
+                width: 100%;
+                max-height: 200px;
+                object-fit: cover;
+                border-radius: 8px;
+                margin-top: 12px;
+            }
+            
+            .blog-editor-tag-input-wrapper {
+                display: flex;
+                gap: 8px;
+            }
+            
+            .blog-editor-tags-display {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 8px;
+            }
+            
+            .blog-editor-tag-chip {
+                background: #ede9fe;
+                color: #6366f1;
+                padding: 4px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            
+            .blog-editor-tag-remove {
+                cursor: pointer;
+                font-weight: 700;
+            }
+            
+            .blog-editor-posts-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                gap: 24px;
+            }
+            
+            .blog-editor-post-card {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                transition: all 0.3s;
+            }
+            
+            .blog-editor-post-card:hover {
+                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                transform: translateY(-4px);
+            }
+            
+            .blog-editor-post-card-image {
+                width: 100%;
+                height: 180px;
+                object-fit: cover;
+                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            }
+            
+            .blog-editor-post-card-body { padding: 20px; }
+            
+            .blog-editor-post-status {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                margin-bottom: 12px;
+            }
+            
+            .blog-editor-status-published { background: #d1fae5; color: #065f46; }
+            .blog-editor-status-draft { background: #fee2e2; color: #991b1b; }
+            
+            .blog-editor-post-card-title {
+                font-size: 18px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                line-height: 1.4;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            
+            .blog-editor-post-card-excerpt {
+                font-size: 14px;
+                color: #6b7280;
+                margin-bottom: 16px;
+                display: -webkit-box;
+                -webkit-line-clamp: 3;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            
+            .blog-editor-post-card-meta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 12px;
+                color: #9ca3af;
+                margin-bottom: 16px;
+            }
+            
+            .blog-editor-post-card-actions {
+                display: flex;
+                gap: 8px;
+            }
+            
+            .blog-editor-toast {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 16px 20px;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                display: none;
+                z-index: 2000;
+                min-width: 320px;
+                animation: slideIn 0.3s;
+            }
+            
+            .blog-editor-toast.show { display: block; }
+            
+            .blog-editor-toast-success {
+                background: #f0fdf4;
+                border-left: 4px solid #10b981;
+                color: #166534;
+            }
+            
+            .blog-editor-toast-error {
+                background: #fef2f2;
+                border-left: 4px solid #ef4444;
+                color: #991b1b;
+            }
+            
+            @keyframes slideIn {
+                from { transform: translateX(400px); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            
+            .blog-editor-loading {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 60px 20px;
+            }
+            
+            .blog-editor-loading.hide { display: none; }
+            
+            .blog-editor-spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #e5e7eb;
+                border-top-color: #6366f1;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Create HTML structure in Light DOM
+        this.innerHTML = `
+            <div class="blog-editor-container">
+                <div class="blog-editor-header">
+                    <div class="blog-editor-header-content">
                         <div>
-                            <h1 class="title">📝 Advanced Blog Editor</h1>
-                            <p class="subtitle">Create SEO-optimized blog posts with Editor.js</p>
+                            <h1 class="blog-editor-title">📝 Advanced Blog Editor</h1>
+                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Editor.js</p>
                         </div>
-                        <div class="header-actions">
-                            <button class="btn btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
-                            <button class="btn btn-success" id="savePost">Save Post</button>
+                        <div class="blog-editor-header-actions">
+                            <button class="blog-editor-btn blog-editor-btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
+                            <button class="blog-editor-btn blog-editor-btn-success" id="savePost">Save Post</button>
                         </div>
                     </div>
                 </div>
                 
-                <div class="main">
-                    <div class="content">
-                        <div class="view-toggle">
-                            <button class="view-btn active" data-view="editor">✏️ Editor</button>
-                            <button class="view-btn" data-view="posts">📚 All Posts</button>
+                <div class="blog-editor-main">
+                    <div class="blog-editor-content">
+                        <div class="blog-editor-view-toggle">
+                            <button class="blog-editor-view-btn active" data-view="editor">✏️ Editor</button>
+                            <button class="blog-editor-view-btn" data-view="posts">📚 All Posts</button>
                         </div>
                         
-                        <div class="editor-view active">
-                            <div class="editor-container">
-                                <div class="editor-main">
-                                    <div class="editor-wrapper">
+                        <!-- Editor View -->
+                        <div class="blog-editor-editor-view active">
+                            <div class="blog-editor-layout">
+                                <div class="blog-editor-main-panel">
+                                    <div class="blog-editor-wrapper">
                                         <div id="editorjs"></div>
                                     </div>
                                 </div>
                                 
-                                <div class="editor-sidebar">
-                                    <div class="sidebar-section">
-                                        <div class="section-title">📄 Basic Information</div>
+                                <div class="blog-editor-sidebar">
+                                    <!-- Basic Info -->
+                                    <div class="blog-editor-section">
+                                        <div class="blog-editor-section-title">📄 Basic Information</div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Title *</label>
-                                            <input type="text" class="input" id="titleInput" placeholder="Enter post title">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Title *</label>
+                                            <input type="text" class="blog-editor-input" id="titleInput" placeholder="Enter post title">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Slug (URL)</label>
-                                            <input type="text" class="input" id="slugInput" placeholder="auto-generated-from-title">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Slug (URL)</label>
+                                            <input type="text" class="blog-editor-input" id="slugInput" placeholder="auto-generated-from-title">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Excerpt</label>
-                                            <textarea class="textarea" id="excerptInput" placeholder="Brief summary..."></textarea>
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Excerpt</label>
+                                            <textarea class="blog-editor-textarea" id="excerptInput" placeholder="Brief summary..."></textarea>
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Category</label>
-                                            <input type="text" class="input" id="categoryInput" placeholder="e.g., Technology">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Category</label>
+                                            <input type="text" class="blog-editor-input" id="categoryInput" placeholder="e.g., Technology">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Tags</label>
-                                            <div class="tag-input-wrapper">
-                                                <input type="text" class="input" id="tagInput" placeholder="Add tag">
-                                                <button class="btn btn-primary" id="addTagBtn">+</button>
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Tags</label>
+                                            <div class="blog-editor-tag-input-wrapper">
+                                                <input type="text" class="blog-editor-input" id="tagInput" placeholder="Add tag">
+                                                <button class="blog-editor-btn blog-editor-btn-primary" id="addTagBtn">+</button>
                                             </div>
-                                            <div class="tags-display" id="tagsDisplay"></div>
+                                            <div class="blog-editor-tags-display" id="tagsDisplay"></div>
                                         </div>
                                     </div>
                                     
-                                    <div class="sidebar-section">
-                                        <div class="section-title">🖼️ Featured Image</div>
+                                    <!-- Featured Image -->
+                                    <div class="blog-editor-section">
+                                        <div class="blog-editor-section-title">🖼️ Featured Image</div>
                                         <input type="file" id="featuredImageInput" accept="image/*" style="display: none;">
-                                        <div class="image-upload-area" id="featuredImageArea">
+                                        <div class="blog-editor-image-upload-area" id="featuredImageArea">
                                             <div>📸 Click to upload featured image</div>
                                         </div>
                                         <div id="featuredImagePreview"></div>
                                     </div>
                                     
-                                    <div class="sidebar-section">
-                                        <div class="section-title">✍️ Author Information</div>
+                                    <!-- Author Info -->
+                                    <div class="blog-editor-section">
+                                        <div class="blog-editor-section-title">✍️ Author Information</div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Author Name</label>
-                                            <input type="text" class="input" id="authorInput" placeholder="John Doe">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Author Name</label>
+                                            <input type="text" class="blog-editor-input" id="authorInput" placeholder="John Doe">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Author Image</label>
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Author Image</label>
                                             <input type="file" id="authorImageInput" accept="image/*" style="display: none;">
-                                            <div class="image-upload-area" id="authorImageArea">
+                                            <div class="blog-editor-image-upload-area" id="authorImageArea">
                                                 <div>👤 Click to upload author image</div>
                                             </div>
                                             <div id="authorImagePreview"></div>
                                         </div>
                                     </div>
                                     
-                                    <div class="sidebar-section">
-                                        <div class="section-title">🚀 Publishing</div>
+                                    <!-- Publishing -->
+                                    <div class="blog-editor-section">
+                                        <div class="blog-editor-section-title">🚀 Publishing</div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Status</label>
-                                            <select class="select" id="statusSelect">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Status</label>
+                                            <select class="blog-editor-select" id="statusSelect">
                                                 <option value="draft">Draft</option>
                                                 <option value="published">Published</option>
                                             </select>
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Read Time (minutes)</label>
-                                            <input type="number" class="input" id="readTimeInput" value="5" min="1">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Read Time (minutes)</label>
+                                            <input type="number" class="blog-editor-input" id="readTimeInput" value="5" min="1">
                                         </div>
                                         
-                                        <div class="form-group checkbox-group">
-                                            <input type="checkbox" class="checkbox" id="isFeaturedCheckbox">
-                                            <label class="label" style="margin-bottom: 0;">⭐ Featured Post</label>
+                                        <div class="blog-editor-form-group blog-editor-checkbox-group">
+                                            <input type="checkbox" class="blog-editor-checkbox" id="isFeaturedCheckbox">
+                                            <label class="blog-editor-label" style="margin-bottom: 0;">⭐ Featured Post</label>
                                         </div>
                                     </div>
                                     
-                                    <div class="sidebar-section">
-                                        <div class="section-title">🔍 SEO Settings</div>
+                                    <!-- SEO -->
+                                    <div class="blog-editor-section">
+                                        <div class="blog-editor-section-title">🔍 SEO Settings</div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">SEO Title</label>
-                                            <input type="text" class="input" id="seoTitleInput" placeholder="Optimized title for search engines">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">SEO Title</label>
+                                            <input type="text" class="blog-editor-input" id="seoTitleInput" placeholder="Optimized title for search engines">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">SEO Description</label>
-                                            <textarea class="textarea" id="seoDescriptionInput" placeholder="Meta description for search results"></textarea>
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">SEO Description</label>
+                                            <textarea class="blog-editor-textarea" id="seoDescriptionInput" placeholder="Meta description for search results"></textarea>
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">Keywords (comma-separated)</label>
-                                            <input type="text" class="input" id="seoKeywordsInput" placeholder="seo, blog, marketing">
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">Keywords (comma-separated)</label>
+                                            <input type="text" class="blog-editor-input" id="seoKeywordsInput" placeholder="seo, blog, marketing">
                                         </div>
                                         
-                                        <div class="form-group">
-                                            <label class="label">OG Image</label>
+                                        <div class="blog-editor-form-group">
+                                            <label class="blog-editor-label">OG Image</label>
                                             <input type="file" id="seoOgImageInput" accept="image/*" style="display: none;">
-                                            <div class="image-upload-area" id="seoOgImageArea">
+                                            <div class="blog-editor-image-upload-area" id="seoOgImageArea">
                                                 <div>🌐 Click to upload OG image</div>
                                             </div>
                                             <div id="seoOgImagePreview"></div>
@@ -669,21 +668,19 @@ class BlogEditorDashboard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <div class="posts-view">
-                            <div id="loadingPosts" class="loading">
-                                <div class="spinner"></div>
+                        <!-- Posts View -->
+                        <div class="blog-editor-posts-view">
+                            <div id="loadingPosts" class="blog-editor-loading">
+                                <div class="blog-editor-spinner"></div>
                             </div>
-                            <div class="posts-grid" id="postsGrid"></div>
+                            <div class="blog-editor-posts-grid" id="postsGrid"></div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div class="toast" id="toast"></div>
+            <div class="blog-editor-toast" id="toast"></div>
         `;
-        
-        // Append directly to the custom element in the Light DOM
-        this.appendChild(root);
     }
 
     _setupEventListeners() {
@@ -691,15 +688,15 @@ class BlogEditorDashboard extends HTMLElement {
         this._initializeEditor();
         
         // View toggle
-        const viewBtns = this.querySelectorAll('.view-btn');
+        const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
         viewBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 viewBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
                 const view = btn.dataset.view;
-                this.querySelector('.editor-view').classList.toggle('active', view === 'editor');
-                this.querySelector('.posts-view').classList.toggle('active', view === 'posts');
+                this.querySelector('.blog-editor-editor-view').classList.toggle('active', view === 'editor');
+                this.querySelector('.blog-editor-posts-view').classList.toggle('active', view === 'posts');
                 
                 if (view === 'posts') {
                     this._dispatchEvent('load-blog-posts', {});
@@ -742,6 +739,9 @@ class BlogEditorDashboard extends HTMLElement {
             return;
         }
         
+        // Create custom element reference
+        const customElementRef = this;
+        
         // Custom image uploader
         class ImageTool {
             static get toolbox() {
@@ -769,13 +769,11 @@ class BlogEditorDashboard extends HTMLElement {
                     img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
                     wrapper.appendChild(img);
                     
-                    if (this.data.caption) {
-                        const caption = document.createElement('div');
-                        caption.contentEditable = true;
-                        caption.innerHTML = this.data.caption;
-                        caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
-                        wrapper.appendChild(caption);
-                    }
+                    const caption = document.createElement('div');
+                    caption.contentEditable = true;
+                    caption.innerHTML = this.data.caption || 'Enter image caption...';
+                    caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
+                    wrapper.appendChild(caption);
                 } else {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -801,31 +799,27 @@ class BlogEditorDashboard extends HTMLElement {
                 reader.onload = (event) => {
                     const base64Data = event.target.result.split(',')[1];
                     
-                    // Dispatch upload event to custom element
-                    const customElement = document.querySelector('blog-editor-dashboard');
-                    if(customElement) {
-                        customElement._uploadEditorImage(base64Data, file.name, file.type, (result) => {
-                            if (result.success) {
-                                wrapper.innerHTML = '';
-                                
-                                const img = document.createElement('img');
-                                img.src = result.url;
-                                img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
-                                wrapper.appendChild(img);
-                                
-                                const caption = document.createElement('div');
-                                caption.contentEditable = true;
-                                caption.innerHTML = 'Enter image caption...';
-                                caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
-                                wrapper.appendChild(caption);
-                                
-                                this.data = {
-                                    url: result.url,
-                                    caption: 'Enter image caption...'
-                                };
-                            }
-                        });
-                    }
+                    customElementRef._uploadEditorImage(base64Data, file.name, file.type, (result) => {
+                        if (result.success) {
+                            wrapper.innerHTML = '';
+                            
+                            const img = document.createElement('img');
+                            img.src = result.url;
+                            img.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 20px auto;';
+                            wrapper.appendChild(img);
+                            
+                            const caption = document.createElement('div');
+                            caption.contentEditable = true;
+                            caption.innerHTML = 'Enter image caption...';
+                            caption.style.cssText = 'text-align: center; font-size: 14px; color: #6b7280; margin-top: 8px;';
+                            wrapper.appendChild(caption);
+                            
+                            this.data = {
+                                url: result.url,
+                                caption: 'Enter image caption...'
+                            };
+                        }
+                    });
                 };
                 reader.readAsDataURL(file);
             }
@@ -900,6 +894,15 @@ class BlogEditorDashboard extends HTMLElement {
                         }
                     }
                 },
+                warning: {
+                    class: window.Warning,
+                    inlineToolbar: true,
+                    config: {
+                        titlePlaceholder: 'Title',
+                        messagePlaceholder: 'Message'
+                    }
+                },
+                raw: window.RawTool,
                 image: ImageTool
             },
             onChange: () => {
@@ -918,7 +921,6 @@ class BlogEditorDashboard extends HTMLElement {
             mimeType: mimeType
         });
         
-        // Store callback for later
         this._imageUploadCallback = callback;
     }
     
@@ -943,7 +945,7 @@ class BlogEditorDashboard extends HTMLElement {
             reader.onload = (event) => {
                 const preview = this.querySelector(`#${type}Preview`);
                 preview.innerHTML = `
-                    <img src="${event.target.result}" class="image-preview">
+                    <img src="${event.target.result}" class="blog-editor-image-preview">
                     <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name}</div>
                 `;
                 
@@ -979,13 +981,13 @@ class BlogEditorDashboard extends HTMLElement {
     _renderTags() {
         const container = this.querySelector('#tagsDisplay');
         container.innerHTML = this._formData.tags.map((tag, index) => `
-            <div class="tag-chip">
+            <div class="blog-editor-tag-chip">
                 ${tag}
-                <span class="tag-remove" data-index="${index}">×</span>
+                <span class="blog-editor-tag-remove" data-index="${index}">×</span>
             </div>
         `).join('');
         
-        container.querySelectorAll('.tag-remove').forEach(btn => {
+        container.querySelectorAll('.blog-editor-tag-remove').forEach(btn => {
             btn.addEventListener('click', () => {
                 const index = parseInt(btn.dataset.index);
                 this._formData.tags.splice(index, 1);
@@ -1114,10 +1116,8 @@ class BlogEditorDashboard extends HTMLElement {
                     
                 case 'table':
                     if (block.data.content && block.data.content.length > 0) {
-                        // Header
                         markdown += '| ' + block.data.content[0].join(' | ') + ' |\n';
                         markdown += '|' + block.data.content[0].map(() => '---').join('|') + '|\n';
-                        // Rows
                         for (let i = 1; i < block.data.content.length; i++) {
                             markdown += '| ' + block.data.content[i].join(' | ') + ' |\n';
                         }
@@ -1135,6 +1135,14 @@ class BlogEditorDashboard extends HTMLElement {
                     
                 case 'embed':
                     markdown += `[Embedded Content](${block.data.embed})\n\n`;
+                    break;
+                    
+                case 'warning':
+                    markdown += `> ⚠️ **${block.data.title}**\n>\n> ${block.data.message}\n\n`;
+                    break;
+                    
+                case 'raw':
+                    markdown += `${block.data.html}\n\n`;
                     break;
                     
                 default:
@@ -1192,19 +1200,19 @@ class BlogEditorDashboard extends HTMLElement {
         }
         
         grid.innerHTML = data.posts.map(post => `
-            <div class="post-card">
-                <img src="${post.featuredImage?.url || 'https://via.placeholder.com/400x300?text=No+Image'}" class="post-card-image">
-                <div class="post-card-body">
-                    <div class="post-status status-${post.status}">${post.status}</div>
-                    <div class="post-card-title">${post.title}</div>
-                    <div class="post-card-excerpt">${post.excerpt || 'No excerpt available'}</div>
-                    <div class="post-card-meta">
+            <div class="blog-editor-post-card">
+                <img src="${post.featuredImage?.url || 'https://via.placeholder.com/400x300?text=No+Image'}" class="blog-editor-post-card-image">
+                <div class="blog-editor-post-card-body">
+                    <div class="blog-editor-post-status blog-editor-status-${post.status}">${post.status}</div>
+                    <div class="blog-editor-post-card-title">${post.title}</div>
+                    <div class="blog-editor-post-card-excerpt">${post.excerpt || 'No excerpt available'}</div>
+                    <div class="blog-editor-post-card-meta">
                         <span>📅 ${new Date(post.publishedDate).toLocaleDateString()}</span>
                         <span>👁️ ${post.viewCount || 0} views</span>
                     </div>
-                    <div class="post-card-actions">
-                        <button class="btn btn-primary edit-post-btn" data-id="${post._id}">✏️ Edit</button>
-                        <button class="btn btn-danger delete-post-btn" data-id="${post._id}">🗑️ Delete</button>
+                    <div class="blog-editor-post-card-actions">
+                        <button class="blog-editor-btn blog-editor-btn-primary edit-post-btn" data-id="${post._id}">✏️ Edit</button>
+                        <button class="blog-editor-btn blog-editor-btn-danger delete-post-btn" data-id="${post._id}">🗑️ Delete</button>
                     </div>
                 </div>
             </div>
@@ -1247,28 +1255,27 @@ class BlogEditorDashboard extends HTMLElement {
         
         if (data.featuredImage) {
             this.querySelector('#featuredImagePreview').innerHTML = `
-                <img src="${data.featuredImage.url}" class="image-preview">
+                <img src="${data.featuredImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.featuredImage = data.featuredImage;
         }
         
         if (data.authorImage) {
             this.querySelector('#authorImagePreview').innerHTML = `
-                <img src="${data.authorImage.url}" class="image-preview">
+                <img src="${data.authorImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.authorImage = data.authorImage;
         }
         
         if (data.seoOgImage) {
             this.querySelector('#seoOgImagePreview').innerHTML = `
-                <img src="${data.seoOgImage.url}" class="image-preview">
+                <img src="${data.seoOgImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.seoOgImage = data.seoOgImage;
         }
         
         this._formData.publishedDate = data.publishedDate;
         
-        // Load editor content
         if (this._editor && data.editorData) {
             try {
                 const editorData = JSON.parse(data.editorData);
@@ -1289,7 +1296,7 @@ class BlogEditorDashboard extends HTMLElement {
     _showToast(type, message) {
         const toast = this.querySelector('#toast');
         toast.textContent = message;
-        toast.className = `toast toast-${type} show`;
+        toast.className = `blog-editor-toast blog-editor-toast-${type} show`;
         setTimeout(() => toast.classList.remove('show'), 5000);
     }
 }
