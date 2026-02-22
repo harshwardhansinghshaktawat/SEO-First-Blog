@@ -1,5 +1,5 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v5 (with TOAST UI Editor)
+// MDX BLOG EDITOR — Custom Element v5 (with TOAST UI Editor - FIXED)
 // <mdx-blog-editor> Web Component
 //
 // VIEW 1 → Posts List (shows all CMS posts, edit/delete)
@@ -84,6 +84,12 @@ class MdxBlogEditor extends HTMLElement {
     // INJECT HTML + CSS INTO SHADOW ROOT
     // ═════════════════════════════════════════════════════════
     _inject() {
+        // Load TOAST UI Editor CSS in the document head (not shadow root)
+        const cssLink = document.createElement('link');
+        cssLink.rel = 'stylesheet';
+        cssLink.href = 'https://uicdn.toast.com/editor/latest/toastui-editor.min.css';
+        document.head.appendChild(cssLink);
+
         const style = document.createElement('style');
         style.textContent = this._styles();
 
@@ -103,7 +109,6 @@ class MdxBlogEditor extends HTMLElement {
     // ─────────────────────────────────────────────────────────
     _styles() { return `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
-@import url('https://uicdn.toast.com/editor/latest/toastui-editor.min.css');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -354,10 +359,11 @@ class MdxBlogEditor extends HTMLElement {
 }
 .editor-panel.hidden { display: none; }
 
-#toastEditorContainer {
+#toastEditorWrapper {
     flex: 1;
     overflow: hidden;
     min-height: 0;
+    position: relative;
 }
 
 /* ─── Preview panel ─── */
@@ -431,36 +437,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     .prev-inner { padding: 16px; }
     .mfields { grid-template-columns: 1fr; }
 }
-
-/* TOAST UI Editor Customizations */
-.toastui-editor-defaultUI {
-    border: none !important;
-}
-
-.toastui-editor-toolbar {
-    background-color: var(--paper2) !important;
-    border-bottom: 1px solid var(--border) !important;
-}
-
-.toastui-editor-md-container,
-.toastui-editor-ww-container {
-    background: #fff !important;
-}
-
-.toastui-editor-contents {
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 16px !important;
-    line-height: 1.75 !important;
-}
-
-.ProseMirror {
-    min-height: 400px !important;
-    padding: 20px !important;
-}
-
-.toastui-editor-md-preview {
-    padding: 20px !important;
-}
 `; }
 
     // ─────────────────────────────────────────────────────────
@@ -511,7 +487,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 
         <!-- Editor Panel -->
         <div class="editor-panel" id="editorPanel">
-            <div id="toastEditorContainer"></div>
+            <div id="toastEditorWrapper"></div>
         </div>
 
         <!-- Preview -->
@@ -679,53 +655,64 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
             return;
         }
 
-        const container = this._root.getElementById('toastEditorContainer');
-        if (!container) return;
+        // Create a div inside the shadow root to hold the editor
+        const wrapper = this._root.getElementById('toastEditorWrapper');
+        if (!wrapper) return;
+
+        // Create the editor container div
+        const editorDiv = document.createElement('div');
+        editorDiv.id = 'toastEditorContainer';
+        editorDiv.style.height = '100%';
+        wrapper.appendChild(editorDiv);
 
         const self = this;
 
-        this._toastEditor = new toastui.Editor({
-            el: container,
-            height: '100%',
-            initialEditType: 'wysiwyg',
-            previewStyle: 'vertical',
-            initialValue: initialMarkdown,
-            usageStatistics: false,
-            toolbarItems: [
-                ['heading', 'bold', 'italic', 'strike'],
-                ['hr', 'quote'],
-                ['ul', 'ol', 'task', 'indent', 'outdent'],
-                ['table', 'image', 'link'],
-                ['code', 'codeblock'],
-                ['scrollSync']
-            ],
-            hooks: {
-                addImageBlobHook: async (blob, callback) => {
-                    try {
-                        const fileData = await self._toBase64(blob);
-                        
-                        self._pendingImageUpload = { callback };
-                        
-                        self._emit('upload-image', {
-                            blockId: 'editor-' + Date.now(),
-                            fileData: fileData,
-                            filename: blob.name || 'image.jpg',
-                            optimize: true
-                        });
-                    } catch (error) {
-                        console.error('Image upload error:', error);
-                        self._toast('error', 'Image upload failed');
+        try {
+            this._toastEditor = new toastui.Editor({
+                el: editorDiv,
+                height: '100%',
+                initialEditType: 'wysiwyg',
+                previewStyle: 'vertical',
+                initialValue: initialMarkdown,
+                usageStatistics: false,
+                toolbarItems: [
+                    ['heading', 'bold', 'italic', 'strike'],
+                    ['hr', 'quote'],
+                    ['ul', 'ol', 'task', 'indent', 'outdent'],
+                    ['table', 'image', 'link'],
+                    ['code', 'codeblock']
+                ],
+                hooks: {
+                    addImageBlobHook: async (blob, callback) => {
+                        try {
+                            const fileData = await self._toBase64(blob);
+                            
+                            self._pendingImageUpload = { callback };
+                            
+                            self._emit('upload-image', {
+                                blockId: 'editor-' + Date.now(),
+                                fileData: fileData,
+                                filename: blob.name || 'image.jpg',
+                                optimize: true
+                            });
+                        } catch (error) {
+                            console.error('Image upload error:', error);
+                            self._toast('error', 'Image upload failed');
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        // Listen for content changes
-        this._toastEditor.on('change', () => {
-            this._currentMarkdown = this._toastEditor.getMarkdown();
-        });
+            // Listen for content changes
+            this._toastEditor.on('change', () => {
+                this._currentMarkdown = this._toastEditor.getMarkdown();
+            });
 
-        console.log('✅ TOAST UI Editor initialized');
+            console.log('✅ TOAST UI Editor initialized');
+        } catch (error) {
+            console.error('❌ Error initializing TOAST UI Editor:', error);
+            this._toast('error', 'Failed to initialize editor: ' + error.message);
+        }
     }
 
     // ═════════════════════════════════════════════════════════
@@ -739,6 +726,14 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._currentView = 'list';
         s.getElementById('listLoading').style.display = 'flex';
         s.getElementById('listContent').style.display = 'none';
+        
+        // Destroy editor when leaving
+        if (this._toastEditor) {
+            try {
+                this._toastEditor.destroy();
+                this._toastEditor = null;
+            } catch(e) { console.error('Error destroying editor:', e); }
+        }
     }
 
     _showEditorView() {
@@ -774,9 +769,13 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._showEditorView();
         this._switchTab('editor');
         
+        // Clear previous editor instance if exists
+        const wrapper = this._root.getElementById('toastEditorWrapper');
+        if (wrapper) wrapper.innerHTML = '';
+        
         setTimeout(() => {
             this._initToastEditor(initialMarkdown);
-        }, 100);
+        }, 200);
     }
 
     // ═════════════════════════════════════════════════════════
@@ -1036,4 +1035,4 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v5 (with TOAST UI Editor) registered');
+console.log('✍️ MdxBlogEditor v5 (with TOAST UI Editor - FIXED) registered');
