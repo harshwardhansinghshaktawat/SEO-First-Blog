@@ -1,9 +1,9 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v5 (with EasyMDE)
+// MDX BLOG EDITOR — Custom Element v5 (with MDXEditor library)
 // <mdx-blog-editor> Web Component
 //
 // VIEW 1 → Posts List (shows all CMS posts, edit/delete)
-// VIEW 2 → Editor (WYSIWYG Markdown editor)
+// VIEW 2 → Editor (create new or edit existing post using MDXEditor)
 // ============================================================
 
 class MdxBlogEditor extends HTMLElement {
@@ -19,7 +19,7 @@ class MdxBlogEditor extends HTMLElement {
         this._editPost    = null;     // null = new post
 
         /* ── editor state ── */
-        this._easyMDE     = null;     // EasyMDE instance
+        this._mdxEditor   = null;     // MDXEditor instance
         this._tab         = 'editor';
         this._meta        = this._freshMeta();
 
@@ -57,6 +57,7 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     connectedCallback() {
+        // Ask widget to fetch all posts
         this._emit('load-post-list', {});
     }
 
@@ -84,12 +85,6 @@ class MdxBlogEditor extends HTMLElement {
     // INJECT HTML + CSS INTO SHADOW ROOT
     // ═════════════════════════════════════════════════════════
     _inject() {
-        // Add EasyMDE CSS
-        const easyMDEStyle = document.createElement('link');
-        easyMDEStyle.rel = 'stylesheet';
-        easyMDEStyle.href = 'https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css';
-        document.head.appendChild(easyMDEStyle);
-
         const style = document.createElement('style');
         style.textContent = this._styles();
 
@@ -99,9 +94,6 @@ class MdxBlogEditor extends HTMLElement {
 
         this._root.appendChild(style);
         this._root.appendChild(host);
-
-        // Load EasyMDE script
-        this._loadEasyMDE();
     }
 
     // ─────────────────────────────────────────────────────────
@@ -366,10 +358,6 @@ class MdxBlogEditor extends HTMLElement {
     min-height: 0;
 }
 
-#mdxEditorContainer textarea {
-    display: none;
-}
-
 /* ─── Preview panel ─── */
 .prev-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; background: #fff; }
 .prev-panel.active { display: block; }
@@ -442,23 +430,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     .mfields { grid-template-columns: 1fr; }
 }
 
-/* EasyMDE Customizations */
-.EasyMDEContainer .CodeMirror {
+/* MDXEditor customizations */
+.mdxeditor-root-contenteditable {
     font-family: 'DM Sans', sans-serif !important;
     font-size: 16px !important;
     line-height: 1.75 !important;
-    min-height: 400px !important;
-    border: none !important;
-}
-
-.EasyMDEContainer .editor-toolbar {
-    border: none !important;
-    border-bottom: 1px solid var(--border) !important;
-    background: var(--paper2) !important;
-}
-
-.EasyMDEContainer .CodeMirror-scroll {
-    min-height: 400px !important;
 }
 `; }
 
@@ -466,13 +442,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // SHELL HTML
     // ─────────────────────────────────────────────────────────
     _shellHTML() { return `
-<!-- Top bar -->
 <div class="top-bar">
     <div class="brand">MDX<span>Blocks</span></div>
     <div class="top-acts" id="topActs"></div>
 </div>
 
-<!-- ═══ LIST VIEW ═══ -->
 <div id="listView">
     <div class="list-bar">
         <div>
@@ -493,10 +467,8 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     </div>
 </div>
 
-<!-- ═══ EDITOR VIEW ═══ -->
 <div id="editorView" class="hidden">
 
-    <!-- Tab bar -->
     <div class="tab-bar">
         <button class="tab active" data-tab="editor">${this._icon('edit')} Editor</button>
         <button class="tab" data-tab="preview">${this._icon('eye')} Preview</button>
@@ -505,32 +477,24 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         <button class="tab" data-tab="seo">${this._icon('seo')} SEO</button>
     </div>
 
-    <!-- Body -->
     <div class="editor-body">
 
-        <!-- Editor Panel -->
         <div class="editor-panel" id="editorPanel">
-            <div id="mdxEditorContainer">
-                <textarea id="mdxTextarea"></textarea>
-            </div>
+            <div id="mdxEditorContainer"></div>
         </div>
 
-        <!-- Preview -->
         <div class="prev-panel" id="prevPanel">
             <div class="prev-inner" id="prevInner"></div>
         </div>
 
-        <!-- Markdown -->
         <div class="md-panel" id="mdPanel">
             <textarea class="md-area" id="mdArea" readonly spellcheck="false"></textarea>
         </div>
 
-        <!-- Post Settings -->
         <div class="meta-panel" id="metaPanel">
             <div class="meta-inner">${this._metaHTML()}</div>
         </div>
 
-        <!-- SEO -->
         <div class="seo-panel" id="seoPanel">
             <div class="seo-inner">${this._seoHTML()}</div>
         </div>
@@ -538,7 +502,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     </div>
 </div>
 
-<!-- Toasts -->
 <div class="toasts" id="toastArea"></div>
 `; }
 
@@ -601,14 +564,18 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 </div>`; }
 
     // ═════════════════════════════════════════════════════════
-    // WIRE ALL EVENTS
+    // WIRE ALL EVENTS (called once on build)
     // ═════════════════════════════════════════════════════════
     _wire() {
         const s = this._root;
 
+        /* list view */
         s.getElementById('newPostBtn').addEventListener('click', () => this._openEditor(null));
+
+        /* tabs */
         s.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
 
+        /* meta inputs */
         s.querySelectorAll('[data-m]').forEach(el => {
             const evt = el.type === 'checkbox' ? 'change' : 'input';
             el.addEventListener(evt, () => {
@@ -617,22 +584,21 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         });
         
         // Fixed slug auto-generation
-        let isManualSlugEdit = false;
-        const slugInput = s.getElementById('m-slug');
-        
-        slugInput.addEventListener('input', () => {
-            isManualSlugEdit = true;
-        });
-        
         s.getElementById('m-title').addEventListener('input', (e) => {
-            if (!isManualSlugEdit) {
-                this._autoSlug(e.target.value);
+            const title = e.target.value;
+            if (!this._meta.slug || this._meta.slug === this._autoSlugFromTitle(this._prevTitle || '')) {
+                this._autoSlug(title);
             }
+            this._prevTitle = title;
         });
 
+        /* image upload zones */
         this._wireImgZone('authorZone',   'authorFile',   'authorPrev',   'authorImage');
         this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
         this._wireImgZone('ogZone',       'ogFile',       'ogPrev',       'seoOgImage');
+
+        // Load MDXEditor library and store the promise to prevent race conditions
+        this._editorLoadPromise = this._loadMDXEditor();
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
@@ -650,83 +616,149 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // LOAD EASYMDE LIBRARY
+    // LOAD MDXEDITOR LIBRARY (USING esm.sh)
     // ═════════════════════════════════════════════════════════
-    async _loadEasyMDE() {
+    async _loadMDXEditor() {
         try {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js';
-            script.onload = () => {
-                console.log('✅ EasyMDE library loaded');
-                this._easyMDELoaded = true;
-            };
-            script.onerror = () => {
-                console.error('❌ Failed to load EasyMDE');
-                this._toast('error', 'Failed to load editor library');
-            };
-            document.head.appendChild(script);
+            // Load MDXEditor CSS
+            await this._loadCSS('https://unpkg.com/@mdxeditor/editor@latest/dist/style.css');
+
+            // Dynamically import ESM modules via esm.sh. 
+            // This handles bundling and resolves React dependencies automatically.
+            const ReactModule = await import('https://esm.sh/react@18');
+            const ReactDOMModule = await import('https://esm.sh/react-dom@18/client');
+            const MDXModule = await import('https://esm.sh/@mdxeditor/editor@latest?deps=react@18,react-dom@18');
+
+            // Attach to window so _initMDXEditor can access them
+            window.React = ReactModule.default || ReactModule;
+            window.ReactDOM = ReactDOMModule;
+            window.MDXEditor = MDXModule;
+
+            console.log('✅ MDXEditor library loaded');
+            return true;
         } catch (error) {
-            console.error('❌ Error loading EasyMDE:', error);
+            console.error('❌ Failed to load MDXEditor:', error);
+            this._toast('error', 'Failed to load editor library');
+            return false;
         }
     }
 
+    _loadCSS(href) {
+        return new Promise((resolve, reject) => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.onload = resolve;
+            link.onerror = reject;
+            document.head.appendChild(link);
+        });
+    }
+
     // ═════════════════════════════════════════════════════════
-    // INITIALIZE EASYMDE
+    // INITIALIZE MDXEDITOR
     // ═════════════════════════════════════════════════════════
-    _initEasyMDE(initialMarkdown = '') {
-        if (!window.EasyMDE) {
-            console.error('EasyMDE not loaded yet');
-            setTimeout(() => this._initEasyMDE(initialMarkdown), 500);
+    _initMDXEditor(initialMarkdown = '') {
+        const container = this._root.getElementById('mdxEditorContainer');
+        if (!container) return;
+
+        // Check if MDXEditor is available
+        if (!window.MDXEditor) {
+            console.error('MDXEditor not loaded');
             return;
         }
 
-        const textarea = this._root.getElementById('mdxTextarea');
-        if (!textarea) return;
+        const { MDXEditor, headingsPlugin, listsPlugin, quotePlugin, thematicBreakPlugin, 
+                markdownShortcutPlugin, linkPlugin, linkDialogPlugin, imagePlugin, 
+                tablePlugin, codeBlockPlugin, codeMirrorPlugin, toolbarPlugin,
+                UndoRedo, BoldItalicUnderlineToggles, BlockTypeSelect, CreateLink,
+                InsertImage, InsertTable, InsertThematicBreak, ListsToggle, Separator } = window.MDXEditor;
 
-        const self = this;
+        const React = window.React;
+        const ReactDOM = window.ReactDOM;
 
-        this._easyMDE = new EasyMDE({
-            element: textarea,
-            initialValue: initialMarkdown,
-            spellChecker: false,
-            autofocus: true,
-            placeholder: 'Write your blog post here...',
-            renderingConfig: {
-                singleLineBreaks: false,
-                codeSyntaxHighlighting: true,
+        // Create editor element with a key to force re-renders between different posts
+        const editorElement = React.createElement(MDXEditor, {
+            key: this._editPost?._id || Date.now(),
+            markdown: initialMarkdown,
+            onChange: (markdown) => {
+                this._currentMarkdown = markdown;
             },
-            toolbar: [
-                'bold', 'italic', 'heading', '|',
-                'quote', 'unordered-list', 'ordered-list', '|',
-                'link', 'image', 'table', 'horizontal-rule', '|',
-                'code', 'preview', 'side-by-side', 'fullscreen', '|',
-                'guide'
-            ],
-            status: ['lines', 'words', 'cursor'],
-            uploadImage: true,
-            imageUploadFunction: async function(file, onSuccess, onError) {
-                try {
-                    const fileData = await self._toBase64(file);
-                    
-                    self._pendingImageUpload = { onSuccess, onError };
-                    
-                    self._emit('upload-image', {
-                        blockId: 'editor-' + Date.now(),
-                        fileData: fileData,
-                        filename: file.name,
-                        optimize: true
-                    });
-                } catch (error) {
-                    onError(error.message);
-                }
-            },
+            plugins: [
+                headingsPlugin(),
+                listsPlugin(),
+                quotePlugin(),
+                thematicBreakPlugin(),
+                markdownShortcutPlugin(),
+                linkPlugin(),
+                linkDialogPlugin(),
+                imagePlugin({
+                    imageUploadHandler: async (file) => {
+                        return await this._handleEditorImageUpload(file);
+                    }
+                }),
+                tablePlugin(),
+                codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
+                codeMirrorPlugin({ codeBlockLanguages: { 
+                    js: 'JavaScript', 
+                    css: 'CSS', 
+                    html: 'HTML',
+                    python: 'Python',
+                    typescript: 'TypeScript',
+                    json: 'JSON',
+                    bash: 'Bash'
+                }}),
+                toolbarPlugin({
+                    toolbarContents: () => React.createElement(React.Fragment, null,
+                        React.createElement(UndoRedo),
+                        React.createElement(Separator),
+                        React.createElement(BoldItalicUnderlineToggles),
+                        React.createElement(Separator),
+                        React.createElement(BlockTypeSelect),
+                        React.createElement(Separator),
+                        React.createElement(CreateLink),
+                        React.createElement(InsertImage),
+                        React.createElement(Separator),
+                        React.createElement(ListsToggle),
+                        React.createElement(Separator),
+                        React.createElement(InsertTable),
+                        React.createElement(InsertThematicBreak)
+                    )
+                })
+            ]
         });
 
-        this._easyMDE.codemirror.on('change', () => {
-            this._currentMarkdown = this._easyMDE.value();
-        });
+        if (this._mdxEditorRoot) {
+            // Re-render if the React root already exists
+            this._mdxEditorRoot.render(editorElement);
+        } else {
+            // Mount editor for the first time
+            const root = ReactDOM.createRoot(container);
+            root.render(editorElement);
+            this._mdxEditorRoot = root;
+            console.log('✅ MDXEditor initialized');
+        }
+    }
 
-        console.log('✅ EasyMDE initialized');
+    async _handleEditorImageUpload(file) {
+        try {
+            const fileData = await this._toBase64(file);
+            
+            return new Promise((resolve, reject) => {
+                // Store the resolve function so we can call it when upload completes
+                this._pendingImageUpload = { resolve, reject };
+                
+                // Trigger upload
+                this._emit('upload-image', {
+                    blockId: 'editor-' + Date.now(),
+                    fileData: fileData,
+                    filename: file.name,
+                    optimize: true
+                });
+            });
+        } catch (error) {
+            console.error('Image upload error:', error);
+            throw error;
+        }
     }
 
     // ═════════════════════════════════════════════════════════
@@ -762,7 +794,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         s.getElementById('pubBtn').addEventListener('click',   () => this._save('published'));
     }
 
-    _openEditor(post) {
+    async _openEditor(post) {
         this._editPost = post;
         this._resetEditorState();
         
@@ -775,14 +807,17 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._showEditorView();
         this._switchTab('editor');
         
-        setTimeout(() => {
-            this._initEasyMDE(initialMarkdown);
-        }, 100);
+        // Wait for the libraries to finish loading before initializing
+        if (this._editorLoadPromise) {
+            await this._editorLoadPromise;
+        }
+        
+        this._initMDXEditor(initialMarkdown);
     }
 
     // ═════════════════════════════════════════════════════════
     // POSTS LIST
-    // ═════════════════════════════────────────────────────────
+    // ═════════════════════════════════════════════════════════
     _onPostList(data) {
         const s = this._root;
         s.getElementById('listLoading').style.display = 'none';
@@ -861,7 +896,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // TABS
+    // EDITOR — TABS
     // ═════════════════════════════════════════════════════════
     _switchTab(tab) {
         this._tab = tab;
@@ -879,12 +914,16 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         if (tab === 'markdown') s.getElementById('mdArea').value = this._currentMarkdown || '';
     }
 
+    // ═════════════════════════════════════════════════════════
+    // PREVIEW
+    // ═════════════════════════════════════════════════════════
     _buildPreview() {
         const markdown = this._currentMarkdown || '';
         this._root.getElementById('prevInner').innerHTML = this._mdToHtml(markdown);
     }
 
     _mdToHtml(md) {
+        // Simple markdown to HTML converter
         return md
             .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
             .replace(/^##### (.+)$/gm,  '<h5>$1</h5>')
@@ -906,11 +945,12 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // EDITOR STATE
+    // LOAD EXISTING POST INTO EDITOR
     // ═════════════════════════════════════════════════════════
     _resetEditorState() {
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
+        this._prevTitle = '';
         const s = this._root;
         s.querySelectorAll('[data-m]').forEach(el => {
             if (el.type === 'checkbox') el.checked = false; else el.value = '';
@@ -934,7 +974,9 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         });
         
         this._currentMarkdown = data.content || '';
+        this._prevTitle = data.title || '';
         
+        // Show existing images
         if (data.authorImage) {
             const prev = this._root.getElementById('authorPrev');
             if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
@@ -983,11 +1025,14 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     _onUploadResult(data) {
-        if (data.blockId && this._pendingImageUpload) {
-            const publicUrl = this._wixUrl(data.url);
-            this._pendingImageUpload.onSuccess(publicUrl);
-            this._pendingImageUpload = null;
-            this._toast('success', 'Image uploaded!');
+        if (data.blockId) {
+            // Handle editor image upload
+            if (this._pendingImageUpload) {
+                const publicUrl = this._wixUrl(data.url);
+                this._pendingImageUpload.resolve(publicUrl);
+                this._pendingImageUpload = null;
+                this._toast('success', 'Image uploaded!');
+            }
         }
         if (data.metaKey) {
             this._meta[data.metaKey] = this._wixUrl(data.url);
@@ -998,13 +1043,16 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // ═════════════════════════════════════════════════════════
     // HELPERS
     // ═════════════════════════════════════════════════════════
-    _autoSlug(title) {
-        const slug = title.toLowerCase()
+    _autoSlugFromTitle(title) {
+        return title.toLowerCase()
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
-        
+    }
+
+    _autoSlug(title) {
+        const slug = this._autoSlugFromTitle(title);
         const el = this._root.getElementById('m-slug');
         if (el) { 
             el.value = slug; 
@@ -1036,4 +1084,4 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v5 (with EasyMDE) registered');
+console.log('✍️ MdxBlogEditor v5 (with MDXEditor) registered');
