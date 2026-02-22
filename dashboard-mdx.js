@@ -1652,4 +1652,4 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v4 registered'
+console.log('✍️ MdxBlogEditor v4 registered');
