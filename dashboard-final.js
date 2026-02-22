@@ -3,7 +3,6 @@ class BlogEditorDashboard extends HTMLElement {
         super();
         console.log('📝 Blog Editor: Initializing...');
         this._shadow = this.attachShadow({ mode: 'open' });
-        this._root = document.createElement('div');
         
         // Editor state
         this._content = '';
@@ -34,12 +33,6 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
-        // Prevent re-render flashing
-        this._lastNotification = null;
-        this._lastImageResult = null;
-        this._lastPostsData = null;
-        this._lastEditData = null;
-        
         this._createStructure();
         this._setupEventListeners();
         console.log('📝 Blog Editor: Complete');
@@ -50,13 +43,9 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
-        // Prevent processing same value twice (stops flashing)
         if (!newValue || newValue === oldValue) return;
         
         if (name === 'notification') {
-            if (newValue === this._lastNotification) return;
-            this._lastNotification = newValue;
-            
             try {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
@@ -66,9 +55,6 @@ class BlogEditorDashboard extends HTMLElement {
         }
         
         if (name === 'image-upload-result') {
-            if (newValue === this._lastImageResult) return;
-            this._lastImageResult = newValue;
-            
             try {
                 const result = JSON.parse(newValue);
                 this._handleImageUploadResult(result);
@@ -78,9 +64,6 @@ class BlogEditorDashboard extends HTMLElement {
         }
         
         if (name === 'blog-posts-data') {
-            if (newValue === this._lastPostsData) return;
-            this._lastPostsData = newValue;
-            
             try {
                 const data = JSON.parse(newValue);
                 this._renderBlogPosts(data);
@@ -90,9 +73,6 @@ class BlogEditorDashboard extends HTMLElement {
         }
         
         if (name === 'edit-data') {
-            if (newValue === this._lastEditData) return;
-            this._lastEditData = newValue;
-            
             try {
                 const data = JSON.parse(newValue);
                 this._loadEditData(data);
@@ -104,15 +84,12 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
-        // Only load posts once on initial connection
-        if (!this._hasLoadedPosts) {
-            this._hasLoadedPosts = true;
-            this._dispatchEvent('load-blog-posts', {});
-        }
+        this._dispatchEvent('load-blog-posts', {});
     }
     
     _createStructure() {
-        this._root.innerHTML = `
+        const root = document.createElement('div');
+        root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
                 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
@@ -213,6 +190,12 @@ class BlogEditorDashboard extends HTMLElement {
                     display: grid;
                     grid-template-columns: 1fr 400px;
                     gap: 24px;
+                }
+                
+                @media (max-width: 1200px) {
+                    .editor-container {
+                        grid-template-columns: 1fr;
+                    }
                 }
                 
                 .editor-main {
@@ -531,15 +514,6 @@ class BlogEditorDashboard extends HTMLElement {
                 
                 .modal-body { padding: 24px; }
                 
-                .modal-footer {
-                    padding: 16px 24px;
-                    background: #f9fafb;
-                    border-top: 1px solid #e5e7eb;
-                    display: flex;
-                    gap: 12px;
-                    justify-content: flex-end;
-                }
-                
                 .image-upload-options {
                     display: flex;
                     gap: 12px;
@@ -584,6 +558,8 @@ class BlogEditorDashboard extends HTMLElement {
                     justify-content: center;
                     padding: 60px 20px;
                 }
+                
+                .loading.hide { display: none; }
                 
                 .spinner {
                     width: 40px;
@@ -860,7 +836,8 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="toast" id="toast"></div>
         `;
         
-        this._shadow.appendChild(this._root);
+        // Append only ONCE - this prevents flashing
+        this._shadow.appendChild(root);
     }
 
     _setupEventListeners() {
@@ -1260,7 +1237,7 @@ class BlogEditorDashboard extends HTMLElement {
         const loading = this._shadow.getElementById('loadingPosts');
         const grid = this._shadow.getElementById('postsGrid');
         
-        loading.style.display = 'none';
+        loading.classList.add('hide');
         
         if (!data.posts || data.posts.length === 0) {
             grid.innerHTML = '<div style="text-align: center; padding: 60px; color: #6b7280;">No blog posts yet. Create your first post!</div>';
@@ -1279,22 +1256,22 @@ class BlogEditorDashboard extends HTMLElement {
                         <span>👁️ ${post.viewCount || 0} views</span>
                     </div>
                     <div class="post-card-actions">
-                        <button class="btn btn-primary" data-id="${post._id}">✏️ Edit</button>
-                        <button class="btn btn-danger" data-id="${post._id}">🗑️ Delete</button>
+                        <button class="btn btn-primary edit-post-btn" data-id="${post._id}">✏️ Edit</button>
+                        <button class="btn btn-danger delete-post-btn" data-id="${post._id}">🗑️ Delete</button>
                     </div>
                 </div>
             </div>
         `).join('');
         
         // Add event listeners
-        grid.querySelectorAll('.btn-primary').forEach(btn => {
+        grid.querySelectorAll('.edit-post-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
                 this._dispatchEvent('load-post-for-edit', { id });
             });
         });
         
-        grid.querySelectorAll('.btn-danger').forEach(btn => {
+        grid.querySelectorAll('.delete-post-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
                 if (confirm('Are you sure you want to delete this post?')) {
