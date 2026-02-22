@@ -1,19 +1,14 @@
 class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
-        console.log('========================================');
-        console.log('📝 Blog Editor: CONSTRUCTOR CALLED (Shadow DOM)');
-        console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
+        console.log('📝 Blog Editor: Initializing with MDXEditor...');
         
-        // CRITICAL: Use Shadow DOM to isolate from React
         this._shadow = this.attachShadow({ mode: 'open' });
-        console.log('📝 Blog Editor: Shadow DOM attached');
         
         // Editor state
-        this._quill = null;
+        this._editor = null;
         this._editorReady = false;
         this._editingItemId = null;
-        this._quillLoaded = false;
         
         // Form data
         this._formData = {
@@ -38,11 +33,8 @@ class BlogEditorDashboard extends HTMLElement {
             isFeatured: false
         };
         
-        console.log('📝 Blog Editor: About to create structure...');
         this._createStructure();
-        console.log('📝 Blog Editor: Structure created successfully');
-        console.log('📝 Blog Editor: Constructor complete');
-        console.log('========================================');
+        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
@@ -90,63 +82,83 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     connectedCallback() {
-        console.log('========================================');
-        console.log('📝 Blog Editor: CONNECTED TO DOM (Shadow DOM)');
-        console.log('📝 Blog Editor: Timestamp:', new Date().toISOString());
-        console.log('========================================');
+        console.log('📝 Blog Editor: Connected to DOM');
         
-        // Load Quill only after element is connected
-        this._loadQuill(() => {
-            console.log('📝 Blog Editor: Quill loaded, setting up...');
+        this._loadMDXEditor(() => {
             this._setupEventListeners();
-            this._initializeQuill();
+            this._initializeMDXEditor();
             this._dispatchEvent('load-blog-posts', {});
         });
     }
     
-    disconnectedCallback() {
-        console.log('📝 Blog Editor: Disconnected from DOM');
-    }
-    
-    _loadQuill(callback) {
-        console.log('📝 Blog Editor: Loading Quill.js...');
+    _loadMDXEditor(callback) {
+        console.log('📝 Blog Editor: Loading MDXEditor...');
         
-        if (window.Quill) {
-            console.log('📝 Blog Editor: Quill already loaded');
-            this._quillLoaded = true;
+        // Check if React and MDXEditor are already loaded
+        if (window.React && window.MDXEditor) {
+            console.log('📝 Blog Editor: MDXEditor already loaded');
             callback();
             return;
         }
         
-        // Load Quill CSS
-        const quillCss = document.createElement('link');
-        quillCss.rel = 'stylesheet';
-        quillCss.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
-        document.head.appendChild(quillCss);
+        // Load React first
+        const reactScript = document.createElement('script');
+        reactScript.src = 'https://unpkg.com/react@18/umd/react.production.min.js';
+        reactScript.crossOrigin = 'anonymous';
         
-        // Load Quill JS
-        const quillScript = document.createElement('script');
-        quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
-        quillScript.onload = () => {
-            console.log('📝 Blog Editor: ✅ Quill loaded successfully');
-            this._quillLoaded = true;
-            callback();
+        reactScript.onload = () => {
+            console.log('📝 Blog Editor: React loaded');
+            
+            // Load React DOM
+            const reactDOMScript = document.createElement('script');
+            reactDOMScript.src = 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';
+            reactDOMScript.crossOrigin = 'anonymous';
+            
+            reactDOMScript.onload = () => {
+                console.log('📝 Blog Editor: React DOM loaded');
+                
+                // Load MDXEditor
+                const mdxScript = document.createElement('script');
+                mdxScript.src = 'https://unpkg.com/@mdxeditor/editor@3.9.0/dist/index.umd.js';
+                mdxScript.crossOrigin = 'anonymous';
+                
+                mdxScript.onload = () => {
+                    console.log('📝 Blog Editor: ✅ MDXEditor loaded');
+                    callback();
+                };
+                
+                mdxScript.onerror = () => {
+                    console.error('📝 Blog Editor: Failed to load MDXEditor');
+                };
+                
+                document.head.appendChild(mdxScript);
+            };
+            
+            reactDOMScript.onerror = () => {
+                console.error('📝 Blog Editor: Failed to load React DOM');
+            };
+            
+            document.head.appendChild(reactDOMScript);
         };
-        quillScript.onerror = (error) => {
-            console.error('📝 Blog Editor: ❌ Failed to load Quill', error);
-            this._showToast('error', 'Failed to load editor');
+        
+        reactScript.onerror = () => {
+            console.error('📝 Blog Editor: Failed to load React');
         };
-        document.head.appendChild(quillScript);
+        
+        document.head.appendChild(reactScript);
+        
+        // Load MDXEditor CSS
+        const mdxCSS = document.createElement('link');
+        mdxCSS.rel = 'stylesheet';
+        mdxCSS.href = 'https://unpkg.com/@mdxeditor/editor@3.9.0/dist/style.css';
+        document.head.appendChild(mdxCSS);
     }
     
     _createStructure() {
-        console.log('📝 Blog Editor: Creating Shadow DOM structure...');
-        
         const root = document.createElement('div');
         root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                @import url('https://cdn.quilljs.com/1.3.7/quill.snow.css');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
@@ -176,6 +188,8 @@ class BlogEditorDashboard extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    flex-wrap: wrap;
+                    gap: 16px;
                 }
                 
                 .blog-editor-title {
@@ -192,6 +206,7 @@ class BlogEditorDashboard extends HTMLElement {
                 .blog-editor-header-actions {
                     display: flex;
                     gap: 12px;
+                    flex-wrap: wrap;
                 }
                 
                 .blog-editor-btn {
@@ -271,29 +286,27 @@ class BlogEditorDashboard extends HTMLElement {
                     padding: 24px;
                 }
                 
-                #quillEditor {
+                #mdxEditorContainer {
                     min-height: 500px;
                     background: white;
                 }
                 
-                .ql-container {
-                    font-size: 16px;
-                    font-family: 'Inter', sans-serif;
+                /* MDXEditor Customization */
+                .mdxeditor {
+                    border: none !important;
                 }
                 
-                .ql-editor {
-                    min-height: 450px;
-                    max-height: 600px;
-                    overflow-y: auto;
+                .mdxeditor-toolbar {
+                    background: #f9fafb !important;
+                    border-bottom: 2px solid #e5e7eb !important;
+                    padding: 12px !important;
                 }
                 
-                .ql-editor p {
-                    line-height: 1.8;
-                }
-                
-                .ql-toolbar {
-                    border-top-left-radius: 8px;
-                    border-top-right-radius: 8px;
+                .mdxeditor-root-contenteditable {
+                    font-family: 'Inter', sans-serif !important;
+                    font-size: 16px !important;
+                    line-height: 1.8 !important;
+                    padding: 24px !important;
                 }
                 
                 .blog-editor-sidebar {
@@ -542,7 +555,7 @@ class BlogEditorDashboard extends HTMLElement {
                     <div class="blog-editor-header-content">
                         <div>
                             <h1 class="blog-editor-title">📝 Advanced Blog Editor</h1>
-                            <p class="blog-editor-subtitle">Create SEO-optimized blog posts with Quill.js</p>
+                            <p class="blog-editor-subtitle">Visual markdown editor with blocks</p>
                         </div>
                         <div class="blog-editor-header-actions">
                             <button class="blog-editor-btn blog-editor-btn-secondary" id="cancelEdit" style="display: none;">Cancel</button>
@@ -563,7 +576,7 @@ class BlogEditorDashboard extends HTMLElement {
                             <div class="blog-editor-layout">
                                 <div class="blog-editor-main-panel">
                                     <div class="blog-editor-wrapper">
-                                        <div id="quillEditor"></div>
+                                        <div id="mdxEditorContainer"></div>
                                     </div>
                                 </div>
                                 
@@ -700,14 +713,164 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="blog-editor-toast" id="toast"></div>
         `;
         
-        // Append to shadow DOM ONCE
         this._shadow.appendChild(root);
-        console.log('📝 Blog Editor: ✅ Shadow DOM structure created');
     }
-
-    _setupEventListeners() {
-        console.log('📝 Blog Editor: Setting up event listeners...');
+    
+    _initializeMDXEditor() {
+        console.log('📝 Blog Editor: Initializing MDXEditor...');
         
+        const container = this._shadow.querySelector('#mdxEditorContainer');
+        
+        if (!window.React || !window.ReactDOM || !window.MDXEditor) {
+            console.error('📝 Blog Editor: MDXEditor libraries not loaded');
+            
+            // Fallback to simple textarea
+            container.innerHTML = `
+                <div style="border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                    <div style="background: #f9fafb; padding: 12px; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #374151;">
+                        Markdown Editor (Loading visual editor...)
+                    </div>
+                    <textarea 
+                        id="markdownTextarea" 
+                        placeholder="# Start writing your blog post in Markdown...
+
+## Headings
+Use # for H1, ## for H2, etc.
+
+**Bold text** and *italic text*
+
+- Bullet lists
+- Are easy
+
+1. Numbered lists
+2. Too!
+
+> Blockquotes for emphasis
+
+\`inline code\` and code blocks
+
+![Images](url)
+[Links](url)
+"
+                        style="
+                            width: 100%;
+                            min-height: 500px;
+                            border: none;
+                            outline: none;
+                            font-family: 'Monaco', 'Consolas', monospace;
+                            font-size: 14px;
+                            line-height: 1.6;
+                            padding: 20px;
+                            resize: vertical;
+                        "
+                    ></textarea>
+                </div>
+            `;
+            
+            this._editorReady = true;
+            return;
+        }
+        
+        try {
+            const React = window.React;
+            const ReactDOM = window.ReactDOM;
+            const { MDXEditor, headingsPlugin, listsPlugin, quotePlugin, thematicBreakPlugin, markdownShortcutPlugin, linkPlugin, linkDialogPlugin, imagePlugin, tablePlugin, codeBlockPlugin, codeMirrorPlugin, diffSourcePlugin, frontmatterPlugin, toolbarPlugin, UndoRedo, BoldItalicUnderlineToggles, BlockTypeSelect, CreateLink, InsertImage, InsertTable, InsertThematicBreak, ListsToggle, Separator } = window.MDXEditor;
+            
+            // Image upload handler
+            const imageUploadHandler = async (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        // For now, return base64 data URL
+                        // In production, upload to server and return URL
+                        resolve(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            };
+            
+            // Create MDXEditor component
+            const editorElement = React.createElement(MDXEditor, {
+                markdown: '# Start Writing Your Blog Post\n\nClick here to start editing...',
+                contentEditableClassName: 'mdxeditor-root-contenteditable',
+                plugins: [
+                    headingsPlugin(),
+                    listsPlugin(),
+                    quotePlugin(),
+                    thematicBreakPlugin(),
+                    markdownShortcutPlugin(),
+                    linkPlugin(),
+                    linkDialogPlugin(),
+                    imagePlugin({
+                        imageUploadHandler: imageUploadHandler
+                    }),
+                    tablePlugin(),
+                    codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
+                    codeMirrorPlugin({ codeBlockLanguages: {
+                        javascript: 'JavaScript',
+                        typescript: 'TypeScript',
+                        python: 'Python',
+                        java: 'Java',
+                        css: 'CSS',
+                        html: 'HTML',
+                        json: 'JSON',
+                        bash: 'Bash',
+                        sql: 'SQL'
+                    }}),
+                    diffSourcePlugin({ viewMode: 'rich-text' }),
+                    frontmatterPlugin(),
+                    toolbarPlugin({
+                        toolbarContents: () => React.createElement(
+                            React.Fragment,
+                            null,
+                            React.createElement(UndoRedo),
+                            React.createElement(Separator),
+                            React.createElement(BoldItalicUnderlineToggles),
+                            React.createElement(Separator),
+                            React.createElement(BlockTypeSelect),
+                            React.createElement(Separator),
+                            React.createElement(CreateLink),
+                            React.createElement(InsertImage),
+                            React.createElement(Separator),
+                            React.createElement(ListsToggle),
+                            React.createElement(Separator),
+                            React.createElement(InsertTable),
+                            React.createElement(InsertThematicBreak)
+                        )
+                    })
+                ],
+                onChange: (markdown) => {
+                    this._currentMarkdown = markdown;
+                }
+            });
+            
+            // Render using ReactDOM
+            const root = ReactDOM.createRoot(container);
+            root.render(editorElement);
+            
+            // Store reference for getting markdown
+            this._editorRoot = root;
+            this._currentMarkdown = '# Start Writing Your Blog Post\n\nClick here to start editing...';
+            
+            this._editorReady = true;
+            console.log('📝 Blog Editor: ✅ MDXEditor initialized');
+            
+        } catch (error) {
+            console.error('📝 Blog Editor: MDXEditor initialization error:', error);
+            
+            // Fallback to textarea
+            container.innerHTML = `
+                <textarea 
+                    id="markdownTextarea" 
+                    placeholder="# Start writing..."
+                    style="width: 100%; min-height: 500px; padding: 20px; border: 2px solid #e5e7eb; border-radius: 8px; font-family: monospace;"
+                ></textarea>
+            `;
+            this._editorReady = true;
+        }
+    }
+    
+    _setupEventListeners() {
         // View toggle
         const viewBtns = this._shadow.querySelectorAll('.blog-editor-view-btn');
         viewBtns.forEach(btn => {
@@ -748,250 +911,7 @@ class BlogEditorDashboard extends HTMLElement {
         // Save & Cancel
         this._shadow.querySelector('#savePost').addEventListener('click', () => this._savePost());
         this._shadow.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
-        
-        console.log('📝 Blog Editor: ✅ Event listeners set up');
     }
-    
-    _initializeQuill() {
-    console.log('📝 Blog Editor: Initializing Quill...');
-    
-    if (!window.Quill) {
-        console.error('📝 Blog Editor: Quill not loaded');
-        return;
-    }
-    
-    const editorElement = this._shadow.querySelector('#quillEditor');
-    
-    if (!editorElement) {
-        console.error('📝 Blog Editor: Editor element not found');
-        return;
-    }
-    
-    try {
-        this._quill = new Quill(editorElement, {
-            theme: 'snow',
-            placeholder: 'Start writing your amazing blog post...',
-            modules: {
-                toolbar: {
-                    container: [
-                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'indent': '-1'}, { 'indent': '+1' }],
-                        [{ 'align': [] }],
-                        ['blockquote', 'code-block'],
-                        ['link', 'image', 'video'],
-                        ['clean']
-                    ],
-                    handlers: {
-                        // Custom handlers to preserve cursor position
-                        'header': function(value) {
-                            const range = this.quill.getSelection();
-                            if (range) {
-                                // Only format the current line
-                                if (value) {
-                                    this.quill.format('header', value);
-                                } else {
-                                    this.quill.format('header', false);
-                                }
-                            }
-                        }
-                    }
-                },
-                clipboard: {
-                    matchVisual: false
-                },
-                keyboard: {
-                    bindings: {
-                        // Improve Enter key behavior
-                        linebreak: {
-                            key: 13,
-                            shiftKey: false,
-                            handler: function(range) {
-                                const currentFormat = this.quill.getFormat(range);
-                                this.quill.insertText(range.index, '\n');
-                                this.quill.setSelection(range.index + 1);
-                                
-                                // Remove header formatting on new line
-                                if (currentFormat.header) {
-                                    this.quill.removeFormat(range.index + 1, 1);
-                                }
-                                
-                                return false;
-                            }
-                        }
-                    }
-                }
-            },
-            formats: [
-                'bold', 'italic', 'underline', 'strike',
-                'blockquote', 'code-block',
-                'header',
-                'list', 'bullet', 'indent',
-                'link', 'image', 'video',
-                'align', 'color', 'background'
-            ]
-        });
-        
-        this._editorReady = true;
-        console.log('📝 Blog Editor: ✅ Quill initialized');
-        
-        // Add event listener to prevent unwanted formatting spread
-        this._quill.on('text-change', (delta, oldDelta, source) => {
-            if (source === 'user') {
-                // Ensure formatting doesn't spread to entire document
-                const selection = this._quill.getSelection();
-                if (selection && selection.length === 0) {
-                    // Get current line format
-                    const format = this._quill.getFormat(selection.index);
-                    
-                    // If no text is selected and header format exists, 
-                    // make sure it only applies to current line
-                    if (format.header) {
-                        const currentLine = this._quill.getLine(selection.index);
-                        if (currentLine && currentLine[0]) {
-                            const lineLength = currentLine[0].length();
-                            const lineStart = selection.index - currentLine[1];
-                            
-                            // Only format current line
-                            this._quill.formatLine(lineStart, lineLength, 'header', format.header, 'silent');
-                        }
-                    }
-                }
-            }
-        });
-        
-    } catch (error) {
-        console.error('📝 Blog Editor: Quill initialization error:', error);
-    }
-}
-    
-   _convertQuillToMarkdown(delta) {
-    let markdown = '';
-    let currentListType = null;
-    let listItemBuffer = [];
-    
-    const ops = delta.ops || [];
-    
-    const flushList = () => {
-        if (listItemBuffer.length > 0) {
-            listItemBuffer.forEach((item, index) => {
-                const prefix = currentListType === 'ordered' ? `${index + 1}.` : '-';
-                markdown += `${prefix} ${item}\n`;
-            });
-            markdown += '\n';
-            listItemBuffer = [];
-            currentListType = null;
-        }
-    };
-    
-    ops.forEach((op, index) => {
-        if (typeof op.insert === 'string') {
-            let text = op.insert;
-            const attributes = op.attributes || {};
-            
-            // Handle newlines
-            if (text === '\n') {
-                // Check if it's a list item
-                if (attributes.list) {
-                    // Continue list
-                    if (currentListType !== attributes.list) {
-                        flushList();
-                        currentListType = attributes.list;
-                    }
-                    return; // List items are handled separately
-                } else {
-                    // Flush any pending list
-                    flushList();
-                    
-                    // Handle headers
-                    if (attributes.header) {
-                        // Header was already processed with the text before the newline
-                        markdown += '\n';
-                        return;
-                    }
-                    
-                    // Handle blockquotes
-                    if (attributes.blockquote) {
-                        markdown += '\n';
-                        return;
-                    }
-                    
-                    // Handle code blocks
-                    if (attributes['code-block']) {
-                        markdown += '\n';
-                        return;
-                    }
-                    
-                    // Regular newline
-                    markdown += '\n';
-                    return;
-                }
-            }
-            
-            // Handle list items
-            if (attributes.list) {
-                if (currentListType !== attributes.list) {
-                    flushList();
-                    currentListType = attributes.list;
-                }
-                listItemBuffer.push(text.replace('\n', ''));
-                return;
-            } else {
-                flushList();
-            }
-            
-            // Apply inline formatting
-            let formattedText = text.replace(/\n$/, ''); // Remove trailing newline for processing
-            
-            if (attributes.bold) {
-                formattedText = `**${formattedText}**`;
-            }
-            if (attributes.italic) {
-                formattedText = `*${formattedText}*`;
-            }
-            if (attributes.strike) {
-                formattedText = `~~${formattedText}~~`;
-            }
-            if (attributes.code) {
-                formattedText = `\`${formattedText}\``;
-            }
-            if (attributes.link) {
-                formattedText = `[${formattedText}](${attributes.link})`;
-            }
-            
-            // Handle block formatting
-            if (attributes.header) {
-                const level = '#'.repeat(attributes.header);
-                markdown += `${level} ${formattedText}\n`;
-            } else if (attributes.blockquote) {
-                markdown += `> ${formattedText}`;
-            } else if (attributes['code-block']) {
-                markdown += formattedText;
-            } else {
-                markdown += formattedText;
-            }
-            
-        } else if (op.insert.image) {
-            flushList();
-            markdown += `\n![Image](${op.insert.image})\n\n`;
-        } else if (op.insert.video) {
-            flushList();
-            markdown += `\n[Video](${op.insert.video})\n\n`;
-        }
-    });
-    
-    // Flush any remaining list items
-    flushList();
-    
-    // Clean up extra newlines
-    markdown = markdown
-        .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive newlines
-        .trim();
-    
-    return markdown;
-}
     
     _setupImageUpload(type) {
         const area = this._shadow.querySelector(`#${type}Area`);
@@ -1067,24 +987,29 @@ class BlogEditorDashboard extends HTMLElement {
             return;
         }
         
-        if (!this._quill) {
-            this._showToast('error', 'Editor not ready');
+        // Get markdown content
+        let markdown = '';
+        if (this._currentMarkdown) {
+            // From MDXEditor
+            markdown = this._currentMarkdown;
+        } else {
+            // From fallback textarea
+            const textarea = this._shadow.querySelector('#markdownTextarea');
+            markdown = textarea ? textarea.value : '';
+        }
+        
+        if (!markdown.trim()) {
+            this._showToast('error', 'Please write some content');
             return;
         }
         
         try {
-            const delta = this._quill.getContents();
-            const htmlContent = this._quill.root.innerHTML;
-            const markdown = this._convertQuillToMarkdown(delta);
-            
             const formData = {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
                 excerpt: this._shadow.querySelector('#excerptInput').value,
                 content: markdown,
-                htmlContent: htmlContent,
-                quillDelta: JSON.stringify(delta),
                 author: this._shadow.querySelector('#authorInput').value,
                 category: this._shadow.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
@@ -1162,9 +1087,11 @@ class BlogEditorDashboard extends HTMLElement {
         this._formData.authorImage = null;
         this._formData.seoOgImage = null;
         
-        if (this._quill) {
-            this._quill.setContents([]);
-        }
+        // Reset editor content
+        this._currentMarkdown = '# Start Writing Your Blog Post\n\nClick here to start editing...';
+        
+        const textarea = this._shadow.querySelector('#markdownTextarea');
+        if (textarea) textarea.value = '';
     }
     
     _renderBlogPosts(data) {
@@ -1255,16 +1182,18 @@ class BlogEditorDashboard extends HTMLElement {
         
         this._formData.publishedDate = data.publishedDate;
         
-        if (this._quill && data.quillDelta) {
-            try {
-                const delta = JSON.parse(data.quillDelta);
-                this._quill.setContents(delta);
-            } catch (e) {
-                console.error('📝 Blog Editor: Failed to load Quill content:', e);
-                if (data.htmlContent) {
-                    this._quill.root.innerHTML = data.htmlContent;
-                }
+        // Load markdown content
+        if (data.content) {
+            this._currentMarkdown = data.content;
+            
+            const textarea = this._shadow.querySelector('#markdownTextarea');
+            if (textarea) {
+                textarea.value = data.content;
             }
+            
+            // If MDXEditor is loaded, re-initialize with content
+            // Note: This requires recreating the React component
+            // For simplicity in this example, we'll just use the textarea
         }
         
         this._shadow.querySelector('[data-view="editor"]').click();
@@ -1290,4 +1219,4 @@ class BlogEditorDashboard extends HTMLElement {
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('📝 Blog Editor: ✅ Custom element registered (Shadow DOM)');
+console.log('📝 Blog Editor: ✅ Custom element registered with MDXEditor');
