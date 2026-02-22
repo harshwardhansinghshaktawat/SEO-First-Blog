@@ -1,95 +1,96 @@
-class BlogListViewer extends HTMLElement {
+class EnhancedBlogPostViewer extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
-        this._posts = [];
-        this._currentPage = 1;
-        this._totalPages = 1;
-        this._postsPerPage = 9;
-        this._selectedCategory = '';
-        this._searchQuery = '';
+
+        this.state = {
+            postData: null,
+            relatedPosts: [],
+            isLoading: true
+        };
+
+        this.markedLoaded = false;
+        this.isMobile = window.innerWidth <= 768;
         
-        // Parse initial style props
         const initialStyleProps = this.getAttribute('style-props');
         this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
         
-        this._initializeUI();
+        this.initializeUI();
     }
 
     static get observedAttributes() {
-        return ['blog-data', 'current-page', 'total-pages', 'style-props'];
+        return ['post-data', 'related-posts', 'style-props'];
     }
 
     getDefaultStyleProps() {
         return {
-            // Typography
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            
-            // Colors
-            bgColor: '#ffffff',
-            titleColor: '#1a1a1a',
-            subtitleColor: '#666666',
-            
-            // Card
-            cardBg: '#ffffff',
-            cardBorder: '#f3f4f6',
-            cardShadow: 'rgba(0,0,0,0.07)',
-            cardHoverShadow: 'rgba(0,0,0,0.12)',
-            
-            // Card Content
-            cardTitleColor: '#1a1a1a',
-            cardExcerptColor: '#6b7280',
-            
-            // Category Badge
-            categoryBg: '#ede9fe',
-            categoryText: '#6366f1',
-            
-            // Featured Badge
-            featuredBg: '#fbbf24',
-            featuredText: '#78350f',
-            
-            // Meta
-            metaColor: '#9ca3af',
-            authorNameColor: '#1a1a1a',
-            dateColor: '#9ca3af',
-            
-            // Button
-            btnBg: '#6366f1',
-            btnText: '#ffffff',
-            btnHoverBg: '#4f46e5',
-            
-            // Filters
-            filterBorder: '#e5e7eb',
-            filterFocusBorder: '#6366f1',
-            filterBg: '#ffffff',
-            
-            // Pagination
-            paginationBorder: '#e5e7eb',
-            paginationText: '#374151',
-            paginationActiveBg: '#6366f1',
-            paginationActiveText: '#ffffff',
-            paginationHoverBg: '#f5f3ff',
-            paginationHoverBorder: '#6366f1',
-            
-            // Empty State
-            emptyIconColor: 'rgba(0,0,0,0.5)',
-            emptyTitleColor: '#1a1a1a',
-            emptyTextColor: '#6b7280'
+            bgColor: '#1E1E1E',
+            h1Color: '#64FFDA',
+            h2Color: '#64FFDA',
+            h3Color: '#64FFDA',
+            h4Color: '#64FFDA',
+            h5Color: '#64FFDA',
+            h6Color: '#64FFDA',
+            paragraphColor: '#ffffff',
+            linkColor: '#FFFF05',
+            strongColor: '#64FFDA',
+            blockquoteBg: '#2d2d2d',
+            blockquoteBorder: '#FFFF05',
+            blockquoteText: '#FFFF05',
+            codeBg: '#2d2d2d',
+            codeText: '#64FFDA',
+            tableHeaderBg: '#1a1a1a',
+            tableHeaderText: '#64FFDA',
+            tableRowBg: '#2d2d2d',
+            tableRowAltBg: '#252525',
+            tableText: '#ffffff',
+            tableBorder: '#3d3d3d',
+            tocBg: '#2d2d2d',
+            tocBorder: '#3d3d3d',
+            tocTitle: '#64FFDA',
+            tocText: '#b0b0b0',
+            tocActive: '#64FFDA',
+            authorBorder: '#64FFDA',
+            metaText: '#9ca3af',
+            shareBg: '#2d2d2d',
+            shareBorder: '#3d3d3d',
+            shareText: '#b0b0b0',
+            shareHover: '#64FFDA',
+            tagBg: '#2d2d2d',
+            tagText: '#64FFDA',
+            tagBorder: '#3d3d3d',
+            relatedCardBg: '#2d2d2d',
+            relatedCardBorder: '#3d3d3d',
+            relatedCategory: '#64FFDA',
+            relatedTitle: '#ffffff',
+            relatedExcerpt: '#9ca3af',
+            relatedMeta: '#6b7280'
         };
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
         if (!newValue || oldValue === newValue) return;
 
-        if (name === 'blog-data') {
+        if (name === 'post-data') {
             try {
-                const data = JSON.parse(newValue);
-                this._posts = data.posts || [];
-                this._totalPages = data.totalPages || 1;
-                this._currentPage = data.currentPage || 1;
-                requestAnimationFrame(() => this._renderPosts());
+                this.state.postData = JSON.parse(newValue);
+                this.state.isLoading = false;
+                requestAnimationFrame(() => {
+                    this.renderPost();
+                    this.updateSEOMarkup();
+                });
             } catch (e) {
-                console.error('Error parsing blog data:', e);
+                console.error('Error parsing post data:', e);
+            }
+        } else if (name === 'related-posts') {
+            try {
+                this.state.relatedPosts = JSON.parse(newValue);
+                requestAnimationFrame(() => {
+                    this.renderRelatedPosts();
+                });
+            } catch (e) {
+                console.error('Error parsing related posts:', e);
             }
         } else if (name === 'style-props') {
             try {
@@ -104,502 +105,358 @@ class BlogListViewer extends HTMLElement {
         }
     }
 
-    _initializeUI() {
+    initializeUI() {
         this.shadowRoot.innerHTML = `
             <style>${this.getStyles()}</style>
 
-            <div class="blog-container">
-                <header class="blog-header">
-                    <h1 class="blog-title">Latest Articles</h1>
-                    <p class="blog-subtitle">Discover insights, tutorials, and stories from our blog</p>
-                </header>
+            <article class="blog-post-container" aria-live="polite" aria-busy="true">
+                <div id="blog-content-wrapper">
+                    <aside class="toc-sidebar" id="tocSidebar" aria-label="Table of Contents">
+                        <div id="tableOfContents"></div>
+                    </aside>
 
-                <nav class="filters-section" aria-label="Blog filters">
-                    <div class="search-box">
-                        <span class="search-icon" aria-hidden="true">🔍</span>
-                        <input 
-                            type="search" 
-                            class="search-input" 
-                            placeholder="Search articles..."
-                            id="searchInput"
-                            aria-label="Search articles"
-                        />
-                    </div>
-                    <select class="category-filter" id="categoryFilter" aria-label="Filter by category">
-                        <option value="">All Categories</option>
-                    </select>
-                </nav>
+                    <main class="main-content">
+                        <div class="featured-image-container" id="featuredImageContainer" style="display: none;">
+                            <img class="featured-image" id="featuredImage" alt="Blog featured image" width="900" height="500" fetchpriority="high" decoding="async" />
+                        </div>
+                        
+                        <div class="blog-content" id="blogContent"></div>
 
-                <main id="blogGrid" class="blog-grid" aria-live="polite">
+                        <footer class="post-footer" id="postFooter" style="display: none;"></footer>
                     </main>
+                </div>
 
-                <nav class="pagination" id="pagination" aria-label="Pagination"></nav>
-            </div>
+                <section class="tags-section" id="tagsSection" style="display: none;" aria-label="Post tags"></section>
+
+                <section class="related-posts-section" id="relatedPostsSection" style="display: none;" aria-label="Related posts"></section>
+            </article>
         `;
 
-        this._setupEventListeners();
+        this.container = this.shadowRoot.querySelector('.blog-post-container');
+        this.featuredImageContainer = this.shadowRoot.getElementById('featuredImageContainer');
+        this.featuredImage = this.shadowRoot.getElementById('featuredImage');
+        this.tocElement = this.shadowRoot.getElementById('tableOfContents');
+        this.tocSidebar = this.shadowRoot.getElementById('tocSidebar');
+        this.contentElement = this.shadowRoot.getElementById('blogContent');
+        this.postFooter = this.shadowRoot.getElementById('postFooter');
+        this.tagsSection = this.shadowRoot.getElementById('tagsSection');
+        this.relatedPostsSection = this.shadowRoot.getElementById('relatedPostsSection');
+        
         this.initialRenderDone = true;
-        this.showLoading(); // Show skeletons immediately on mount
+        this.showLoading(); // Show skeleton immediately
     }
 
     getStyles() {
         const {
-            fontFamily, bgColor, titleColor, subtitleColor,
-            cardBg, cardBorder, cardShadow, cardHoverShadow,
-            cardTitleColor, cardExcerptColor,
-            categoryBg, categoryText,
-            featuredBg, featuredText,
-            metaColor, authorNameColor, dateColor,
-            btnBg, btnText, btnHoverBg,
-            filterBorder, filterFocusBorder, filterBg,
-            paginationBorder, paginationText, paginationActiveBg, paginationActiveText,
-            paginationHoverBg, paginationHoverBorder,
-            emptyIconColor, emptyTitleColor, emptyTextColor
+            fontFamily, bgColor,
+            h1Color, h2Color, h3Color, h4Color, h5Color, h6Color,
+            paragraphColor, linkColor, strongColor,
+            blockquoteBg, blockquoteBorder, blockquoteText,
+            codeBg, codeText,
+            tableHeaderBg, tableHeaderText, tableRowBg, tableRowAltBg, tableText, tableBorder,
+            tocBg, tocBorder, tocTitle, tocText, tocActive,
+            authorBorder, metaText,
+            shareBg, shareBorder, shareText, shareHover,
+            tagBg, tagText, tagBorder,
+            relatedCardBg, relatedCardBorder, relatedCategory, relatedTitle, relatedExcerpt, relatedMeta
         } = this.styleProps;
-
+        
         return `
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            
             :host {
                 display: block;
                 width: 100%;
                 font-family: ${fontFamily};
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
             }
 
-            .blog-container {
+            * { box-sizing: border-box; }
+
+            .blog-post-container {
                 max-width: 1400px;
                 margin: 0 auto;
-                padding: 60px 20px;
+                padding: 40px 20px;
                 background-color: ${bgColor};
+                min-height: 800px; /* Prevents CLS on initial load */
             }
 
-            .blog-header {
-                text-align: center;
-                margin-bottom: 60px;
-            }
-
-            .blog-title {
-                font-size: clamp(36px, 5vw, 56px);
-                font-weight: 800;
-                color: ${titleColor};
-                margin-bottom: 16px;
-                letter-spacing: -0.02em;
-            }
-
-            .blog-subtitle {
-                font-size: 18px;
-                color: ${subtitleColor};
-                max-width: 600px;
-                margin: 0 auto;
-            }
-
-            /* Filters Section */
-            .filters-section {
-                display: flex;
-                gap: 16px;
-                margin-bottom: 40px;
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-
-            .search-box {
-                flex: 1;
-                max-width: 400px;
-                position: relative;
-            }
-
-            .search-input {
-                width: 100%;
-                padding: 14px 20px 14px 48px;
-                border: 2px solid ${filterBorder};
-                border-radius: 12px;
-                font-size: 16px;
-                background: ${filterBg};
-                transition: border-color 0.2s, box-shadow 0.2s;
-            }
-
-            .search-input:focus {
-                outline: none;
-                border-color: ${filterFocusBorder};
-                box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-            }
-
-            .search-icon {
-                position: absolute;
-                left: 16px;
-                top: 50%;
-                transform: translateY(-50%);
-                color: ${metaColor};
-            }
-
-            .category-filter {
-                padding: 14px 24px;
-                border: 2px solid ${filterBorder};
-                border-radius: 12px;
-                font-size: 16px;
-                font-weight: 500;
-                cursor: pointer;
-                background: ${filterBg};
-                transition: border-color 0.2s, background-color 0.2s;
-            }
-
-            .category-filter:hover {
-                border-color: ${filterFocusBorder};
-                background: ${paginationHoverBg};
-            }
-
-            /* Blog Grid */
-            .blog-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-                gap: 32px;
-                margin-bottom: 60px;
-                min-height: 400px; /* Prevents container collapse during load */
-            }
-
-            .blog-card {
-                background: ${cardBg};
-                border-radius: 16px;
-                overflow: hidden;
-                box-shadow: 0 4px 6px ${cardShadow};
-                transition: transform 0.3s, box-shadow 0.3s;
-                border: 1px solid ${cardBorder};
-                display: flex;
-                flex-direction: column;
-                height: 100%;
-                will-change: transform;
-            }
-
-            .blog-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 12px 24px ${cardHoverShadow};
-            }
-
-            .card-image-wrapper {
-                width: 100%;
-                height: 240px;
-                overflow: hidden;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                position: relative;
-            }
-
-            .card-image {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                transition: transform 0.3s;
-                display: block; /* Removes bottom space under inline elements */
-            }
-
-            .blog-card:hover .card-image {
-                transform: scale(1.05);
-            }
-
-            .featured-badge {
-                position: absolute;
-                top: 16px;
-                right: 16px;
-                background: ${featuredBg};
-                color: ${featuredText};
-                padding: 6px 14px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                z-index: 1;
-            }
-
-            .card-content {
-                padding: 28px;
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-            }
-
-            .card-meta {
-                display: flex;
-                gap: 16px;
-                margin-bottom: 16px;
-                flex-wrap: wrap;
-                align-items: center;
-            }
-
-            .category-badge {
-                background: ${categoryBg};
-                color: ${categoryText};
-                padding: 6px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.3px;
-            }
-
-            .read-time {
-                color: ${metaColor};
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
-
-            .card-title {
-                font-size: 22px;
-                font-weight: 700;
-                color: ${cardTitleColor};
-                margin-bottom: 12px;
-                line-height: 1.4;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }
-
-            .card-excerpt {
-                color: ${cardExcerptColor};
-                font-size: 15px;
-                line-height: 1.7;
-                margin-bottom: 20px;
-                display: -webkit-box;
-                -webkit-line-clamp: 3;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-                flex: 1;
-            }
-
-            .card-footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding-top: 20px;
-                border-top: 1px solid ${cardBorder};
-            }
-
-            .author-info {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .author-avatar {
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                object-fit: cover;
-                border: 2px solid ${filterBorder};
-                background-color: ${filterBorder};
-            }
-
-            .author-details {
-                display: flex;
-                flex-direction: column;
-            }
-
-            .author-name {
-                font-size: 14px;
-                font-weight: 600;
-                color: ${authorNameColor};
-            }
-
-            .publish-date {
-                font-size: 12px;
-                color: ${dateColor};
-            }
-
-            .read-more-btn {
-                background: ${btnBg};
-                color: ${btnText};
-                padding: 10px 20px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                border: none;
-                cursor: pointer;
-                transition: background-color 0.2s;
-                text-decoration: none;
-                display: inline-block;
-            }
-
-            .read-more-btn:hover {
-                background: ${btnHoverBg};
-            }
-
-            /* Empty State */
-            .empty-state {
-                text-align: center;
-                padding: 80px 20px;
-                grid-column: 1 / -1;
-            }
-
-            .empty-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-                opacity: 0.5;
-                color: ${emptyIconColor};
-            }
-
-            .empty-title {
-                font-size: 24px;
-                font-weight: 700;
-                color: ${emptyTitleColor};
-                margin-bottom: 12px;
-            }
-
-            .empty-text {
-                font-size: 16px;
-                color: ${emptyTextColor};
-            }
-
-            /* Pagination */
-            .pagination {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                gap: 12px;
-                margin-top: 60px;
-            }
-
-            .page-btn {
-                padding: 12px 20px;
-                border: 2px solid ${paginationBorder};
-                border-radius: 10px;
-                background: ${filterBg};
-                color: ${paginationText};
-                font-size: 15px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: border-color 0.2s, background-color 0.2s, color 0.2s;
-                min-width: 48px;
-            }
-
-            .page-btn:hover:not(:disabled) {
-                border-color: ${paginationHoverBorder};
-                background: ${paginationHoverBg};
-                color: ${filterFocusBorder};
-            }
-
-            .page-btn:disabled {
-                opacity: 0.4;
-                cursor: not-allowed;
-            }
-
-            .page-btn.active {
-                background: ${paginationActiveBg};
-                border-color: ${paginationActiveBg};
-                color: ${paginationActiveText};
-            }
-
-            .page-info {
-                font-size: 15px;
-                color: ${cardExcerptColor};
-                font-weight: 500;
-            }
-
-            /* Skeleton Loader Animations & Styles */
+            /* Skeleton Loaders */
             @keyframes shimmer {
                 0% { background-position: -1000px 0; }
                 100% { background-position: 1000px 0; }
             }
 
             .skeleton-bg {
-                background: #f6f7f8;
-                background-image: linear-gradient(to right, #f6f7f8 0%, #edeef1 20%, #f6f7f8 40%, #f6f7f8 100%);
+                background: ${tableRowBg};
+                background-image: linear-gradient(to right, ${tableRowBg} 0%, ${tableRowAltBg} 20%, ${tableRowBg} 40%, ${tableRowBg} 100%);
                 background-repeat: no-repeat;
                 background-size: 1000px 100%;
-                animation-duration: 1.5s;
-                animation-fill-mode: forwards;
-                animation-iteration-count: infinite;
-                animation-name: shimmer;
-                animation-timing-function: linear;
+                animation: shimmer 1.5s infinite linear forwards;
             }
 
-            .skeleton-img {
-                height: 240px;
-                width: 100%;
-            }
+            .sk-hero { width: 100%; height: 400px; border-radius: 12px; margin-bottom: 40px; }
+            .sk-title { width: 80%; height: 48px; border-radius: 6px; margin: 60px 0 30px; }
+            .sk-text { width: 100%; height: 20px; border-radius: 4px; margin-bottom: 16px; }
+            .sk-text.short { width: 60%; margin-bottom: 30px; }
+            .sk-toc-box { border: 2px solid ${tocBorder}; border-radius: 12px; padding: 28px 24px; min-height: 300px; }
+            .sk-toc-item { width: 80%; height: 16px; border-radius: 4px; margin-bottom: 16px; }
 
-            .skeleton-badge {
-                height: 24px;
-                width: 80px;
-                border-radius: 6px;
-                margin-bottom: 16px;
-            }
-
-            .skeleton-title {
-                height: 28px;
-                width: 90%;
-                border-radius: 4px;
-                margin-bottom: 12px;
-            }
-
-            .skeleton-text {
-                height: 16px;
-                width: 100%;
-                border-radius: 4px;
-                margin-bottom: 8px;
-            }
-
-            .skeleton-text.short {
-                width: 70%;
-                margin-bottom: 20px;
-            }
-
-            .skeleton-footer {
+            /* Content Wrapper */
+            #blog-content-wrapper {
                 display: flex;
-                justify-content: space-between;
+                gap: 40px;
+                width: 100%;
+                position: relative;
+            }
+
+            .main-content {
+                flex: 1;
+                min-width: 0;
+                max-width: 900px;
+            }
+
+            .featured-image-container {
+                width: 100%;
+                margin-bottom: 40px;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+                aspect-ratio: 16 / 9; /* Reserves space to prevent CLS */
+                background-color: ${tableRowBg};
+            }
+
+            .featured-image {
+                width: 100%;
+                height: 100%;
+                display: block;
+                object-fit: cover;
+            }
+
+            /* TOC Sidebar */
+            .toc-sidebar {
+                width: 280px;
+                flex-shrink: 0;
+                position: sticky;
+                top: 20px;
+                align-self: flex-start;
+                max-height: calc(100vh - 40px);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .table-of-contents {
+                background: ${tocBg};
+                border: 2px solid ${tocBorder};
+                border-radius: 12px;
+                padding: 28px 24px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            }
+
+            .toc-title {
+                font-size: 22px;
+                font-weight: 700;
+                color: ${tocTitle};
+                margin: 0 0 20px 0;
+                display: flex;
                 align-items: center;
-                padding-top: 20px;
-                border-top: 1px solid ${cardBorder};
-                margin-top: auto;
+                gap: 10px;
             }
 
-            .skeleton-avatar {
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
+            .toc-list { list-style: none; padding: 0; margin: 0; }
+            .toc-list li { margin-bottom: 4px; }
+            
+            .toc-list a {
+                color: ${tocText};
+                text-decoration: none;
+                display: block;
+                padding: 10px 12px;
+                transition: color 0.2s, background-color 0.2s;
+                border-left: 3px solid transparent;
+                border-radius: 6px;
+                font-size: 15px;
             }
 
-            .skeleton-author-details {
-                height: 20px;
-                width: 100px;
+            .toc-list a:hover, .toc-list a.active {
+                color: ${tocActive};
+                background-color: rgba(100, 255, 218, 0.15);
+                border-left-color: ${tocActive};
+            }
+
+            .toc-list .toc-level-1 { font-size: 17px; font-weight: 600; }
+            .toc-list .toc-level-2 { font-size: 16px; padding-left: 12px; }
+            .toc-list .toc-level-3 { font-size: 15px; padding-left: 24px; }
+
+            .toc-sidebar::-webkit-scrollbar { width: 6px; }
+            .toc-sidebar::-webkit-scrollbar-track { background: ${tocBg}; border-radius: 3px; }
+            .toc-sidebar::-webkit-scrollbar-thumb { background: ${tocActive}; border-radius: 3px; }
+
+            /* Blog Content */
+            .blog-content {
+                font-size: 18px;
+                line-height: 1.8;
+                color: ${paragraphColor};
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .blog-content h1, .blog-content h2, .blog-content h3, 
+            .blog-content h4, .blog-content h5, .blog-content h6 {
+                font-weight: 700;
+                line-height: 1.3;
+                margin-top: 40px;
+                margin-bottom: 20px;
+                scroll-margin-top: 20px;
+            }
+
+            .blog-content h1 { font-size: clamp(32px, 4vw, 42px); color: ${h1Color}; margin-top: 60px; }
+            .blog-content h2 { font-size: clamp(28px, 3.5vw, 36px); color: ${h2Color}; margin-top: 50px; }
+            .blog-content h3 { font-size: clamp(24px, 3vw, 30px); color: ${h3Color}; }
+            .blog-content h4 { font-size: clamp(20px, 2.5vw, 24px); color: ${h4Color}; }
+            .blog-content h5 { font-size: clamp(18px, 2vw, 20px); color: ${h5Color}; }
+            .blog-content h6 { font-size: clamp(16px, 1.8vw, 18px); color: ${h6Color}; }
+
+            .blog-content p { margin-bottom: 24px; line-height: 1.8; }
+
+            .blog-content a {
+                color: ${linkColor};
+                text-decoration: none;
+                border-bottom: 1px solid ${linkColor};
+                transition: opacity 0.2s;
+            }
+            .blog-content a:hover { opacity: 0.8; }
+
+            .blog-content strong, .blog-content b { font-weight: 700; color: ${strongColor}; }
+            .blog-content em, .blog-content i { font-style: italic; }
+            
+            .blog-content ul, .blog-content ol { margin-bottom: 24px; padding-left: 30px; }
+            .blog-content ul li { list-style-type: disc; margin-bottom: 12px; line-height: 1.8; }
+            .blog-content ol li { list-style-type: decimal; margin-bottom: 12px; line-height: 1.8; }
+
+            .blog-content blockquote {
+                margin: 30px 0;
+                padding: 20px 30px;
+                border-left: 4px solid ${blockquoteBorder};
+                background-color: ${blockquoteBg};
+                font-style: italic;
+                color: ${blockquoteText};
+                border-radius: 0 8px 8px 0;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+
+            .blog-content code {
+                background-color: ${codeBg};
+                padding: 3px 8px;
                 border-radius: 4px;
+                font-family: 'Monaco', 'Courier New', monospace;
+                font-size: 0.9em;
+                color: ${codeText};
             }
 
-            .skeleton-btn {
-                height: 36px;
-                width: 100px;
+            .blog-content pre {
+                background-color: ${codeBg};
+                color: ${paragraphColor};
+                padding: 20px;
                 border-radius: 8px;
+                overflow-x: auto;
+                margin: 30px 0;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             }
+            .blog-content pre code { background-color: transparent; padding: 0; font-size: 14px; }
+
+            .blog-content img {
+                max-width: 100%;
+                height: auto;
+                border-radius: 8px;
+                margin: 30px auto;
+                display: block;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+
+            .blog-content hr { border: none; border-top: 2px solid ${tableBorder}; margin: 40px 0; }
+
+            .table-wrapper { overflow-x: auto; margin: 30px 0; }
+            .blog-content table {
+                width: 100%; border-collapse: collapse; margin: 0;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                border-radius: 8px; overflow: hidden;
+                background-color: ${tableRowBg};
+            }
+            .blog-content table th, .blog-content table td {
+                padding: 12px 16px; text-align: left;
+                border-bottom: 1px solid ${tableBorder};
+                color: ${tableText};
+            }
+            .blog-content table th { background-color: ${tableHeaderBg}; font-weight: 700; color: ${tableHeaderText}; border-bottom: 2px solid ${tableHeaderText}; }
+            .blog-content table tbody tr { background-color: ${tableRowBg}; }
+            .blog-content table tbody tr:nth-child(even) { background-color: ${tableRowAltBg}; }
+            .blog-content table tbody tr:hover { background-color: ${tableBorder}; }
+
+            /* Post Footer (Author & Share) */
+            .post-footer {
+                margin-top: 60px; padding-top: 40px; border-top: 2px solid ${tableBorder};
+                display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 30px;
+            }
+
+            .author-section { display: flex; align-items: center; gap: 16px; }
+            .author-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid ${authorBorder}; background-color: ${tableRowBg}; }
+            .author-info { display: flex; flex-direction: column; gap: 4px; }
+            .author-label { font-size: 12px; color: ${metaText}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+            .author-name { font-weight: 700; color: ${paragraphColor}; font-size: 18px; }
+            .author-meta { font-size: 14px; color: ${metaText}; display: flex; align-items: center; gap: 12px; }
+            .meta-separator { color: ${tableBorder}; }
+
+            /* Share Buttons */
+            .share-section { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+            .share-label { font-size: 12px; color: ${metaText}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+            .share-buttons { display: flex; gap: 12px; }
+            .share-btn {
+                width: 44px; height: 44px; border-radius: 50%; border: 1px solid ${shareBorder};
+                background: ${shareBg}; color: ${shareText}; display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: background-color 0.2s, color 0.2s, border-color 0.2s; text-decoration: none;
+            }
+            .share-btn svg { width: 20px; height: 20px; fill: currentColor; }
+            .share-btn:hover { background: ${shareHover}; color: ${bgColor}; border-color: ${shareHover}; }
+
+            /* Tags Section */
+            .tags-section { max-width: 900px; margin: 60px auto; padding-top: 40px; border-top: 2px solid ${tableBorder}; }
+            .tags-title { font-size: 16px; font-weight: 600; color: ${metaText}; margin-bottom: 16px; }
+            .tags-container { display: flex; gap: 10px; flex-wrap: wrap; }
+            .tag {
+                background: ${tagBg}; color: ${tagText}; padding: 8px 16px; border-radius: 20px;
+                font-size: 14px; border: 1px solid ${tagBorder}; transition: background-color 0.2s, border-color 0.2s;
+            }
+            .tag:hover { background: ${tagBorder}; border-color: ${tagText}; }
+
+            /* Related Posts */
+            .related-posts-section { max-width: 1200px; margin: 80px auto 0; padding-top: 60px; border-top: 2px solid ${tableBorder}; }
+            .related-posts-title { font-size: 32px; font-weight: 700; color: ${h2Color}; margin-bottom: 40px; text-align: center; }
+            .related-posts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; }
+            
+            .related-post-card {
+                background: ${relatedCardBg}; border-radius: 12px; overflow: hidden; border: 1px solid ${relatedCardBorder};
+                transition: box-shadow 0.2s, border-color 0.2s; cursor: pointer;
+            }
+            .related-post-card:hover { box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); border-color: ${relatedCategory}; }
+            .related-post-image { width: 100%; height: 200px; object-fit: cover; background-color: ${tableRowBg}; }
+            .related-post-content { padding: 24px; }
+            .related-post-category { display: inline-block; background: rgba(100, 255, 218, 0.1); color: ${relatedCategory}; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+            .related-post-title { font-size: 20px; font-weight: 700; color: ${relatedTitle}; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+            .related-post-excerpt { font-size: 14px; color: ${relatedExcerpt}; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 16px; }
+            .related-post-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: ${relatedMeta}; }
 
             /* Responsive */
+            @media (max-width: 1200px) {
+                #blog-content-wrapper { flex-direction: column; }
+                .toc-sidebar { position: relative; top: 0; width: 100%; max-width: 100%; margin-bottom: 40px; max-height: 400px; }
+                .main-content { max-width: 100%; }
+            }
             @media (max-width: 768px) {
-                .blog-container {
-                    padding: 40px 16px;
-                }
-
-                .blog-grid {
-                    grid-template-columns: 1fr;
-                    gap: 24px;
-                }
-
-                .filters-section {
-                    flex-direction: column;
-                }
-
-                .search-box {
-                    max-width: 100%;
-                }
-
-                .pagination {
-                    gap: 8px;
-                }
-
-                .page-btn {
-                    padding: 10px 16px;
-                    font-size: 14px;
-                    min-width: 40px;
-                }
+                .blog-post-container { padding: 30px 16px; }
+                .post-footer { flex-direction: column; align-items: flex-start; }
+                .share-section { align-items: flex-start; width: 100%; }
+                .blog-content { font-size: 16px; }
+                .related-posts-grid { grid-template-columns: 1fr; }
+                .table-of-contents { padding: 20px; }
             }
         `;
     }
@@ -611,41 +468,36 @@ class BlogListViewer extends HTMLElement {
         }
     }
 
-    _setupEventListeners() {
-        const searchInput = this.shadowRoot.getElementById('searchInput');
-        const categoryFilter = this.shadowRoot.getElementById('categoryFilter');
+    showLoading() {
+        if (!this.state.isLoading) return;
+        this.container.setAttribute('aria-busy', 'true');
 
-        // Debounce search input to prevent performance bottleneck on typing
-        let debounceTimeout;
-        searchInput.addEventListener('input', (e) => {
-            clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(() => {
-                this._searchQuery = e.target.value;
-                this._dispatchFilterEvent();
-            }, 300);
-        });
+        // Inject Skeleton UI immediately
+        this.tocElement.innerHTML = `
+            <div class="sk-toc-box skeleton-bg">
+                <div class="sk-toc-item skeleton-bg" style="width: 50%; height: 24px; margin-bottom: 20px;"></div>
+                <div class="sk-toc-item skeleton-bg"></div>
+                <div class="sk-toc-item skeleton-bg" style="width: 90%;"></div>
+                <div class="sk-toc-item skeleton-bg" style="width: 70%;"></div>
+                <div class="sk-toc-item skeleton-bg" style="width: 85%;"></div>
+            </div>
+        `;
 
-        categoryFilter.addEventListener('change', (e) => {
-            this._selectedCategory = e.target.value;
-            this._dispatchFilterEvent();
-        });
-    }
-
-    _dispatchFilterEvent() {
-        this.dispatchEvent(new CustomEvent('filter-change', {
-            detail: {
-                search: this._searchQuery,
-                category: this._selectedCategory,
-                page: 1
-            },
-            bubbles: true,
-            composed: true
-        }));
+        this.contentElement.innerHTML = `
+            <div class="sk-hero skeleton-bg"></div>
+            <div class="sk-title skeleton-bg"></div>
+            <div class="sk-text skeleton-bg"></div>
+            <div class="sk-text skeleton-bg"></div>
+            <div class="sk-text short skeleton-bg"></div>
+            <div class="sk-title skeleton-bg" style="height: 32px; width: 50%;"></div>
+            <div class="sk-text skeleton-bg"></div>
+            <div class="sk-text short skeleton-bg"></div>
+        `;
     }
 
     _convertWixImageUrl(wixUrl) {
         if (!wixUrl || typeof wixUrl !== 'string') {
-            return 'https://via.placeholder.com/400x240?text=No+Image';
+            return 'https://static.wixstatic.com/media/default-image.jpg';
         }
 
         if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
@@ -665,223 +517,221 @@ class BlogListViewer extends HTMLElement {
             }
         }
 
-        return 'https://via.placeholder.com/400x240?text=No+Image';
+        return 'https://static.wixstatic.com/media/default-image.jpg';
     }
 
-    _renderPosts() {
-        const grid = this.shadowRoot.getElementById('blogGrid');
+    renderPost() {
+        if (!this.state.postData) return;
+        this.container.setAttribute('aria-busy', 'false');
 
-        if (!this._posts || this._posts.length === 0) {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon" aria-hidden="true">📝</div>
-                    <h3 class="empty-title">No articles found</h3>
-                    <p class="empty-text">Try adjusting your search or filters</p>
+        const post = this.state.postData;
+
+        // Render featured image safely
+        if (post.featuredImage) {
+            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
+            this.featuredImage.src = featuredImageUrl;
+            this.featuredImage.onerror = () => {
+                this.featuredImageContainer.style.display = 'none';
+            };
+            this.featuredImageContainer.style.display = 'block';
+        }
+
+        // Parse and render Content
+        this._renderContent(post.content);
+
+        // Render author & share at bottom
+        const authorImageUrl = this._convertWixImageUrl(post.authorImage);
+        this.postFooter.innerHTML = `
+            <div class="author-section">
+                <img 
+                    src="${authorImageUrl}" 
+                    alt="${this._escapeHtml(post.author)}"
+                    class="author-avatar"
+                    width="56"
+                    height="56"
+                    loading="lazy"
+                    decoding="async"
+                    onerror="this.src='https://via.placeholder.com/56'"
+                />
+                <div class="author-info">
+                    <div class="author-label">Written by</div>
+                    <div class="author-name">${this._escapeHtml(post.author || 'Anonymous')}</div>
+                    <div class="author-meta">
+                        <span>${this._formatDate(post.publishedDate)}</span>
+                        <span class="meta-separator" aria-hidden="true">•</span>
+                        <span>${post.readTime || '5 min read'}</span>
+                    </div>
                 </div>
-            `;
-            this.shadowRoot.getElementById('pagination').innerHTML = '';
+            </div>
+
+            <div class="share-section">
+                <div class="share-label">Share this post</div>
+                <div class="share-buttons">
+                    <button class="share-btn" data-share="copy" title="Copy link" aria-label="Copy link">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                    </div>
+            </div>
+        `;
+        this.postFooter.style.display = 'flex';
+        this._setupShareButtons();
+
+        if (post.tags) {
+            this._renderTags(post.tags);
+        }
+    }
+
+    _renderContent(markdown) {
+        if (!markdown) return;
+
+        let htmlContent;
+        try {
+            const preprocessed = this._preprocessMarkdownImages(markdown);
+            if (window.marked && window.marked.parse) {
+                window.marked.use({ breaks: true, gfm: true, headerIds: true, mangle: false });
+                htmlContent = window.marked.parse(preprocessed);
+            } else {
+                htmlContent = this._simpleMarkdownParse(preprocessed);
+            }
+        } catch (error) {
+            console.error('Parse error:', error);
+            htmlContent = this._simpleMarkdownParse(this._preprocessMarkdownImages(markdown));
+        }
+
+        htmlContent = this._convertImagesInHTML(htmlContent);
+        htmlContent = this._wrapTablesForMobile(htmlContent);
+        
+        const result = this._generateTableOfContents(htmlContent);
+        
+        if (result.toc) {
+            this.tocElement.innerHTML = result.toc;
+            this.contentElement.innerHTML = result.content;
+            this._addSmoothScrollToTOC();
+            
+            if (!this.isMobile) {
+                this._initScrollSpy();
+            }
+        } else {
+            this.tocElement.innerHTML = '';
+            this.tocSidebar.style.display = 'none';
+            this.contentElement.innerHTML = result.content;
+        }
+    }
+
+    // _simpleMarkdownParse, _parseMarkdownTables, _wrapTablesForMobile remains identical to your code
+    // [...] Omitted for brevity, paste your _simpleMarkdownParse and table functions here.
+    
+    _convertImagesInHTML(html) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        const images = tempDiv.querySelectorAll('img');
+        images.forEach(img => {
+            const src = img.getAttribute('src');
+            if (src) {
+                const convertedSrc = this._convertWixImageUrl(src);
+                img.setAttribute('src', convertedSrc);
+                img.setAttribute('loading', 'lazy'); // Prevents blocking load
+                img.setAttribute('decoding', 'async'); // Prevents main thread blocking
+                img.setAttribute('onerror', "this.src='https://static.wixstatic.com/media/default-image.jpg'");
+            }
+        });
+        
+        return tempDiv.innerHTML;
+    }
+
+    _renderTags(tagsString) {
+        if (!tagsString) return;
+        const tags = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag);
+        if (tags.length === 0) return;
+
+        this.tagsSection.innerHTML = `
+            <div class="tags-title">Tags</div>
+            <div class="tags-container">
+                ${tags.map(tag => `<span class="tag">${this._escapeHtml(tag)}</span>`).join('')}
+            </div>
+        `;
+        this.tagsSection.style.display = 'block';
+    }
+
+    renderRelatedPosts() {
+        if (!this.state.relatedPosts || this.state.relatedPosts.length === 0) {
+            this.relatedPostsSection.style.display = 'none';
             return;
         }
 
-        grid.innerHTML = this._posts.map((post, index) => {
-            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
-            const authorImageUrl = this._convertWixImageUrl(post.authorImage);
-            
-            // Prioritize loading the very first image for LCP, lazy load the rest
-            const isLCP = index === 0 && this._currentPage === 1; 
+        const posts = this.state.relatedPosts;
 
-            return `
-                <article class="blog-card">
-                    <div class="card-image-wrapper">
-                        <img 
-                            src="${featuredImageUrl}" 
-                            alt="${this._escapeHtml(post.title)}"
-                            class="card-image"
-                            width="400"
-                            height="240"
-                            decoding="async"
-                            ${isLCP ? 'fetchpriority="high"' : 'loading="lazy"'}
-                            onerror="this.src='https://via.placeholder.com/400x240?text=No+Image'"
-                        />
-                        ${post.isFeatured ? '<span class="featured-badge">⭐ Featured</span>' : ''}
-                    </div>
-                    <div class="card-content">
-                        <div class="card-meta">
-                            <span class="category-badge">${this._escapeHtml(post.category || 'Uncategorized')}</span>
-                            <span class="read-time" aria-label="Estimated read time">⏱️ ${post.readTime || '5 min'}</span>
-                        </div>
-                        <h2 class="card-title">${this._escapeHtml(post.title)}</h2>
-                        <p class="card-excerpt">${this._escapeHtml(post.excerpt || '')}</p>
-                        <div class="card-footer">
-                            <div class="author-info">
-                                <img 
-                                    src="${authorImageUrl}" 
-                                    alt="Avatar of ${this._escapeHtml(post.author || 'Author')}"
-                                    class="author-avatar"
-                                    width="40"
-                                    height="40"
-                                    loading="lazy"
-                                    decoding="async"
-                                    onerror="this.src='https://via.placeholder.com/40'"
-                                />
-                                <div class="author-details">
-                                    <div class="author-name">${this._escapeHtml(post.author || 'Anonymous')}</div>
-                                    <div class="publish-date">${this._formatDate(post.publishedDate)}</div>
+        this.relatedPostsSection.innerHTML = `
+            <h2 class="related-posts-title">Related Articles</h2>
+            <div class="related-posts-grid">
+                ${posts.map(post => {
+                    const relatedImageUrl = this._convertWixImageUrl(post.featuredImage);
+                    return `
+                        <article class="related-post-card" data-slug="${post.slug}">
+                            <img 
+                                src="${relatedImageUrl}" 
+                                alt="${this._escapeHtml(post.title)}"
+                                class="related-post-image"
+                                width="400"
+                                height="200"
+                                loading="lazy"
+                                decoding="async"
+                                onerror="this.src='https://via.placeholder.com/400x200'"
+                            />
+                            <div class="related-post-content">
+                                ${post.category ? `<span class="related-post-category">${this._escapeHtml(post.category)}</span>` : ''}
+                                <h3 class="related-post-title">${this._escapeHtml(post.title)}</h3>
+                                <p class="related-post-excerpt">${this._escapeHtml(post.excerpt || '')}</p>
+                                <div class="related-post-meta">
+                                    <span class="related-post-date">📅 ${this._formatDate(post.publishedDate)}</span>
+                                    <span class="related-post-readtime">⏱️ ${post.readTime || '5 min'}</span>
                                 </div>
                             </div>
-                            <button class="read-more-btn" data-slug="${post.slug}" aria-label="Read more about ${this._escapeHtml(post.title)}">
-                                Read More →
-                            </button>
-                        </div>
-                    </div>
-                </article>
-            `;
-        }).join('');
+                        </article>
+                    `;
+                }).join('')}
+            </div>
+        `;
 
-        // Add click handlers to read more buttons
-        this.shadowRoot.querySelectorAll('.read-more-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const slug = e.target.getAttribute('data-slug');
+        this.relatedPostsSection.style.display = 'block';
+
+        this.shadowRoot.querySelectorAll('.related-post-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
                 this._navigateToPost(slug);
             });
         });
-
-        this._renderPagination();
     }
 
-    _renderPagination() {
-        const pagination = this.shadowRoot.getElementById('pagination');
-        
-        if (this._totalPages <= 1) {
-            pagination.innerHTML = '';
+    // ... [Other helper methods like updateSEOMarkup, _setupShareButtons, _handleShare remain the same]
+
+    loadMarkedJS() {
+        if (window.marked) {
+            this.markedLoaded = true;
             return;
         }
-
-        let paginationHTML = `
-            <button class="page-btn" id="prevBtn" ${this._currentPage === 1 ? 'disabled' : ''} aria-label="Go to previous page">
-                ← Previous
-            </button>
-        `;
-
-        // Page numbers
-        const maxVisible = 5;
-        let startPage = Math.max(1, this._currentPage - 2);
-        let endPage = Math.min(this._totalPages, startPage + maxVisible - 1);
         
-        if (endPage - startPage < maxVisible - 1) {
-            startPage = Math.max(1, endPage - maxVisible + 1);
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js';
+        script.async = true; // Non-blocking load
+        script.onload = () => { 
+            this.markedLoaded = true;
+            // If data arrived before marked.js, trigger re-render
+            if (this.state.postData) this.renderPost();
+        };
+        document.head.appendChild(script);
+    }
+
+    connectedCallback() {
+        this.loadMarkedJS();
+    }
+
+    disconnectedCallback() {
+        if (this.scrollSpyObserver) {
+            this.scrollSpyObserver.disconnect();
         }
-
-        if (startPage > 1) {
-            paginationHTML += `<button class="page-btn" data-page="1" aria-label="Page 1">1</button>`;
-            if (startPage > 2) {
-                paginationHTML += `<span class="page-info" aria-hidden="true">...</span>`;
-            }
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            paginationHTML += `
-                <button class="page-btn ${i === this._currentPage ? 'active' : ''}" data-page="${i}" aria-label="Page ${i}" ${i === this._currentPage ? 'aria-current="page"' : ''}>
-                    ${i}
-                </button>
-            `;
-        }
-
-        if (endPage < this._totalPages) {
-            if (endPage < this._totalPages - 1) {
-                paginationHTML += `<span class="page-info" aria-hidden="true">...</span>`;
-            }
-            paginationHTML += `<button class="page-btn" data-page="${this._totalPages}" aria-label="Page ${this._totalPages}">${this._totalPages}</button>`;
-        }
-
-        paginationHTML += `
-            <button class="page-btn" id="nextBtn" ${this._currentPage === this._totalPages ? 'disabled' : ''} aria-label="Go to next page">
-                Next →
-            </button>
-        `;
-
-        pagination.innerHTML = paginationHTML;
-
-        // Add click handlers
-        this.shadowRoot.getElementById('prevBtn')?.addEventListener('click', () => {
-            if (this._currentPage > 1) {
-                this._changePage(this._currentPage - 1);
-            }
-        });
-
-        this.shadowRoot.getElementById('nextBtn')?.addEventListener('click', () => {
-            if (this._currentPage < this._totalPages) {
-                this._changePage(this._currentPage + 1);
-            }
-        });
-
-        this.shadowRoot.querySelectorAll('.page-btn[data-page]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const page = parseInt(e.target.getAttribute('data-page'));
-                this._changePage(page);
-            });
-        });
-    }
-
-    _changePage(page) {
-        this.dispatchEvent(new CustomEvent('page-change', {
-            detail: { page },
-            bubbles: true,
-            composed: true
-        }));
-    }
-
-    _navigateToPost(slug) {
-        this.dispatchEvent(new CustomEvent('navigate-to-post', {
-            detail: { slug },
-            bubbles: true,
-            composed: true
-        }));
-    }
-
-    _formatDate(dateString) {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-        });
-    }
-
-    _escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    showLoading() {
-        const grid = this.shadowRoot.getElementById('blogGrid');
-        
-        // Generate placeholder skeleton cards
-        const skeletons = Array(this._postsPerPage).fill(`
-            <article class="blog-card">
-                <div class="skeleton-img skeleton-bg"></div>
-                <div class="card-content">
-                    <div class="skeleton-badge skeleton-bg"></div>
-                    <div class="skeleton-title skeleton-bg"></div>
-                    <div class="skeleton-text skeleton-bg"></div>
-                    <div class="skeleton-text skeleton-bg"></div>
-                    <div class="skeleton-text short skeleton-bg"></div>
-                    <div class="skeleton-footer">
-                        <div class="author-info" style="width: 100%;">
-                            <div class="skeleton-avatar skeleton-bg"></div>
-                            <div class="skeleton-author-details skeleton-bg"></div>
-                        </div>
-                        <div class="skeleton-btn skeleton-bg"></div>
-                    </div>
-                </div>
-            </article>
-        `).join('');
-
-        grid.innerHTML = skeletons;
     }
 }
 
-customElements.define('blog-list-viewer', BlogListViewer);
+customElements.define('enhanced-blog-post-viewer', EnhancedBlogPostViewer);
