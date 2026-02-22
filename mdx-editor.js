@@ -1,9 +1,9 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v5 (with MDXEditor library)
+// MDX BLOG EDITOR — Custom Element v6 (with TOAST UI Editor)
 // <mdx-blog-editor> Web Component
 //
 // VIEW 1 → Posts List (shows all CMS posts, edit/delete)
-// VIEW 2 → Editor (create new or edit existing post using MDXEditor)
+// VIEW 2 → Editor (create new or edit existing post using TOAST UI)
 // ============================================================
 
 class MdxBlogEditor extends HTMLElement {
@@ -19,9 +19,10 @@ class MdxBlogEditor extends HTMLElement {
         this._editPost    = null;     // null = new post
 
         /* ── editor state ── */
-        this._mdxEditor   = null;     // MDXEditor instance
-        this._tab         = 'editor';
-        this._meta        = this._freshMeta();
+        this._editorInstance = null;  // TOAST UI Editor instance
+        this._tab            = 'editor';
+        this._meta           = this._freshMeta();
+        this._currentMarkdown = '';
 
         this._inject();
         this._wire();
@@ -53,7 +54,7 @@ class MdxBlogEditor extends HTMLElement {
             if (name === 'delete-result') this._onDeleteResult(d);
             if (name === 'notification')  this._toast(d.type, d.message);
             if (name === 'load-data')     this._populateEditor(d);
-        } catch(e) { console.error('[MdxEditor]', e); }
+        } catch(e) { console.error('[BlogEditor]', e); }
     }
 
     connectedCallback() {
@@ -101,6 +102,7 @@ class MdxBlogEditor extends HTMLElement {
     // ─────────────────────────────────────────────────────────
     _styles() { return `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://uicdn.toast.com/editor/latest/toastui-editor.min.css');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -351,11 +353,20 @@ class MdxBlogEditor extends HTMLElement {
 }
 .editor-panel.hidden { display: none; }
 
-#mdxEditorContainer {
+#toastEditorContainer {
     flex: 1;
-    overflow-y: auto;
-    padding: 20px;
+    overflow: hidden;
     min-height: 0;
+}
+
+/* ─── TOAST UI Editor Overrides ─── */
+.toastui-editor-defaultUI {
+    font-family: 'DM Sans', sans-serif !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+.toastui-editor-md-container, .toastui-editor-ww-container {
+    background: #fff;
 }
 
 /* ─── Preview panel ─── */
@@ -429,13 +440,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     .prev-inner { padding: 16px; }
     .mfields { grid-template-columns: 1fr; }
 }
-
-/* MDXEditor customizations */
-.mdxeditor-root-contenteditable {
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 16px !important;
-    line-height: 1.75 !important;
-}
 `; }
 
     // ─────────────────────────────────────────────────────────
@@ -443,7 +447,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // ─────────────────────────────────────────────────────────
     _shellHTML() { return `
 <div class="top-bar">
-    <div class="brand">MDX<span>Blocks</span></div>
+    <div class="brand">Blog<span>Blocks</span></div>
     <div class="top-acts" id="topActs"></div>
 </div>
 
@@ -480,7 +484,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     <div class="editor-body">
 
         <div class="editor-panel" id="editorPanel">
-            <div id="mdxEditorContainer"></div>
+            <div id="toastEditorContainer"></div>
         </div>
 
         <div class="prev-panel" id="prevPanel">
@@ -597,8 +601,8 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
         this._wireImgZone('ogZone',       'ogFile',       'ogPrev',       'seoOgImage');
 
-        // Load MDXEditor library and store the promise to prevent race conditions
-        this._editorLoadPromise = this._loadMDXEditor();
+        // Load TUI Editor library via classic UMD to avoid CORS issues
+        this._editorLoadPromise = this._loadEditorLibrary();
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
@@ -616,127 +620,76 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // LOAD MDXEDITOR LIBRARY (USING esm.sh)
+    // LOAD TOAST UI EDITOR LIBRARY (UMD / No CORS Issues)
     // ═════════════════════════════════════════════════════════
-    async _loadMDXEditor() {
-        try {
-            // Load MDXEditor CSS
-            await this._loadCSS('https://unpkg.com/@mdxeditor/editor@latest/dist/style.css');
+    async _loadEditorLibrary() {
+        if (window.toastui && window.toastui.Editor) return true;
 
-            // Dynamically import ESM modules via esm.sh. 
-            // This handles bundling and resolves React dependencies automatically.
-            const ReactModule = await import('https://esm.sh/react@18');
-            const ReactDOMModule = await import('https://esm.sh/react-dom@18/client');
-            const MDXModule = await import('https://esm.sh/@mdxeditor/editor@latest?deps=react@18,react-dom@18');
-
-            // Attach to window so _initMDXEditor can access them
-            window.React = ReactModule.default || ReactModule;
-            window.ReactDOM = ReactDOMModule;
-            window.MDXEditor = MDXModule;
-
-            console.log('✅ MDXEditor library loaded');
-            return true;
-        } catch (error) {
-            console.error('❌ Failed to load MDXEditor:', error);
-            this._toast('error', 'Failed to load editor library');
-            return false;
-        }
-    }
-
-    _loadCSS(href) {
         return new Promise((resolve, reject) => {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = href;
-            link.onload = resolve;
-            link.onerror = reject;
-            document.head.appendChild(link);
+            const script = document.createElement('script');
+            // Safe, plain JavaScript file - no module resolution required
+            script.src = 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js';
+            script.onload = () => {
+                console.log('✅ TOAST UI Editor library loaded');
+                resolve(true);
+            };
+            script.onerror = () => {
+                console.error('❌ Failed to load Editor library');
+                this._toast('error', 'Failed to load the editor');
+                reject(false);
+            };
+            document.head.appendChild(script);
         });
     }
 
     // ═════════════════════════════════════════════════════════
-    // INITIALIZE MDXEDITOR
+    // INITIALIZE TOAST UI EDITOR
     // ═════════════════════════════════════════════════════════
-    _initMDXEditor(initialMarkdown = '') {
-        const container = this._root.getElementById('mdxEditorContainer');
+    _initEditor(initialMarkdown = '') {
+        const container = this._root.getElementById('toastEditorContainer');
         if (!container) return;
 
-        // Check if MDXEditor is available
-        if (!window.MDXEditor) {
-            console.error('MDXEditor not loaded');
+        if (!window.toastui || !window.toastui.Editor) {
+            console.error('Editor not loaded');
             return;
         }
 
-        const { MDXEditor, headingsPlugin, listsPlugin, quotePlugin, thematicBreakPlugin, 
-                markdownShortcutPlugin, linkPlugin, linkDialogPlugin, imagePlugin, 
-                tablePlugin, codeBlockPlugin, codeMirrorPlugin, toolbarPlugin,
-                UndoRedo, BoldItalicUnderlineToggles, BlockTypeSelect, CreateLink,
-                InsertImage, InsertTable, InsertThematicBreak, ListsToggle, Separator } = window.MDXEditor;
-
-        const React = window.React;
-        const ReactDOM = window.ReactDOM;
-
-        // Create editor element with a key to force re-renders between different posts
-        const editorElement = React.createElement(MDXEditor, {
-            key: this._editPost?._id || Date.now(),
-            markdown: initialMarkdown,
-            onChange: (markdown) => {
-                this._currentMarkdown = markdown;
-            },
-            plugins: [
-                headingsPlugin(),
-                listsPlugin(),
-                quotePlugin(),
-                thematicBreakPlugin(),
-                markdownShortcutPlugin(),
-                linkPlugin(),
-                linkDialogPlugin(),
-                imagePlugin({
-                    imageUploadHandler: async (file) => {
-                        return await this._handleEditorImageUpload(file);
-                    }
-                }),
-                tablePlugin(),
-                codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
-                codeMirrorPlugin({ codeBlockLanguages: { 
-                    js: 'JavaScript', 
-                    css: 'CSS', 
-                    html: 'HTML',
-                    python: 'Python',
-                    typescript: 'TypeScript',
-                    json: 'JSON',
-                    bash: 'Bash'
-                }}),
-                toolbarPlugin({
-                    toolbarContents: () => React.createElement(React.Fragment, null,
-                        React.createElement(UndoRedo),
-                        React.createElement(Separator),
-                        React.createElement(BoldItalicUnderlineToggles),
-                        React.createElement(Separator),
-                        React.createElement(BlockTypeSelect),
-                        React.createElement(Separator),
-                        React.createElement(CreateLink),
-                        React.createElement(InsertImage),
-                        React.createElement(Separator),
-                        React.createElement(ListsToggle),
-                        React.createElement(Separator),
-                        React.createElement(InsertTable),
-                        React.createElement(InsertThematicBreak)
-                    )
-                })
-            ]
-        });
-
-        if (this._mdxEditorRoot) {
-            // Re-render if the React root already exists
-            this._mdxEditorRoot.render(editorElement);
-        } else {
-            // Mount editor for the first time
-            const root = ReactDOM.createRoot(container);
-            root.render(editorElement);
-            this._mdxEditorRoot = root;
-            console.log('✅ MDXEditor initialized');
+        // If editor already exists, update its content instead of re-rendering
+        if (this._editorInstance) {
+            this._editorInstance.setMarkdown(initialMarkdown);
+            this._currentMarkdown = initialMarkdown;
+            return;
         }
+
+        // Initialize editor for the first time
+        this._editorInstance = new window.toastui.Editor({
+            el: container,
+            height: '100%',
+            initialEditType: 'wysiwyg', // Start in WYSIWYG mode!
+            previewStyle: 'vertical',
+            initialValue: initialMarkdown,
+            usageStatistics: false,
+            events: {
+                change: () => {
+                    this._currentMarkdown = this._editorInstance.getMarkdown();
+                }
+            },
+            hooks: {
+                // Hook to intercept image uploads and pipe them to your Wix logic
+                addImageBlobHook: async (blob, callback) => {
+                    try {
+                        const publicUrl = await this._handleEditorImageUpload(blob);
+                        callback(publicUrl, blob.name || 'image');
+                    } catch (error) {
+                        console.error('Image upload failed', error);
+                        this._toast('error', 'Image upload failed');
+                    }
+                }
+            }
+        });
+        
+        this._currentMarkdown = initialMarkdown;
+        console.log('✅ TOAST UI Editor initialized');
     }
 
     async _handleEditorImageUpload(file) {
@@ -744,19 +697,16 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
             const fileData = await this._toBase64(file);
             
             return new Promise((resolve, reject) => {
-                // Store the resolve function so we can call it when upload completes
                 this._pendingImageUpload = { resolve, reject };
-                
-                // Trigger upload
                 this._emit('upload-image', {
                     blockId: 'editor-' + Date.now(),
                     fileData: fileData,
-                    filename: file.name,
+                    filename: file.name || 'image.png',
                     optimize: true
                 });
             });
         } catch (error) {
-            console.error('Image upload error:', error);
+            console.error('Image processing error:', error);
             throw error;
         }
     }
@@ -807,12 +757,12 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._showEditorView();
         this._switchTab('editor');
         
-        // Wait for the libraries to finish loading before initializing
+        // Wait for the library script to finish loading, then init the editor
         if (this._editorLoadPromise) {
             await this._editorLoadPromise;
         }
         
-        this._initMDXEditor(initialMarkdown);
+        this._initEditor(initialMarkdown);
     }
 
     // ═════════════════════════════════════════════════════════
@@ -923,7 +873,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     _mdToHtml(md) {
-        // Simple markdown to HTML converter
         return md
             .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
             .replace(/^##### (.+)$/gm,  '<h5>$1</h5>')
@@ -976,7 +925,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._currentMarkdown = data.content || '';
         this._prevTitle = data.title || '';
         
-        // Show existing images
         if (data.authorImage) {
             const prev = this._root.getElementById('authorPrev');
             if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
@@ -995,6 +943,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // SAVE
     // ═════════════════════════════════════════════════════════
     _save(status) {
+        // Ensure we pull the latest content directly from the TOAST UI Editor instance
+        if (this._editorInstance) {
+            this._currentMarkdown = this._editorInstance.getMarkdown();
+        }
+        
         const md = this._currentMarkdown || '';
         this._emit('save-post', {
             ...this._meta,
@@ -1026,12 +979,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 
     _onUploadResult(data) {
         if (data.blockId) {
-            // Handle editor image upload
             if (this._pendingImageUpload) {
                 const publicUrl = this._wixUrl(data.url);
                 this._pendingImageUpload.resolve(publicUrl);
                 this._pendingImageUpload = null;
-                this._toast('success', 'Image uploaded!');
+                this._toast('success', 'Image uploaded into post!');
             }
         }
         if (data.metaKey) {
@@ -1084,4 +1036,4 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v5 (with MDXEditor) registered');
+console.log('✍️ MdxBlogEditor v6 (with TOAST UI Editor) registered');
