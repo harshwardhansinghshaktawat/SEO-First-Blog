@@ -1,9 +1,6 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v5 (with TOAST UI Editor - FIXED)
+// MDX BLOG EDITOR — Custom Element v7 (Light DOM + TOAST UI)
 // <mdx-blog-editor> Web Component
-//
-// VIEW 1 → Posts List (shows all CMS posts, edit/delete)
-// VIEW 2 → Editor (WYSIWYG Markdown editor with TOAST UI)
 // ============================================================
 
 class MdxBlogEditor extends HTMLElement {
@@ -11,7 +8,9 @@ class MdxBlogEditor extends HTMLElement {
     // ─────────────────────────────────────────────────────────
     constructor() {
         super();
-        this._root = this.attachShadow({ mode: 'open' });
+        
+        // 1. FIX: Render directly to the custom element (Light DOM) instead of Shadow DOM
+        this._root = this;
 
         /* ── view state ── */
         this._currentView = 'list';   // 'list' | 'editor'
@@ -19,9 +18,10 @@ class MdxBlogEditor extends HTMLElement {
         this._editPost    = null;     // null = new post
 
         /* ── editor state ── */
-        this._toastEditor = null;     // TOAST UI Editor instance
-        this._tab         = 'editor';
-        this._meta        = this._freshMeta();
+        this._editorInstance = null;  // TOAST UI Editor instance
+        this._tab            = 'editor';
+        this._meta           = this._freshMeta();
+        this._currentMarkdown = '';
 
         this._inject();
         this._wire();
@@ -53,7 +53,7 @@ class MdxBlogEditor extends HTMLElement {
             if (name === 'delete-result') this._onDeleteResult(d);
             if (name === 'notification')  this._toast(d.type, d.message);
             if (name === 'load-data')     this._populateEditor(d);
-        } catch(e) { console.error('[MdxEditor]', e); }
+        } catch(e) { console.error('[BlogEditor]', e); }
     }
 
     connectedCallback() {
@@ -81,15 +81,9 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     // ═════════════════════════════════════════════════════════
-    // INJECT HTML + CSS INTO SHADOW ROOT
+    // INJECT HTML + CSS INTO HOST (LIGHT DOM)
     // ═════════════════════════════════════════════════════════
     _inject() {
-        // Load TOAST UI Editor CSS in the document head (not shadow root)
-        const cssLink = document.createElement('link');
-        cssLink.rel = 'stylesheet';
-        cssLink.href = 'https://uicdn.toast.com/editor/latest/toastui-editor.min.css';
-        document.head.appendChild(cssLink);
-
         const style = document.createElement('style');
         style.textContent = this._styles();
 
@@ -97,11 +91,8 @@ class MdxBlogEditor extends HTMLElement {
         host.id = 'host';
         host.innerHTML = this._shellHTML();
 
-        this._root.appendChild(style);
-        this._root.appendChild(host);
-
-        // Load TOAST UI Editor
-        this._loadToastEditor();
+        this.appendChild(style);
+        this.appendChild(host);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -109,10 +100,11 @@ class MdxBlogEditor extends HTMLElement {
     // ─────────────────────────────────────────────────────────
     _styles() { return `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://uicdn.toast.com/editor/latest/toastui-editor.min.css');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:host {
+mdx-blog-editor {
     display: block;
     width: 100%;
     height: 100%;
@@ -359,11 +351,20 @@ class MdxBlogEditor extends HTMLElement {
 }
 .editor-panel.hidden { display: none; }
 
-#toastEditorWrapper {
+#toastEditorContainer {
     flex: 1;
     overflow: hidden;
     min-height: 0;
-    position: relative;
+}
+
+/* ─── TOAST UI Editor Overrides ─── */
+.toastui-editor-defaultUI {
+    font-family: 'DM Sans', sans-serif !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+.toastui-editor-md-container, .toastui-editor-ww-container {
+    background: #fff;
 }
 
 /* ─── Preview panel ─── */
@@ -443,13 +444,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // SHELL HTML
     // ─────────────────────────────────────────────────────────
     _shellHTML() { return `
-<!-- Top bar -->
 <div class="top-bar">
-    <div class="brand">MDX<span>Blocks</span></div>
+    <div class="brand">Blog<span>Blocks</span></div>
     <div class="top-acts" id="topActs"></div>
 </div>
 
-<!-- ═══ LIST VIEW ═══ -->
 <div id="listView">
     <div class="list-bar">
         <div>
@@ -470,10 +469,8 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     </div>
 </div>
 
-<!-- ═══ EDITOR VIEW ═══ -->
 <div id="editorView" class="hidden">
 
-    <!-- Tab bar -->
     <div class="tab-bar">
         <button class="tab active" data-tab="editor">${this._icon('edit')} Editor</button>
         <button class="tab" data-tab="preview">${this._icon('eye')} Preview</button>
@@ -482,30 +479,24 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         <button class="tab" data-tab="seo">${this._icon('seo')} SEO</button>
     </div>
 
-    <!-- Body -->
     <div class="editor-body">
 
-        <!-- Editor Panel -->
         <div class="editor-panel" id="editorPanel">
-            <div id="toastEditorWrapper"></div>
+            <div id="toastEditorContainer"></div>
         </div>
 
-        <!-- Preview -->
         <div class="prev-panel" id="prevPanel">
             <div class="prev-inner" id="prevInner"></div>
         </div>
 
-        <!-- Markdown -->
         <div class="md-panel" id="mdPanel">
             <textarea class="md-area" id="mdArea" readonly spellcheck="false"></textarea>
         </div>
 
-        <!-- Post Settings -->
         <div class="meta-panel" id="metaPanel">
             <div class="meta-inner">${this._metaHTML()}</div>
         </div>
 
-        <!-- SEO -->
         <div class="seo-panel" id="seoPanel">
             <div class="seo-inner">${this._seoHTML()}</div>
         </div>
@@ -513,7 +504,6 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     </div>
 </div>
 
-<!-- Toasts -->
 <div class="toasts" id="toastArea"></div>
 `; }
 
@@ -581,9 +571,13 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     _wire() {
         const s = this._root;
 
-        s.getElementById('newPostBtn').addEventListener('click', () => this._openEditor(null));
+        /* list view */
+        s.querySelector('#newPostBtn').addEventListener('click', () => this._openEditor(null));
+
+        /* tabs */
         s.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
 
+        /* meta inputs */
         s.querySelectorAll('[data-m]').forEach(el => {
             const evt = el.type === 'checkbox' ? 'change' : 'input';
             el.addEventListener(evt, () => {
@@ -592,29 +586,28 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         });
         
         // Fixed slug auto-generation
-        let isManualSlugEdit = false;
-        const slugInput = s.getElementById('m-slug');
-        
-        slugInput.addEventListener('input', () => {
-            isManualSlugEdit = true;
-        });
-        
-        s.getElementById('m-title').addEventListener('input', (e) => {
-            if (!isManualSlugEdit) {
-                this._autoSlug(e.target.value);
+        s.querySelector('#m-title').addEventListener('input', (e) => {
+            const title = e.target.value;
+            if (!this._meta.slug || this._meta.slug === this._autoSlugFromTitle(this._prevTitle || '')) {
+                this._autoSlug(title);
             }
+            this._prevTitle = title;
         });
 
+        /* image upload zones */
         this._wireImgZone('authorZone',   'authorFile',   'authorPrev',   'authorImage');
         this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
         this._wireImgZone('ogZone',       'ogFile',       'ogPrev',       'seoOgImage');
+
+        // Load TUI Editor library via classic UMD
+        this._editorLoadPromise = this._loadEditorLibrary();
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
         const s = this._root;
-        const zone = s.getElementById(zoneId);
-        const file = s.getElementById(fileId);
-        const prev = s.getElementById(prevId);
+        const zone = s.querySelector(`#${zoneId}`);
+        const file = s.querySelector(`#${fileId}`);
+        const prev = s.querySelector(`#${prevId}`);
         if (!zone || !file) return;
         zone.addEventListener('click', () => file.click());
         file.addEventListener('change', async e => {
@@ -625,93 +618,90 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // LOAD TOAST UI EDITOR
+    // LOAD TOAST UI EDITOR LIBRARY
     // ═════════════════════════════════════════════════════════
-    async _loadToastEditor() {
-        try {
+    async _loadEditorLibrary() {
+        if (window.toastui && window.toastui.Editor) return true;
+
+        return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js';
             script.onload = () => {
                 console.log('✅ TOAST UI Editor library loaded');
-                this._toastEditorLoaded = true;
+                resolve(true);
             };
             script.onerror = () => {
-                console.error('❌ Failed to load TOAST UI Editor');
-                this._toast('error', 'Failed to load editor library');
+                console.error('❌ Failed to load Editor library');
+                this._toast('error', 'Failed to load the editor');
+                reject(false);
             };
             document.head.appendChild(script);
-        } catch (error) {
-            console.error('❌ Error loading TOAST UI Editor:', error);
-        }
+        });
     }
 
     // ═════════════════════════════════════════════════════════
     // INITIALIZE TOAST UI EDITOR
     // ═════════════════════════════════════════════════════════
-    _initToastEditor(initialMarkdown = '') {
+    _initEditor(initialMarkdown = '') {
+        const container = this._root.querySelector('#toastEditorContainer');
+        if (!container) return;
+
         if (!window.toastui || !window.toastui.Editor) {
-            console.error('TOAST UI Editor not loaded yet');
-            setTimeout(() => this._initToastEditor(initialMarkdown), 500);
+            console.error('Editor not loaded');
             return;
         }
 
-        // Create a div inside the shadow root to hold the editor
-        const wrapper = this._root.getElementById('toastEditorWrapper');
-        if (!wrapper) return;
+        if (this._editorInstance) {
+            this._editorInstance.setMarkdown(initialMarkdown);
+            this._currentMarkdown = initialMarkdown;
+            return;
+        }
 
-        // Create the editor container div
-        const editorDiv = document.createElement('div');
-        editorDiv.id = 'toastEditorContainer';
-        editorDiv.style.height = '100%';
-        wrapper.appendChild(editorDiv);
-
-        const self = this;
-
-        try {
-            this._toastEditor = new toastui.Editor({
-                el: editorDiv,
-                height: '100%',
-                initialEditType: 'wysiwyg',
-                previewStyle: 'vertical',
-                initialValue: initialMarkdown,
-                usageStatistics: false,
-                toolbarItems: [
-                    ['heading', 'bold', 'italic', 'strike'],
-                    ['hr', 'quote'],
-                    ['ul', 'ol', 'task', 'indent', 'outdent'],
-                    ['table', 'image', 'link'],
-                    ['code', 'codeblock']
-                ],
-                hooks: {
-                    addImageBlobHook: async (blob, callback) => {
-                        try {
-                            const fileData = await self._toBase64(blob);
-                            
-                            self._pendingImageUpload = { callback };
-                            
-                            self._emit('upload-image', {
-                                blockId: 'editor-' + Date.now(),
-                                fileData: fileData,
-                                filename: blob.name || 'image.jpg',
-                                optimize: true
-                            });
-                        } catch (error) {
-                            console.error('Image upload error:', error);
-                            self._toast('error', 'Image upload failed');
-                        }
+        this._editorInstance = new window.toastui.Editor({
+            el: container,
+            height: '100%',
+            initialEditType: 'wysiwyg', 
+            previewStyle: 'vertical',
+            initialValue: initialMarkdown,
+            usageStatistics: false,
+            events: {
+                change: () => {
+                    this._currentMarkdown = this._editorInstance.getMarkdown();
+                }
+            },
+            hooks: {
+                addImageBlobHook: async (blob, callback) => {
+                    try {
+                        const publicUrl = await this._handleEditorImageUpload(blob);
+                        callback(publicUrl, blob.name || 'image');
+                    } catch (error) {
+                        console.error('Image upload failed', error);
+                        this._toast('error', 'Image upload failed');
                     }
                 }
-            });
+            }
+        });
+        
+        this._currentMarkdown = initialMarkdown;
+        console.log('✅ TOAST UI Editor initialized');
+    }
 
-            // Listen for content changes
-            this._toastEditor.on('change', () => {
-                this._currentMarkdown = this._toastEditor.getMarkdown();
+    async _handleEditorImageUpload(file) {
+        try {
+            const fileData = await this._toBase64(file);
+            
+            return new Promise((resolve, reject) => {
+                this._pendingImageUpload = { resolve, reject };
+                this._emit('upload-image', {
+                    blockId: 'editor-' + Date.now(),
+                    fileData: fileData,
+                    filename: file.name || 'image.png',
+                    optimize: true
+                });
             });
-
-            console.log('✅ TOAST UI Editor initialized');
         } catch (error) {
-            console.error('❌ Error initializing TOAST UI Editor:', error);
-            this._toast('error', 'Failed to initialize editor: ' + error.message);
+            console.error('Image processing error:', error);
+            throw error;
         }
     }
 
@@ -720,43 +710,35 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // ═════════════════════════════════════════════════════════
     _showListView() {
         const s = this._root;
-        s.getElementById('listView').classList.remove('hidden');
-        s.getElementById('editorView').classList.add('hidden');
-        s.getElementById('topActs').innerHTML = '';
+        s.querySelector('#listView').classList.remove('hidden');
+        s.querySelector('#editorView').classList.add('hidden');
+        s.querySelector('#topActs').innerHTML = '';
         this._currentView = 'list';
-        s.getElementById('listLoading').style.display = 'flex';
-        s.getElementById('listContent').style.display = 'none';
-        
-        // Destroy editor when leaving
-        if (this._toastEditor) {
-            try {
-                this._toastEditor.destroy();
-                this._toastEditor = null;
-            } catch(e) { console.error('Error destroying editor:', e); }
-        }
+        s.querySelector('#listLoading').style.display = 'flex';
+        s.querySelector('#listContent').style.display = 'none';
     }
 
     _showEditorView() {
         const s = this._root;
-        s.getElementById('listView').classList.add('hidden');
-        s.getElementById('editorView').classList.remove('hidden');
+        s.querySelector('#listView').classList.add('hidden');
+        s.querySelector('#editorView').classList.remove('hidden');
         this._currentView = 'editor';
 
         const isNew = !this._editPost;
-        s.getElementById('topActs').innerHTML = `
+        s.querySelector('#topActs').innerHTML = `
             <button class="btn btn-ghost" id="backBtn">${this._icon('back')} All Posts</button>
             <button class="btn btn-ghost" id="draftBtn">${this._icon('save')} Save Draft</button>
             <button class="btn btn-accent" id="pubBtn">${this._icon('check')} ${isNew ? 'Publish' : 'Update'}</button>`;
 
-        s.getElementById('backBtn').addEventListener('click', () => {
+        s.querySelector('#backBtn').addEventListener('click', () => {
             this._showListView();
             this._emit('load-post-list', {});
         });
-        s.getElementById('draftBtn').addEventListener('click', () => this._save('draft'));
-        s.getElementById('pubBtn').addEventListener('click',   () => this._save('published'));
+        s.querySelector('#draftBtn').addEventListener('click', () => this._save('draft'));
+        s.querySelector('#pubBtn').addEventListener('click',   () => this._save('published'));
     }
 
-    _openEditor(post) {
+    async _openEditor(post) {
         this._editPost = post;
         this._resetEditorState();
         
@@ -769,13 +751,11 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         this._showEditorView();
         this._switchTab('editor');
         
-        // Clear previous editor instance if exists
-        const wrapper = this._root.getElementById('toastEditorWrapper');
-        if (wrapper) wrapper.innerHTML = '';
+        if (this._editorLoadPromise) {
+            await this._editorLoadPromise;
+        }
         
-        setTimeout(() => {
-            this._initToastEditor(initialMarkdown);
-        }, 200);
+        this._initEditor(initialMarkdown);
     }
 
     // ═════════════════════════════════════════════════════════
@@ -783,13 +763,13 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // ═════════════════════════════════════════════════════════
     _onPostList(data) {
         const s = this._root;
-        s.getElementById('listLoading').style.display = 'none';
-        const content = s.getElementById('listContent');
+        s.querySelector('#listLoading').style.display = 'none';
+        const content = s.querySelector('#listContent');
         content.style.display = 'block';
 
         this._posts = data.posts || [];
         const total = data.totalCount || this._posts.length;
-        s.getElementById('listCount').textContent = `(${total})`;
+        s.querySelector('#listCount').textContent = `(${total})`;
 
         if (!this._posts.length) {
             content.innerHTML = `<div class="state-box">${this._icon('image')}<p>No posts yet. Click "New Post" to create your first!</p></div>`;
@@ -810,7 +790,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     <tbody id="postsBody"></tbody>
 </table>`;
 
-        const tbody = s.getElementById('postsBody');
+        const tbody = s.querySelector('#postsBody');
         this._posts.forEach((post, idx) => {
             const tr = document.createElement('tr');
             const dateStr = post.publishedDate
@@ -859,7 +839,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // TABS
+    // EDITOR — TABS
     // ═════════════════════════════════════════════════════════
     _switchTab(tab) {
         this._tab = tab;
@@ -867,23 +847,25 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 
         s.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 
-        s.getElementById('editorPanel').style.display = tab === 'editor' ? 'flex' : 'none';
-        s.getElementById('prevPanel').classList.toggle('active',  tab === 'preview');
-        s.getElementById('mdPanel').classList.toggle('active',    tab === 'markdown');
-        s.getElementById('metaPanel').classList.toggle('active',  tab === 'meta');
-        s.getElementById('seoPanel').classList.toggle('active',   tab === 'seo');
+        s.querySelector('#editorPanel').style.display = tab === 'editor' ? 'flex' : 'none';
+        s.querySelector('#prevPanel').classList.toggle('active',  tab === 'preview');
+        s.querySelector('#mdPanel').classList.toggle('active',    tab === 'markdown');
+        s.querySelector('#metaPanel').classList.toggle('active',  tab === 'meta');
+        s.querySelector('#seoPanel').classList.toggle('active',   tab === 'seo');
 
         if (tab === 'preview')  this._buildPreview();
-        if (tab === 'markdown') s.getElementById('mdArea').value = this._currentMarkdown || '';
+        if (tab === 'markdown') s.querySelector('#mdArea').value = this._currentMarkdown || '';
     }
 
+    // ═════════════════════════════════════════════════════════
+    // PREVIEW
+    // ═════════════════════════════════════════════════════════
     _buildPreview() {
         const markdown = this._currentMarkdown || '';
-        this._root.getElementById('prevInner').innerHTML = this._mdToHtml(markdown);
+        this._root.querySelector('#prevInner').innerHTML = this._mdToHtml(markdown);
     }
 
     _mdToHtml(md) {
-        // Simple markdown to HTML converter
         return md
             .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
             .replace(/^##### (.+)$/gm,  '<h5>$1</h5>')
@@ -905,17 +887,18 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     // ═════════════════════════════════════════════════════════
-    // EDITOR STATE
+    // LOAD EXISTING POST INTO EDITOR
     // ═════════════════════════════════════════════════════════
     _resetEditorState() {
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
+        this._prevTitle = '';
         const s = this._root;
         s.querySelectorAll('[data-m]').forEach(el => {
             if (el.type === 'checkbox') el.checked = false; else el.value = '';
         });
         ['authorPrev','featuredPrev','ogPrev'].forEach(id => {
-            const el = s.getElementById(id); if (el) { el.src = ''; el.style.display = 'none'; }
+            const el = s.querySelector(`#${id}`); if (el) { el.src = ''; el.style.display = 'none'; }
         });
     }
 
@@ -933,17 +916,18 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
         });
         
         this._currentMarkdown = data.content || '';
+        this._prevTitle = data.title || '';
         
         if (data.authorImage) {
-            const prev = this._root.getElementById('authorPrev');
+            const prev = this._root.querySelector('#authorPrev');
             if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
         }
         if (data.featuredImage) {
-            const prev = this._root.getElementById('featuredPrev');
+            const prev = this._root.querySelector('#featuredPrev');
             if (prev) { prev.src = data.featuredImage; prev.style.display = 'block'; }
         }
         if (data.seoOgImage) {
-            const prev = this._root.getElementById('ogPrev');
+            const prev = this._root.querySelector('#ogPrev');
             if (prev) { prev.src = data.seoOgImage; prev.style.display = 'block'; }
         }
     }
@@ -952,6 +936,10 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // SAVE
     // ═════════════════════════════════════════════════════════
     _save(status) {
+        if (this._editorInstance) {
+            this._currentMarkdown = this._editorInstance.getMarkdown();
+        }
+        
         const md = this._currentMarkdown || '';
         this._emit('save-post', {
             ...this._meta,
@@ -982,11 +970,13 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     _onUploadResult(data) {
-        if (data.blockId && this._pendingImageUpload) {
-            const publicUrl = this._wixUrl(data.url);
-            this._pendingImageUpload.callback(publicUrl);
-            this._pendingImageUpload = null;
-            this._toast('success', 'Image uploaded!');
+        if (data.blockId) {
+            if (this._pendingImageUpload) {
+                const publicUrl = this._wixUrl(data.url);
+                this._pendingImageUpload.resolve(publicUrl);
+                this._pendingImageUpload = null;
+                this._toast('success', 'Image uploaded into post!');
+            }
         }
         if (data.metaKey) {
             this._meta[data.metaKey] = this._wixUrl(data.url);
@@ -997,14 +987,17 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     // ═════════════════════════════════════════════════════════
     // HELPERS
     // ═════════════════════════════════════════════════════════
-    _autoSlug(title) {
-        const slug = title.toLowerCase()
+    _autoSlugFromTitle(title) {
+        return title.toLowerCase()
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
-        
-        const el = this._root.getElementById('m-slug');
+    }
+
+    _autoSlug(title) {
+        const slug = this._autoSlugFromTitle(title);
+        const el = this._root.querySelector('#m-slug');
         if (el) { 
             el.value = slug; 
             this._meta.slug = slug; 
@@ -1016,7 +1009,7 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
     }
 
     _toast(type, msg) {
-        const area = this._root.getElementById('toastArea');
+        const area = this._root.querySelector('#toastArea');
         const t = document.createElement('div');
         t.className = `toast toast-${type}`;
         t.textContent = msg;
@@ -1035,4 +1028,4 @@ input:checked + .tog-slider::before { transform: translateX(17px); }
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v5 (with TOAST UI Editor - FIXED) registered');
+console.log('✍️ MdxBlogEditor v7 (Light DOM + TOAST UI Editor) registered');
