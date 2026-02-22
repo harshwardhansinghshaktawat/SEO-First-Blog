@@ -7,6 +7,7 @@ class BlogEditorDashboard extends HTMLElement {
         this._editor = null;
         this._editorReady = false;
         this._editingItemId = null;
+        this._rendered = false; // Flag to prevent double rendering
         
         // Form data
         this._formData = {
@@ -30,12 +31,6 @@ class BlogEditorDashboard extends HTMLElement {
             seoKeywords: '',
             isFeatured: false
         };
-        
-        this._createStructure();
-        this._loadEditorJS(() => {
-            this._setupEventListeners();
-        });
-        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
@@ -84,7 +79,21 @@ class BlogEditorDashboard extends HTMLElement {
     
     connectedCallback() {
         console.log('📝 Blog Editor: Connected to DOM');
-        this._dispatchEvent('load-blog-posts', {});
+        
+        // Only render the HTML and load scripts once the element is actually on the page
+        if (!this._rendered) {
+            this._createStructure();
+            this._loadEditorJS(() => {
+                this._setupEventListeners();
+                // Dispatch the load event AFTER everything is set up
+                this._dispatchEvent('load-blog-posts', {});
+            });
+            this._rendered = true;
+            console.log('📝 Blog Editor: Complete');
+        } else {
+            // If it's already rendered (e.g., moved in the DOM), just request posts again
+            this._dispatchEvent('load-blog-posts', {});
+        }
     }
     
     _loadEditorJS(callback) {
@@ -673,7 +682,7 @@ class BlogEditorDashboard extends HTMLElement {
             <div class="toast" id="toast"></div>
         `;
         
-        // Fix: Append directly to the custom element, not the shadow root
+        // Append directly to the custom element in the Light DOM
         this.appendChild(root);
     }
 
@@ -793,7 +802,6 @@ class BlogEditorDashboard extends HTMLElement {
                     const base64Data = event.target.result.split(',')[1];
                     
                     // Dispatch upload event to custom element
-                    // The host element in Light DOM is found differently, but we can search for the tag
                     const customElement = document.querySelector('blog-editor-dashboard');
                     if(customElement) {
                         customElement._uploadEditorImage(base64Data, file.name, file.type, (result) => {
@@ -1097,7 +1105,7 @@ class BlogEditorDashboard extends HTMLElement {
                     break;
                     
                 case 'code':
-                    markdown += \`\`\`\n\${block.data.code}\n\`\`\`\n\n\`;
+                    markdown += `\`\`\`\n${block.data.code}\n\`\`\`\n\n`;
                     break;
                     
                 case 'delimiter':
