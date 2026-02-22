@@ -1,9 +1,6 @@
 class BlogEditorDashboard extends HTMLElement {
     constructor() {
         super();
-        console.log('📝 Blog Editor: Initializing with Quill...');
-        
-        this._shadow = this.attachShadow({ mode: 'open' });
         
         // Editor state
         this._quill = null;
@@ -35,7 +32,6 @@ class BlogEditorDashboard extends HTMLElement {
         };
         
         this._createStructure();
-        console.log('📝 Blog Editor: Complete');
     }
     
     static get observedAttributes() {
@@ -50,7 +46,7 @@ class BlogEditorDashboard extends HTMLElement {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
             } catch (e) {
-                console.error('📝 Blog Editor: Notification error:', e);
+                // Silently handle
             }
         }
         
@@ -59,7 +55,7 @@ class BlogEditorDashboard extends HTMLElement {
                 const result = JSON.parse(newValue);
                 this._handleImageUploadResult(result);
             } catch (e) {
-                console.error('📝 Blog Editor: Image upload result error:', e);
+                // Silently handle
             }
         }
         
@@ -68,7 +64,7 @@ class BlogEditorDashboard extends HTMLElement {
                 const data = JSON.parse(newValue);
                 this._renderBlogPosts(data);
             } catch (e) {
-                console.error('📝 Blog Editor: Blog posts data error:', e);
+                // Silently handle
             }
         }
         
@@ -77,14 +73,12 @@ class BlogEditorDashboard extends HTMLElement {
                 const data = JSON.parse(newValue);
                 this._loadEditData(data);
             } catch (e) {
-                console.error('📝 Blog Editor: Edit data error:', e);
+                // Silently handle
             }
         }
     }
     
     connectedCallback() {
-        console.log('📝 Blog Editor: Connected to DOM');
-        
         this._loadQuill(() => {
             this._setupEventListeners();
             this._initializeQuill();
@@ -93,10 +87,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _loadQuill(callback) {
-        console.log('📝 Blog Editor: Loading Quill...');
-        
         if (window.Quill) {
-            console.log('📝 Blog Editor: Quill already loaded');
             this._quillLoaded = true;
             callback();
             return;
@@ -112,27 +103,25 @@ class BlogEditorDashboard extends HTMLElement {
         const quillScript = document.createElement('script');
         quillScript.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
         quillScript.onload = () => {
-            console.log('📝 Blog Editor: ✅ Quill loaded');
             this._quillLoaded = true;
             callback();
         };
-        quillScript.onerror = (error) => {
-            console.error('📝 Blog Editor: ❌ Failed to load Quill', error);
+        quillScript.onerror = () => {
             this._showToast('error', 'Failed to load editor');
         };
         document.head.appendChild(quillScript);
     }
     
     _createStructure() {
-        const root = document.createElement('div');
-        root.innerHTML = `
+        // We use this.innerHTML directly instead of shadow DOM so Quill's selection works
+        this.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
                 @import url('https://cdn.quilljs.com/1.3.7/quill.snow.css');
                 
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
-                :host {
+                blog-editor-dashboard {
                     display: block;
                     width: 100%;
                     font-family: 'Inter', sans-serif;
@@ -620,7 +609,6 @@ class BlogEditorDashboard extends HTMLElement {
                             <button class="blog-editor-view-btn" data-view="posts">📚 All Posts</button>
                         </div>
                         
-                        <!-- Editor View -->
                         <div class="blog-editor-editor-view active">
                             <div class="blog-editor-layout">
                                 <div class="blog-editor-main-panel">
@@ -630,7 +618,6 @@ class BlogEditorDashboard extends HTMLElement {
                                 </div>
                                 
                                 <div class="blog-editor-sidebar">
-                                    <!-- Basic Info -->
                                     <div class="blog-editor-section">
                                         <div class="blog-editor-section-title">📄 Basic Information</div>
                                         
@@ -664,7 +651,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- Featured Image -->
                                     <div class="blog-editor-section">
                                         <div class="blog-editor-section-title">🖼️ Featured Image</div>
                                         <input type="file" id="featuredImageInput" accept="image/*" style="display: none;">
@@ -674,7 +660,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         <div id="featuredImagePreview"></div>
                                     </div>
                                     
-                                    <!-- Author Info -->
                                     <div class="blog-editor-section">
                                         <div class="blog-editor-section-title">✍️ Author Information</div>
                                         
@@ -693,7 +678,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- Publishing -->
                                     <div class="blog-editor-section">
                                         <div class="blog-editor-section-title">🚀 Publishing</div>
                                         
@@ -716,7 +700,6 @@ class BlogEditorDashboard extends HTMLElement {
                                         </div>
                                     </div>
                                     
-                                    <!-- SEO -->
                                     <div class="blog-editor-section">
                                         <div class="blog-editor-section-title">🔍 SEO Settings</div>
                                         
@@ -748,7 +731,6 @@ class BlogEditorDashboard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <!-- Posts View -->
                         <div class="blog-editor-posts-view">
                             <div id="loadingPosts" class="blog-editor-loading">
                                 <div class="blog-editor-spinner"></div>
@@ -761,21 +743,19 @@ class BlogEditorDashboard extends HTMLElement {
             
             <div class="blog-editor-toast" id="toast"></div>
         `;
-        
-        this._shadow.appendChild(root);
     }
     
     _setupEventListeners() {
         // View toggle
-        const viewBtns = this._shadow.querySelectorAll('.blog-editor-view-btn');
+        const viewBtns = this.querySelectorAll('.blog-editor-view-btn');
         viewBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 viewBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
                 const view = btn.dataset.view;
-                this._shadow.querySelector('.blog-editor-editor-view').classList.toggle('active', view === 'editor');
-                this._shadow.querySelector('.blog-editor-posts-view').classList.toggle('active', view === 'posts');
+                this.querySelector('.blog-editor-editor-view').classList.toggle('active', view === 'editor');
+                this.querySelector('.blog-editor-posts-view').classList.toggle('active', view === 'posts');
                 
                 if (view === 'posts') {
                     this._dispatchEvent('load-blog-posts', {});
@@ -784,14 +764,14 @@ class BlogEditorDashboard extends HTMLElement {
         });
         
         // Title to slug
-        this._shadow.querySelector('#titleInput').addEventListener('input', (e) => {
+        this.querySelector('#titleInput').addEventListener('input', (e) => {
             const slug = this._generateSlug(e.target.value);
-            this._shadow.querySelector('#slugInput').value = slug;
+            this.querySelector('#slugInput').value = slug;
         });
         
         // Tags
-        this._shadow.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
-        this._shadow.querySelector('#tagInput').addEventListener('keypress', (e) => {
+        this.querySelector('#addTagBtn').addEventListener('click', () => this._addTag());
+        this.querySelector('#tagInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 this._addTag();
@@ -804,19 +784,16 @@ class BlogEditorDashboard extends HTMLElement {
         this._setupImageUpload('seoOgImage');
         
         // Save & Cancel
-        this._shadow.querySelector('#savePost').addEventListener('click', () => this._savePost());
-        this._shadow.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
+        this.querySelector('#savePost').addEventListener('click', () => this._savePost());
+        this.querySelector('#cancelEdit').addEventListener('click', () => this._cancelEdit());
     }
     
     _initializeQuill() {
-        console.log('📝 Blog Editor: Initializing Quill...');
-        
         if (!window.Quill) {
-            console.error('📝 Blog Editor: Quill not loaded');
             return;
         }
         
-        const editorElement = this._shadow.querySelector('#quillEditor');
+        const editorElement = this.querySelector('#quillEditor');
         
         try {
             this._quill = new Quill(editorElement, {
@@ -838,10 +815,9 @@ class BlogEditorDashboard extends HTMLElement {
             });
             
             this._editorReady = true;
-            console.log('📝 Blog Editor: ✅ Quill initialized');
             
         } catch (error) {
-            console.error('📝 Blog Editor: Quill initialization error:', error);
+            // Silently handle
         }
     }
     
@@ -882,8 +858,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _setupImageUpload(type) {
-        const area = this._shadow.querySelector(`#${type}Area`);
-        const input = this._shadow.querySelector(`#${type}Input`);
+        const area = this.querySelector(`#${type}Area`);
+        const input = this.querySelector(`#${type}Input`);
         
         area.addEventListener('click', () => input.click());
         
@@ -893,7 +869,7 @@ class BlogEditorDashboard extends HTMLElement {
             
             const reader = new FileReader();
             reader.onload = (event) => {
-                const preview = this._shadow.querySelector(`#${type}Preview`);
+                const preview = this.querySelector(`#${type}Preview`);
                 preview.innerHTML = `
                     <img src="${event.target.result}" class="blog-editor-image-preview">
                     <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${file.name}</div>
@@ -915,7 +891,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _addTag() {
-        const input = this._shadow.querySelector('#tagInput');
+        const input = this.querySelector('#tagInput');
         const tag = input.value.trim();
         
         if (!tag) return;
@@ -929,7 +905,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _renderTags() {
-        const container = this._shadow.querySelector('#tagsDisplay');
+        const container = this.querySelector('#tagsDisplay');
         container.innerHTML = this._formData.tags.map((tag, index) => `
             <div class="blog-editor-tag-chip">
                 ${tag}
@@ -947,8 +923,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     async _savePost() {
-        const title = this._shadow.querySelector('#titleInput').value.trim();
-        const slug = this._shadow.querySelector('#slugInput').value.trim();
+        const title = this.querySelector('#titleInput').value.trim();
+        const slug = this.querySelector('#slugInput').value.trim();
         
         if (!title) {
             this._showToast('error', 'Please enter a title');
@@ -969,19 +945,19 @@ class BlogEditorDashboard extends HTMLElement {
                 _id: this._editingItemId,
                 title: title,
                 slug: slug,
-                excerpt: this._shadow.querySelector('#excerptInput').value,
+                excerpt: this.querySelector('#excerptInput').value,
                 content: markdown,
                 htmlContent: htmlContent,
                 quillDelta: JSON.stringify(delta),
-                author: this._shadow.querySelector('#authorInput').value,
-                category: this._shadow.querySelector('#categoryInput').value,
+                author: this.querySelector('#authorInput').value,
+                category: this.querySelector('#categoryInput').value,
                 tags: this._formData.tags,
-                status: this._shadow.querySelector('#statusSelect').value,
-                readTime: parseInt(this._shadow.querySelector('#readTimeInput').value) || 5,
-                isFeatured: this._shadow.querySelector('#isFeaturedCheckbox').checked,
-                seoTitle: this._shadow.querySelector('#seoTitleInput').value,
-                seoDescription: this._shadow.querySelector('#seoDescriptionInput').value,
-                seoKeywords: this._shadow.querySelector('#seoKeywordsInput').value,
+                status: this.querySelector('#statusSelect').value,
+                readTime: parseInt(this.querySelector('#readTimeInput').value) || 5,
+                isFeatured: this.querySelector('#isFeaturedCheckbox').checked,
+                seoTitle: this.querySelector('#seoTitleInput').value,
+                seoDescription: this.querySelector('#seoDescriptionInput').value,
+                seoKeywords: this.querySelector('#seoKeywordsInput').value,
                 featuredImage: this._formData.featuredImage,
                 authorImage: this._formData.authorImage,
                 seoOgImage: this._formData.seoOgImage,
@@ -1015,7 +991,6 @@ class BlogEditorDashboard extends HTMLElement {
             this._dispatchEvent('save-blog-post', formData);
             
         } catch (error) {
-            console.error('📝 Blog Editor: Save error:', error);
             this._showToast('error', 'Failed to save post');
         }
     }
@@ -1023,28 +998,28 @@ class BlogEditorDashboard extends HTMLElement {
     _cancelEdit() {
         this._editingItemId = null;
         this._resetForm();
-        this._shadow.querySelector('#cancelEdit').style.display = 'none';
+        this.querySelector('#cancelEdit').style.display = 'none';
     }
     
     _resetForm() {
-        this._shadow.querySelector('#titleInput').value = '';
-        this._shadow.querySelector('#slugInput').value = '';
-        this._shadow.querySelector('#excerptInput').value = '';
-        this._shadow.querySelector('#authorInput').value = '';
-        this._shadow.querySelector('#categoryInput').value = '';
-        this._shadow.querySelector('#readTimeInput').value = '5';
-        this._shadow.querySelector('#seoTitleInput').value = '';
-        this._shadow.querySelector('#seoDescriptionInput').value = '';
-        this._shadow.querySelector('#seoKeywordsInput').value = '';
-        this._shadow.querySelector('#isFeaturedCheckbox').checked = false;
-        this._shadow.querySelector('#statusSelect').value = 'draft';
+        this.querySelector('#titleInput').value = '';
+        this.querySelector('#slugInput').value = '';
+        this.querySelector('#excerptInput').value = '';
+        this.querySelector('#authorInput').value = '';
+        this.querySelector('#categoryInput').value = '';
+        this.querySelector('#readTimeInput').value = '5';
+        this.querySelector('#seoTitleInput').value = '';
+        this.querySelector('#seoDescriptionInput').value = '';
+        this.querySelector('#seoKeywordsInput').value = '';
+        this.querySelector('#isFeaturedCheckbox').checked = false;
+        this.querySelector('#statusSelect').value = 'draft';
         
         this._formData.tags = [];
         this._renderTags();
         
-        this._shadow.querySelector('#featuredImagePreview').innerHTML = '';
-        this._shadow.querySelector('#authorImagePreview').innerHTML = '';
-        this._shadow.querySelector('#seoOgImagePreview').innerHTML = '';
+        this.querySelector('#featuredImagePreview').innerHTML = '';
+        this.querySelector('#authorImagePreview').innerHTML = '';
+        this.querySelector('#seoOgImagePreview').innerHTML = '';
         
         this._formData.featuredImage = null;
         this._formData.authorImage = null;
@@ -1056,8 +1031,8 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _renderBlogPosts(data) {
-        const loading = this._shadow.querySelector('#loadingPosts');
-        const grid = this._shadow.querySelector('#postsGrid');
+        const loading = this.querySelector('#loadingPosts');
+        const grid = this.querySelector('#postsGrid');
         
         loading.classList.add('hide');
         
@@ -1105,37 +1080,37 @@ class BlogEditorDashboard extends HTMLElement {
     _loadEditData(data) {
         this._editingItemId = data._id;
         
-        this._shadow.querySelector('#titleInput').value = data.title || '';
-        this._shadow.querySelector('#slugInput').value = data.slug || '';
-        this._shadow.querySelector('#excerptInput').value = data.excerpt || '';
-        this._shadow.querySelector('#authorInput').value = data.author || '';
-        this._shadow.querySelector('#categoryInput').value = data.category || '';
-        this._shadow.querySelector('#readTimeInput').value = data.readTime || 5;
-        this._shadow.querySelector('#seoTitleInput').value = data.seoTitle || '';
-        this._shadow.querySelector('#seoDescriptionInput').value = data.seoDescription || '';
-        this._shadow.querySelector('#seoKeywordsInput').value = data.seoKeywords || '';
-        this._shadow.querySelector('#isFeaturedCheckbox').checked = data.isFeatured || false;
-        this._shadow.querySelector('#statusSelect').value = data.status || 'draft';
+        this.querySelector('#titleInput').value = data.title || '';
+        this.querySelector('#slugInput').value = data.slug || '';
+        this.querySelector('#excerptInput').value = data.excerpt || '';
+        this.querySelector('#authorInput').value = data.author || '';
+        this.querySelector('#categoryInput').value = data.category || '';
+        this.querySelector('#readTimeInput').value = data.readTime || 5;
+        this.querySelector('#seoTitleInput').value = data.seoTitle || '';
+        this.querySelector('#seoDescriptionInput').value = data.seoDescription || '';
+        this.querySelector('#seoKeywordsInput').value = data.seoKeywords || '';
+        this.querySelector('#isFeaturedCheckbox').checked = data.isFeatured || false;
+        this.querySelector('#statusSelect').value = data.status || 'draft';
         
         this._formData.tags = data.tags || [];
         this._renderTags();
         
         if (data.featuredImage) {
-            this._shadow.querySelector('#featuredImagePreview').innerHTML = `
+            this.querySelector('#featuredImagePreview').innerHTML = `
                 <img src="${data.featuredImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.featuredImage = data.featuredImage;
         }
         
         if (data.authorImage) {
-            this._shadow.querySelector('#authorImagePreview').innerHTML = `
+            this.querySelector('#authorImagePreview').innerHTML = `
                 <img src="${data.authorImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.authorImage = data.authorImage;
         }
         
         if (data.seoOgImage) {
-            this._shadow.querySelector('#seoOgImagePreview').innerHTML = `
+            this.querySelector('#seoOgImagePreview').innerHTML = `
                 <img src="${data.seoOgImage.url}" class="blog-editor-image-preview">
             `;
             this._formData.seoOgImage = data.seoOgImage;
@@ -1148,19 +1123,18 @@ class BlogEditorDashboard extends HTMLElement {
                 const delta = JSON.parse(data.quillDelta);
                 this._quill.setContents(delta);
             } catch (e) {
-                console.error('📝 Blog Editor: Failed to load Quill content:', e);
                 if (data.htmlContent) {
                     this._quill.root.innerHTML = data.htmlContent;
                 }
             }
         }
         
-        this._shadow.querySelector('[data-view="editor"]').click();
-        this._shadow.querySelector('#cancelEdit').style.display = 'inline-block';
+        this.querySelector('[data-view="editor"]').click();
+        this.querySelector('#cancelEdit').style.display = 'inline-block';
     }
     
     _handleImageUploadResult(result) {
-        console.log('📝 Blog Editor: Image upload result:', result);
+        // Handled silently
     }
     
     _dispatchEvent(name, detail) {
@@ -1168,7 +1142,7 @@ class BlogEditorDashboard extends HTMLElement {
     }
     
     _showToast(type, message) {
-        const toast = this._shadow.querySelector('#toast');
+        const toast = this.querySelector('#toast');
         if (!toast) return;
         
         toast.textContent = message;
@@ -1178,4 +1152,3 @@ class BlogEditorDashboard extends HTMLElement {
 }
 
 customElements.define('blog-editor-dashboard', BlogEditorDashboard);
-console.log('📝 Blog Editor: ✅ Custom element registered with Quill');
