@@ -49,6 +49,8 @@ class MdxBlogEditor extends HTMLElement {
             h2: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="11" font-weight="900" font-family="serif" fill="currentColor" stroke="none">H2</text></svg>`,
             h3: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="11" font-weight="900" font-family="serif" fill="currentColor" stroke="none">H3</text></svg>`,
             h4: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="11" font-weight="900" font-family="serif" fill="currentColor" stroke="none">H4</text></svg>`,
+            h5: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="11" font-weight="900" font-family="serif" fill="currentColor" stroke="none">H5</text></svg>`,
+            h6: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="11" font-weight="900" font-family="serif" fill="currentColor" stroke="none">H6</text></svg>`,
             paragraph: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 4H7a4 4 0 0 0 0 8h3v8h3V4z"/><line x1="17" y1="4" x2="17" y2="20"/></svg>`,
             bold: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>`,
             italic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>`,
@@ -215,6 +217,10 @@ class MdxBlogEditor extends HTMLElement {
                 gap: 2px;
                 flex-wrap: wrap;
                 flex-shrink: 0;
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             }
 
             .toolbar-sep {
@@ -260,13 +266,23 @@ class MdxBlogEditor extends HTMLElement {
             .tb-btn:hover .tb-tooltip { opacity: 1; }
 
             /* ── EDITOR AREA ── */
-            .editor-body { display: flex; flex: 1; overflow: hidden; }
+            .editor-body { display: flex; flex: 1; overflow: hidden; position: relative; }
 
             .editor-panel {
                 flex: 1;
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
+            }
+
+            .editor-toolbar-wrap {
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                background: var(--paper);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                flex-shrink: 0;
             }
 
             .blocks-container {
@@ -351,6 +367,8 @@ class MdxBlogEditor extends HTMLElement {
             [data-block-type="h2"] .block-editable { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; line-height: 1.3; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
             [data-block-type="h3"] .block-editable { font-size: 22px; font-weight: 700; line-height: 1.35; }
             [data-block-type="h4"] .block-editable { font-size: 18px; font-weight: 600; line-height: 1.4; }
+            [data-block-type="h5"] .block-editable { font-size: 15px; font-weight: 700; line-height: 1.45; text-transform: uppercase; letter-spacing: 0.5px; }
+            [data-block-type="h6"] .block-editable { font-size: 13px; font-weight: 700; line-height: 1.5; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); }
 
             /* ── QUOTE ── */
             [data-block-type="quote"] .block-editable,
@@ -716,6 +734,8 @@ class MdxBlogEditor extends HTMLElement {
             .preview-panel h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin: 24px 0 12px; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
             .preview-panel h3 { font-size: 22px; font-weight: 700; margin: 20px 0 10px; }
             .preview-panel h4 { font-size: 18px; font-weight: 600; margin: 16px 0 8px; }
+            .preview-panel h5 { font-size: 15px; font-weight: 700; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .preview-panel h6 { font-size: 13px; font-weight: 700; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); }
             .preview-panel p { margin-bottom: 12px; line-height: 1.75; }
             .preview-panel blockquote { border-left: 4px solid var(--accent2); padding-left: 16px; color: var(--ink2); font-style: italic; margin: 12px 0; }
             .preview-panel blockquote blockquote { border-left-color: var(--accent); margin-left: 16px; background: var(--paper2); padding: 8px 8px 8px 16px; border-radius: 0 var(--radius) var(--radius) 0; }
@@ -961,16 +981,17 @@ class MdxBlogEditor extends HTMLElement {
                 </button>
             </div>
 
-            <!-- TOOLBAR (editor only) -->
-            <div class="toolbar" id="toolbar">
-                ${this._renderToolbar()}
-            </div>
-
             <!-- BODY -->
             <div class="editor-body">
 
                 <!-- EDITOR PANEL -->
                 <div class="editor-panel" id="editorPanel">
+                    <!-- STICKY TOOLBAR WRAPPER (inside editor panel) -->
+                    <div class="editor-toolbar-wrap" id="toolbarWrap">
+                        <div class="toolbar" id="toolbar">
+                            ${this._renderToolbar()}
+                        </div>
+                    </div>
                     <div class="blocks-container" id="blocksContainer">
                         <!-- blocks injected here -->
                     </div>
@@ -1013,6 +1034,8 @@ class MdxBlogEditor extends HTMLElement {
                 { type: 'h2', label: 'Heading 2' },
                 { type: 'h3', label: 'Heading 3' },
                 { type: 'h4', label: 'Heading 4' },
+                { type: 'h5', label: 'Heading 5' },
+                { type: 'h6', label: 'Heading 6' },
             ],
             null,
             [
@@ -1067,6 +1090,8 @@ class MdxBlogEditor extends HTMLElement {
             { type: 'h2', label: 'H2' },
             { type: 'h3', label: 'H3' },
             { type: 'h4', label: 'H4' },
+            { type: 'h5', label: 'H5' },
+            { type: 'h6', label: 'H6' },
             { type: 'paragraph', label: 'Para' },
             { type: 'quote', label: 'Quote' },
             { type: 'nested-quote', label: 'Nested' },
@@ -1212,10 +1237,41 @@ class MdxBlogEditor extends HTMLElement {
             tab.addEventListener('click', () => this._switchTab(tab.dataset.tab));
         });
 
-        // Toolbar buttons
+        // Toolbar buttons — CONVERT focused block OR add new block
         s.getElementById('toolbar').addEventListener('click', e => {
             const btn = e.target.closest('[data-action="insert-block"]');
-            if (btn) this._addBlock(btn.dataset.blockType);
+            if (!btn) return;
+            const newType = btn.dataset.blockType;
+
+            // Find which block is currently focused
+            const focusedEl = s.activeElement || s.querySelector(':focus');
+            const focusedWrapper = focusedEl?.closest?.('[data-block-id]');
+
+            if (focusedWrapper) {
+                // A block is focused — convert its type instead of inserting new block
+                const blockId = parseInt(focusedWrapper.getAttribute('data-block-id'));
+                const blockIdx = this._blocks.findIndex(b => b.id === blockId);
+                if (blockIdx !== -1) {
+                    const currentBlock = this._blocks[blockIdx];
+                    // Preserve text content when converting compatible types
+                    const textCompatible = ['h1','h2','h3','h4','h5','h6','paragraph','quote','nested-quote','ul','ol','inline-code','escape'];
+                    const hasText = textCompatible.includes(currentBlock.type) && textCompatible.includes(newType);
+
+                    this._blocks[blockIdx] = {
+                        id: currentBlock.id,
+                        type: newType,
+                        data: hasText
+                            ? { ...this._defaultData(newType), text: currentBlock.data.text || '' }
+                            : this._defaultData(newType)
+                    };
+                    this._renderBlocks();
+                    setTimeout(() => this._focusBlock(blockId), 50);
+                    return;
+                }
+            }
+
+            // No focused block — append new block at end
+            this._addBlock(newType);
         });
 
         // Save / Publish
@@ -1295,7 +1351,6 @@ class MdxBlogEditor extends HTMLElement {
         const s = this._shadow;
 
         s.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-        s.getElementById('toolbar').style.display = tab === 'editor' ? 'flex' : 'none';
 
         const panels = { editor: 'editorPanel', preview: 'previewPanel', markdown: 'markdownPanel', meta: 'metaPanel', seo: 'seoPanel' };
 
@@ -1409,6 +1464,8 @@ class MdxBlogEditor extends HTMLElement {
             case 'h2': return `<div class="block-editable" contenteditable="true" data-placeholder="Heading 2..." data-idx="${idx}">${block.data.text}</div>`;
             case 'h3': return `<div class="block-editable" contenteditable="true" data-placeholder="Heading 3..." data-idx="${idx}">${block.data.text}</div>`;
             case 'h4': return `<div class="block-editable" contenteditable="true" data-placeholder="Heading 4..." data-idx="${idx}">${block.data.text}</div>`;
+            case 'h5': return `<div class="block-editable" contenteditable="true" data-placeholder="Heading 5..." data-idx="${idx}">${block.data.text}</div>`;
+            case 'h6': return `<div class="block-editable" contenteditable="true" data-placeholder="Heading 6..." data-idx="${idx}">${block.data.text}</div>`;
             case 'paragraph': return `<div class="block-editable" contenteditable="true" data-placeholder="Write something..." data-idx="${idx}">${block.data.text}</div>`;
             case 'quote': return `<div class="block-editable" contenteditable="true" data-placeholder="Blockquote..." data-idx="${idx}">${block.data.text}</div>`;
             case 'nested-quote': return `<div class="block-editable" contenteditable="true" data-placeholder="Nested quote..." data-idx="${idx}">${block.data.text}</div>`;
@@ -1700,7 +1757,23 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     // ─── IMAGE HANDLING ──────────────────────────────────────
-    async _handleImageFile(file, block, idx) {
+
+    /**
+     * Convert wix:image://v1/HASH~mv2.ext/filename.ext#... 
+     * → https://static.wixstatic.com/media/HASH~mv2.ext
+     */
+    _convertWixImageUrl(url) {
+        if (!url) return url;
+        // Already a public URL
+        if (url.startsWith('http')) return url;
+        // wix:image://v1/{hash~mv2.ext}/{filename}#{params}
+        const match = url.match(/^wix:image:\/\/v1\/([^/]+)\//);
+        if (match) {
+            const mediaFile = match[1]; // e.g. 8874a0_abc~mv2.webp
+            return `https://static.wixstatic.com/media/${mediaFile}`;
+        }
+        return url;
+    }
         const preview = URL.createObjectURL(file);
         block.data.pendingFile = file;
         block.data.preview = preview;
@@ -1761,7 +1834,8 @@ class MdxBlogEditor extends HTMLElement {
         if (data.blockId) {
             const info = this._uploadingImages[data.blockId];
             if (info) {
-                info.block.data.src = data.url;
+                // Convert wix:image:// URL to public https URL
+                info.block.data.src = this._convertWixImageUrl(data.url);
                 info.block.data.alt = '';
                 info.block.data.pendingFile = null;
                 info.block.data.preview = null;
@@ -1771,7 +1845,8 @@ class MdxBlogEditor extends HTMLElement {
             }
         }
         if (data.metaKey) {
-            this._metaData[data.metaKey] = data.url;
+            // Convert wix:image:// URL for meta images too
+            this._metaData[data.metaKey] = this._convertWixImageUrl(data.url);
             this._showToast('success', 'Image uploaded!');
         }
     }
@@ -1812,6 +1887,8 @@ class MdxBlogEditor extends HTMLElement {
             else if (line.startsWith('## ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'h2', data: { text: line.slice(3) } }); }
             else if (line.startsWith('### ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'h3', data: { text: line.slice(4) } }); }
             else if (line.startsWith('#### ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'h4', data: { text: line.slice(5) } }); }
+            else if (line.startsWith('##### ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'h5', data: { text: line.slice(6) } }); }
+            else if (line.startsWith('###### ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'h6', data: { text: line.slice(7) } }); }
             else if (line.startsWith('>> ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'nested-quote', data: { text: line.slice(3) } }); }
             else if (line.startsWith('> ')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'quote', data: { text: line.slice(2) } }); }
             else if (line.startsWith('---')) { this._blocks.push({ id: ++this._blockIdCounter, type: 'hr', data: {} }); }
@@ -1829,6 +1906,8 @@ class MdxBlogEditor extends HTMLElement {
                 case 'h2': return `## ${block.data.text}`;
                 case 'h3': return `### ${block.data.text}`;
                 case 'h4': return `#### ${block.data.text}`;
+                case 'h5': return `##### ${block.data.text}`;
+                case 'h6': return `###### ${block.data.text}`;
                 case 'paragraph': return block.data.text;
                 case 'quote': return `> ${block.data.text}`;
                 case 'nested-quote': return `>> ${block.data.text}`;
@@ -1874,6 +1953,8 @@ class MdxBlogEditor extends HTMLElement {
 
     _mdToHtml(md) {
         let html = md
+            .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+            .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
             .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
             .replace(/^## (.+)$/gm, '<h2>$1</h2>')
