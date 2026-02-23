@@ -1,5 +1,5 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v9 (FINAL - BUG FIXED)
+// MDX BLOG EDITOR — Custom Element v10 (FINAL - ALL BUGS FIXED)
 // <mdx-blog-editor> Web Component
 // ============================================================
 
@@ -26,6 +26,9 @@ class MdxBlogEditor extends HTMLElement {
         this._searchResults = [];
         this._autoSaveInterval = null;
         this._hasUnsavedChanges = false;
+        
+        this._videoEmbeds = [];
+        this._htmlEmbeds = [];
     }
 
     _freshMeta() {
@@ -1058,6 +1061,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <img class="mdx-fimg-prev" id="ogPrev" style="display:none">
     </div>
 </div>`; }
+
     _wire() {
         this.querySelector('#newPostBtn').addEventListener('click', () => this._openEditor(null));
         this.querySelectorAll('.mdx-tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
@@ -1100,7 +1104,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._wireRelatedPosts();
         this._wireInternalLinks();
     }
-
     _wireRelatedPosts() {
         const searchBtn = this.querySelector('#relatedSearchBtn');
         const searchInput = this.querySelector('#relatedSearchInput');
@@ -1397,12 +1400,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         const self = this;
 
         try {
-            const cleanMarkdown = this._cleanMarkdown(initialMarkdown || '');
+            let cleanMarkdown = this._prepareMarkdownForEditor(initialMarkdown || '');
             
             this._toastEditor = new toastui.Editor({
                 el: editorDiv,
                 height: '100%',
-                initialEditType: 'wysiwyg',
+                initialEditType: 'markdown',
                 previewStyle: 'vertical',
                 initialValue: cleanMarkdown,
                 usageStatistics: false,
@@ -1427,6 +1430,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
                 events: {
                     change: () => {
                         let md = self._toastEditor.getMarkdown();
+                        md = self._restoreEmbeds(md);
                         md = self._cleanMarkdown(md);
                         self._currentMarkdown = md;
                         self._hasUnsavedChanges = true;
@@ -1456,12 +1460,81 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
             console.log('✅ TOAST UI Editor initialized');
             
+            setTimeout(() => {
+                if (self._toastEditor) {
+                    try {
+                        self._toastEditor.changeMode('wysiwyg');
+                    } catch (e) {
+                        console.warn('Could not switch to WYSIWYG mode:', e);
+                    }
+                }
+            }, 100);
+            
             this._startAutoSave();
             
         } catch (error) {
             console.error('❌ Error initializing editor:', error);
             this._toast('error', 'Failed to initialize editor: ' + error.message);
         }
+    }
+
+    _prepareMarkdownForEditor(markdown) {
+        if (!markdown) return '';
+        
+        let prepared = markdown;
+        
+        const videoEmbeds = [];
+        prepared = prepared.replace(/\[youtube:([a-zA-Z0-9_-]+)\]/g, (match, id) => {
+            const index = videoEmbeds.length;
+            videoEmbeds.push({ type: 'youtube', id });
+            return `___VIDEO_EMBED_${index}___`;
+        });
+        
+        prepared = prepared.replace(/\[vimeo:(\d+)\]/g, (match, id) => {
+            const index = videoEmbeds.length;
+            videoEmbeds.push({ type: 'vimeo', id });
+            return `___VIDEO_EMBED_${index}___`;
+        });
+        
+        const htmlEmbeds = [];
+        prepared = prepared.replace(/\[html\]([\s\S]*?)\[\/html\]/g, (match, html) => {
+            const index = htmlEmbeds.length;
+            htmlEmbeds.push(html);
+            return `___HTML_EMBED_${index}___`;
+        });
+        
+        this._videoEmbeds = videoEmbeds;
+        this._htmlEmbeds = htmlEmbeds;
+        
+        prepared = this._cleanMarkdown(prepared);
+        
+        return prepared;
+    }
+
+    _restoreEmbeds(markdown) {
+        if (!markdown) return '';
+        
+        let restored = markdown;
+        
+        if (this._videoEmbeds) {
+            this._videoEmbeds.forEach((embed, index) => {
+                const placeholder = `___VIDEO_EMBED_${index}___`;
+                const embedCode = embed.type === 'youtube' 
+                    ? `[youtube:${embed.id}]` 
+                    : `[vimeo:${embed.id}]`;
+                restored = restored.replace(placeholder, embedCode);
+            });
+        }
+        
+        if (this._htmlEmbeds) {
+            this._htmlEmbeds.forEach((html, index) => {
+                const placeholder = `___HTML_EMBED_${index}___`;
+                const embedCode = `[html]\n${html}\n[/html]`;
+                restored = restored.replace(placeholder, embedCode);
+            });
+        }
+        
+        return restored;
     }
 
     _createCustomButton(text, icon, onClick) {
@@ -1760,6 +1833,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
         this._hasUnsavedChanges = false;
+        this._videoEmbeds = [];
+        this._htmlEmbeds = [];
         
         this.querySelectorAll('[data-m]').forEach(el => {
             if (el.type === 'checkbox') el.checked = false; else el.value = '';
@@ -1818,7 +1893,11 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             return;
         }
 
-        const md = this._cleanMarkdown(this._currentMarkdown || '');
+        let md = this._toastEditor.getMarkdown();
+        
+        md = this._restoreEmbeds(md);
+        
+        md = this._cleanMarkdown(md);
         
         const saveData = {
             ...this._meta,
@@ -2238,4 +2317,4 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v9 (FINAL - BUG FIXED) registered');
+console.log('✍️ MdxBlogEditor v10 (ALL BUGS FIXED - FINAL) registered');
