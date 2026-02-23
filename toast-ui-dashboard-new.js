@@ -1,5 +1,5 @@
 // ============================================================
-// MDX BLOG EDITOR — Custom Element v8 (COMPLETE)
+// MDX BLOG EDITOR — Custom Element v9 (FINAL - BUG FIXED)
 // <mdx-blog-editor> Web Component
 // ============================================================
 
@@ -16,6 +16,7 @@ class MdxBlogEditor extends HTMLElement {
         this._tab = 'editor';
         this._meta = this._freshMeta();
         this._initialized = false;
+        this._currentMarkdown = '';
         
         this._seoScore = 0;
         this._readabilityScore = 0;
@@ -23,12 +24,13 @@ class MdxBlogEditor extends HTMLElement {
         this._readabilityAnalysis = [];
         
         this._searchResults = [];
+        this._autoSaveInterval = null;
+        this._hasUnsavedChanges = false;
     }
 
     _freshMeta() {
         return {
             blogTitle: '',
-            title: '',
             slug: '',
             excerpt: '',
             author: '',
@@ -105,11 +107,15 @@ class MdxBlogEditor extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this._stopAutoSave();
+        
         if (this._toastEditor) {
             try {
                 this._toastEditor.destroy();
                 this._toastEditor = null;
-            } catch(e) { console.error('Error destroying editor:', e); }
+            } catch(e) { 
+                console.error('Error destroying editor:', e); 
+            }
         }
     }
 
@@ -226,6 +232,16 @@ mdx-blog-editor .mdx-brand {
 mdx-blog-editor .mdx-brand span { color: var(--accent2); }
 mdx-blog-editor .mdx-top-acts { display: flex; gap: 8px; align-items: center; }
 
+mdx-blog-editor .mdx-autosave-indicator {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+mdx-blog-editor .mdx-autosave-indicator.saving { color: var(--accent2); }
+mdx-blog-editor .mdx-autosave-indicator.saved { color: var(--green); }
+
 mdx-blog-editor .mdx-btn {
     display: inline-flex;
     align-items: center;
@@ -240,15 +256,19 @@ mdx-blog-editor .mdx-btn {
     transition: background .15s, opacity .15s;
     white-space: nowrap;
 }
+mdx-blog-editor .mdx-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 mdx-blog-editor .mdx-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 mdx-blog-editor .mdx-btn-ghost  { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); }
-mdx-blog-editor .mdx-btn-ghost:hover  { background: rgba(255,255,255,.22); }
+mdx-blog-editor .mdx-btn-ghost:hover:not(:disabled)  { background: rgba(255,255,255,.22); }
 mdx-blog-editor .mdx-btn-accent { background: var(--accent); color: #fff; }
-mdx-blog-editor .mdx-btn-accent:hover { opacity: .88; }
+mdx-blog-editor .mdx-btn-accent:hover:not(:disabled) { opacity: .88; }
 mdx-blog-editor .mdx-btn-light  { background: var(--paper2); color: var(--ink2); border: 1px solid var(--border); }
-mdx-blog-editor .mdx-btn-light:hover  { background: var(--paper3); }
+mdx-blog-editor .mdx-btn-light:hover:not(:disabled)  { background: var(--paper3); }
 mdx-blog-editor .mdx-btn-red    { background: #fff2f0; color: #a8071a; border: 1px solid #ffccc7; }
-mdx-blog-editor .mdx-btn-red:hover    { background: #ffccc7; }
+mdx-blog-editor .mdx-btn-red:hover:not(:disabled)    { background: #ffccc7; }
 mdx-blog-editor .mdx-btn-sm { padding: 5px 10px; font-size: 12px; }
 
 mdx-blog-editor .mdx-list-view {
@@ -451,7 +471,7 @@ mdx-blog-editor .mdx-toast-editor-container {
 }
 
 mdx-blog-editor .mdx-sidebar {
-    width: 340px;
+    width: 380px;
     background: var(--paper);
     border-left: 1px solid var(--border);
     display: flex;
@@ -661,8 +681,8 @@ mdx-blog-editor .mdx-md-panel { display: none; flex: 1; min-height: 0; backgroun
 mdx-blog-editor .mdx-md-panel.active { display: flex; flex-direction: column; }
 mdx-blog-editor .mdx-md-area { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; padding: 22px; border: none; outline: none; resize: none; background: #1e1e2e; color: #cdd6f4; }
 
-mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel, mdx-blog-editor .mdx-related-panel, mdx-blog-editor .mdx-internal-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
-mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active, mdx-blog-editor .mdx-related-panel.active, mdx-blog-editor .mdx-internal-panel.active { display: block; }
+mdx-blog-editor .mdx-seo-panel, mdx-blog-editor .mdx-related-panel, mdx-blog-editor .mdx-internal-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+mdx-blog-editor .mdx-seo-panel.active, mdx-blog-editor .mdx-related-panel.active, mdx-blog-editor .mdx-internal-panel.active { display: block; }
 mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner { padding: 20px; }
 
 mdx-blog-editor .mdx-msec { background: var(--paper); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 14px; overflow: hidden; }
@@ -819,7 +839,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
 @media (max-width: 1200px) {
     mdx-blog-editor .mdx-sidebar {
-        width: 300px;
+        width: 320px;
     }
 }
 
@@ -835,6 +855,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     _shellHTML() { return `
 <div class="mdx-top-bar">
     <div class="mdx-brand">MDX<span>Blocks</span></div>
+    <div class="mdx-autosave-indicator" id="autoSaveIndicator"></div>
     <div class="mdx-top-acts" id="topActs"></div>
 </div>
 
@@ -865,7 +886,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <button class="mdx-tab" data-tab="markdown">${this._icon('code')} Markdown</button>
         <button class="mdx-tab" data-tab="related">${this._icon('link')} Related</button>
         <button class="mdx-tab" data-tab="internal">${this._icon('link')} Links</button>
-        <button class="mdx-tab" data-tab="meta">${this._icon('gear')} Settings</button>
         <button class="mdx-tab" data-tab="seo">${this._icon('seo')} SEO</button>
     </div>
 
@@ -929,53 +949,14 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
                 </div>
             </div>
 
-            <div class="mdx-meta-panel" id="metaPanel">
-                <div class="mdx-meta-inner">${this._metaHTML()}</div>
-            </div>
-
             <div class="mdx-seo-panel" id="seoPanel">
                 <div class="mdx-seo-inner">${this._seoHTML()}</div>
             </div>
         </div>
 
-        <div class="mdx-sidebar" id="seoSidebar">
+        <div class="mdx-sidebar" id="editorSidebar">
             <div class="mdx-sidebar-scroll">
-                <div class="mdx-keyphrase-section">
-                    <label class="mdx-keyphrase-label">Focus Keyphrase</label>
-                    <input type="text" 
-                           class="mdx-keyphrase-input" 
-                           id="focusKeyphrase"
-                           placeholder="Enter your focus keyword..."
-                           data-m="focusKeyphrase">
-                </div>
-
-                <div class="mdx-score-card">
-                    <div class="mdx-score-title">SEO Analysis</div>
-                    <div class="mdx-score-circle">
-                        <svg class="mdx-score-svg" width="120" height="120">
-                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
-                            <circle class="mdx-score-fg" id="seoScoreCircle" cx="60" cy="60" r="52" 
-                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-                        </svg>
-                        <div class="mdx-score-text" id="seoScoreText">0</div>
-                    </div>
-                    <div class="mdx-score-label" id="seoScoreLabel">Needs improvement</div>
-                    <div id="seoAnalysisItems"></div>
-                </div>
-
-                <div class="mdx-score-card">
-                    <div class="mdx-score-title">Readability Analysis</div>
-                    <div class="mdx-score-circle">
-                        <svg class="mdx-score-svg" width="120" height="120">
-                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
-                            <circle class="mdx-score-fg" id="readScoreCircle" cx="60" cy="60" r="52"
-                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-                        </svg>
-                        <div class="mdx-score-text" id="readScoreText">0</div>
-                    </div>
-                    <div class="mdx-score-label" id="readScoreLabel">Needs improvement</div>
-                    <div id="readAnalysisItems"></div>
-                </div>
+                ${this._sidebarHTML()}
             </div>
         </div>
     </div>
@@ -984,11 +965,47 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 <div class="mdx-toasts" id="toastArea"></div>
 `; }
 
-    _metaHTML() { return `
-<div class="mdx-msec">
-    <div class="mdx-msec-title">Post Details</div>
+    _sidebarHTML() { return `
+<div class="mdx-keyphrase-section">
+    <label class="mdx-keyphrase-label">Focus Keyphrase</label>
+    <input type="text" 
+           class="mdx-keyphrase-input" 
+           id="focusKeyphrase"
+           placeholder="Enter your focus keyword..."
+           data-m="focusKeyphrase">
+</div>
+
+<div class="mdx-score-card">
+    <div class="mdx-score-title">SEO Analysis</div>
+    <div class="mdx-score-circle">
+        <svg class="mdx-score-svg" width="120" height="120">
+            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
+            <circle class="mdx-score-fg" id="seoScoreCircle" cx="60" cy="60" r="52" 
+                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+        </svg>
+        <div class="mdx-score-text" id="seoScoreText">0</div>
+    </div>
+    <div class="mdx-score-label" id="seoScoreLabel">Needs improvement</div>
+    <div id="seoAnalysisItems"></div>
+</div>
+
+<div class="mdx-score-card">
+    <div class="mdx-score-title">Readability Analysis</div>
+    <div class="mdx-score-circle">
+        <svg class="mdx-score-svg" width="120" height="120">
+            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
+            <circle class="mdx-score-fg" id="readScoreCircle" cx="60" cy="60" r="52"
+                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+        </svg>
+        <div class="mdx-score-text" id="readScoreText">0</div>
+    </div>
+    <div class="mdx-score-label" id="readScoreLabel">Needs improvement</div>
+    <div id="readAnalysisItems"></div>
+</div>
+
+<div class="mdx-msec" style="margin-top: 20px;">
+    <div class="mdx-msec-title">Post Settings</div>
     <div class="mdx-mfields">
-        <div class="mdx-mfield mdx-mfull"><label>Meta Title</label><input class="mdx-minp" id="m-title" type="text" placeholder="Internal title…" data-m="title"></div>
         <div class="mdx-mfield mdx-mfull"><label>Slug</label><input class="mdx-minp" id="m-slug" type="text" placeholder="post-url-slug" data-m="slug"></div>
         <div class="mdx-mfield mdx-mfull"><label>Excerpt</label><textarea class="mdx-mtxt" placeholder="Short description…" data-m="excerpt" rows="3"></textarea></div>
         <div class="mdx-mfield"><label>Author</label><input class="mdx-minp" type="text" placeholder="Author name" data-m="author"></div>
@@ -998,15 +1015,13 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             <select class="mdx-msel" data-m="status"><option value="draft">Draft</option><option value="published">Published</option></select>
         </div>
         <div class="mdx-mfield"><label>Published Date</label><input class="mdx-minp" type="datetime-local" data-m="publishedDate"></div>
-        <div class="mdx-mfield"><label>Modified Date</label><input class="mdx-minp" type="datetime-local" data-m="modifiedDate"></div>
-        <div class="mdx-mfield"><label>Read Time (min)</label><input class="mdx-minp" type="number" placeholder="5" data-m="readTime"></div>
-        <div class="mdx-mfield"><label>View Count</label><input class="mdx-minp" type="number" placeholder="0" data-m="viewCount"></div>
     </div>
     <div class="mdx-tog-row">
         <span class="mdx-tog-lbl">Featured Post</span>
         <label class="mdx-tog"><input type="checkbox" data-m="isFeatured" id="m-featured"><span class="mdx-tog-slider"></span></label>
     </div>
 </div>
+
 <div class="mdx-msec">
     <div class="mdx-msec-title">Author Image</div>
     <div class="mdx-fimg-zone" id="authorZone">
@@ -1015,6 +1030,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <img class="mdx-fimg-prev" id="authorPrev" style="display:none">
     </div>
 </div>
+
 <div class="mdx-msec">
     <div class="mdx-msec-title">Featured Image</div>
     <div class="mdx-fimg-zone" id="featuredZone">
@@ -1022,7 +1038,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <p>Click to upload</p>
         <img class="mdx-fimg-prev" id="featuredPrev" style="display:none">
     </div>
-</div>`; }
+</div>
+`; }
 
     _seoHTML() { return `
 <div class="mdx-msec">
@@ -1041,7 +1058,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <img class="mdx-fimg-prev" id="ogPrev" style="display:none">
     </div>
 </div>`; }
-
     _wire() {
         this.querySelector('#newPostBtn').addEventListener('click', () => this._openEditor(null));
         this.querySelectorAll('.mdx-tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
@@ -1050,6 +1066,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             const evt = el.type === 'checkbox' ? 'change' : 'input';
             el.addEventListener(evt, () => {
                 this._meta[el.dataset.m] = el.type === 'checkbox' ? el.checked : el.value;
+                this._hasUnsavedChanges = true;
                 
                 if (['blogTitle', 'focusKeyphrase', 'seoTitle', 'seoDescription'].includes(el.dataset.m)) {
                     this._runSEOAnalysis();
@@ -1067,14 +1084,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         
         blogTitleInput.addEventListener('input', (e) => {
             this._meta.blogTitle = e.target.value;
+            this._hasUnsavedChanges = true;
+            
             if (!isManualSlugEdit) {
                 this._autoSlug(e.target.value);
             }
-            if (!this._meta.title) {
-                const titleInput = this.querySelector('#m-title');
-                if (titleInput) titleInput.value = e.target.value;
-                this._meta.title = e.target.value;
-            }
+            
             this._runSEOAnalysis();
         });
 
@@ -1085,7 +1100,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._wireRelatedPosts();
         this._wireInternalLinks();
     }
-  _wireRelatedPosts() {
+
+    _wireRelatedPosts() {
         const searchBtn = this.querySelector('#relatedSearchBtn');
         const searchInput = this.querySelector('#relatedSearchInput');
         
@@ -1179,7 +1195,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         const links = this._meta.internalLinks || [];
         
         if (links.length === 0) {
-            container.innerHTML = '<p style="padding:14px;color:var(--ink3);font-size:13px;">No internal links yet. Add phrases to auto-link.</p>';
+            container.innerHTML = '<p style="padding:14px;color:var(--ink3);font-size:13px;">No internal links yet.</p>';
             return;
         }
         
@@ -1282,6 +1298,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             this._meta.relatedPosts.push(id);
         }
         
+        this._hasUnsavedChanges = true;
         this._renderSearchResults();
     }
 
@@ -1315,6 +1332,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             span.addEventListener('click', () => {
                 const idx = parseInt(span.dataset.idx);
                 this._meta.relatedPosts.splice(idx, 1);
+                this._hasUnsavedChanges = true;
                 this._renderSearchResults();
             });
         });
@@ -1364,7 +1382,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
 
         const wrapper = this.querySelector('#toastEditorWrapper');
-        if (!wrapper) return;
+        if (!wrapper) {
+            console.error('Editor wrapper not found');
+            return;
+        }
+
+        wrapper.innerHTML = '';
 
         const editorDiv = document.createElement('div');
         editorDiv.className = 'mdx-toast-editor-container';
@@ -1374,12 +1397,14 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         const self = this;
 
         try {
+            const cleanMarkdown = this._cleanMarkdown(initialMarkdown || '');
+            
             this._toastEditor = new toastui.Editor({
                 el: editorDiv,
                 height: '100%',
                 initialEditType: 'wysiwyg',
                 previewStyle: 'vertical',
-                initialValue: initialMarkdown,
+                initialValue: cleanMarkdown,
                 usageStatistics: false,
                 autofocus: false,
                 toolbarItems: [
@@ -1404,6 +1429,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
                         let md = self._toastEditor.getMarkdown();
                         md = self._cleanMarkdown(md);
                         self._currentMarkdown = md;
+                        self._hasUnsavedChanges = true;
                         self._runAnalysis();
                     }
                 },
@@ -1429,9 +1455,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             });
 
             console.log('✅ TOAST UI Editor initialized');
+            
+            this._startAutoSave();
+            
         } catch (error) {
             console.error('❌ Error initializing editor:', error);
-            this._toast('error', 'Failed to initialize editor');
+            this._toast('error', 'Failed to initialize editor: ' + error.message);
         }
     }
 
@@ -1481,6 +1510,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _cleanMarkdown(md) {
+        if (!md) return '';
+        
         return md
             .replace(/^(#{1,6}\s+.+)\n\*\*\*\n/gm, '$1\n\n')
             .replace(/\\~\\~(.+?)\\~\\~/g, '~~$1~~')
@@ -1496,16 +1527,24 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this.querySelector('#listView').classList.remove('hidden');
         this.querySelector('#editorView').classList.add('hidden');
         this.querySelector('#topActs').innerHTML = '';
+        this.querySelector('#autoSaveIndicator').innerHTML = '';
         this._currentView = 'list';
-        this.querySelector('#listLoading').style.display = 'flex';
-        this.querySelector('#listContent').style.display = 'none';
+        
+        this._stopAutoSave();
         
         if (this._toastEditor) {
             try {
                 this._toastEditor.destroy();
                 this._toastEditor = null;
-            } catch(e) { console.error('Error destroying editor:', e); }
+            } catch(e) { 
+                console.error('Error destroying editor:', e); 
+            }
         }
+        
+        this._hasUnsavedChanges = false;
+        
+        this.querySelector('#listLoading').style.display = 'none';
+        this.querySelector('#listContent').style.display = 'block';
     }
 
     _showEditorView() {
@@ -1520,9 +1559,15 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             <button class="mdx-btn mdx-btn-accent" id="pubBtn">${this._icon('check')} ${isNew ? 'Publish' : 'Update'}</button>`;
 
         this.querySelector('#backBtn').addEventListener('click', () => {
+            if (this._hasUnsavedChanges) {
+                if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+                    return;
+                }
+            }
             this._showListView();
             this._emit('load-post-list', {});
         });
+        
         this.querySelector('#draftBtn').addEventListener('click', () => this._save('draft'));
         this.querySelector('#pubBtn').addEventListener('click', () => this._save('published'));
     }
@@ -1534,8 +1579,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         
         let initialMarkdown = '';
         
-        if (post && post.content) {
-            initialMarkdown = post.content;
+        if (post) {
+            initialMarkdown = post.content || '';
             this._populateEditor(post);
         }
         
@@ -1547,7 +1592,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         
         setTimeout(() => {
             this._initToastEditor(initialMarkdown);
-        }, 200);
+        }, 300);
     }
 
     _onPostList(data) {
@@ -1641,20 +1686,19 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
         const editorPanel = this.querySelector('#editorPanel');
         const blogTitleBar = this.querySelector('#blogTitleBar');
-        const seoSidebar = this.querySelector('#seoSidebar');
+        const editorSidebar = this.querySelector('#editorSidebar');
 
         const showBlogTitle = tab === 'editor';
         const showSidebar = tab === 'editor';
 
         if (blogTitleBar) blogTitleBar.style.display = showBlogTitle ? 'block' : 'none';
-        if (seoSidebar) seoSidebar.classList.toggle('hidden', !showSidebar);
+        if (editorSidebar) editorSidebar.classList.toggle('hidden', !showSidebar);
 
         editorPanel.style.display = tab === 'editor' ? 'flex' : 'none';
         this.querySelector('#prevPanel').classList.toggle('active', tab === 'preview');
         this.querySelector('#mdPanel').classList.toggle('active', tab === 'markdown');
         this.querySelector('#relatedPanel').classList.toggle('active', tab === 'related');
         this.querySelector('#internalPanel').classList.toggle('active', tab === 'internal');
-        this.querySelector('#metaPanel').classList.toggle('active', tab === 'meta');
         this.querySelector('#seoPanel').classList.toggle('active', tab === 'seo');
 
         if (tab === 'preview') this._buildPreview();
@@ -1715,11 +1759,18 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     _resetEditorState() {
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
+        this._hasUnsavedChanges = false;
+        
         this.querySelectorAll('[data-m]').forEach(el => {
             if (el.type === 'checkbox') el.checked = false; else el.value = '';
         });
+        
         ['authorPrev', 'featuredPrev', 'ogPrev'].forEach(id => {
-            const el = this.querySelector(`#${id}`); if (el) { el.src = ''; el.style.display = 'none'; }
+            const el = this.querySelector(`#${id}`); 
+            if (el) { 
+                el.src = ''; 
+                el.style.display = 'none'; 
+            }
         });
         
         this._seoScore = 0;
@@ -1758,23 +1809,46 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
     }
 
-    _save(status) {
+    _save(status, isAutoSave = false) {
+        if (!this._toastEditor) {
+            console.error('Editor not initialized');
+            if (!isAutoSave) {
+                this._toast('error', 'Editor not ready');
+            }
+            return;
+        }
+
         const md = this._cleanMarkdown(this._currentMarkdown || '');
-        this._emit('save-post', {
+        
+        const saveData = {
             ...this._meta,
             content: md,
             status,
             readTime: Math.max(1, Math.ceil(md.split(/\s+/).length / 200)),
             _id: this._editPost?._id || null
-        });
+        };
+
+        this._emit('save-post', saveData);
+        
+        if (!isAutoSave) {
+            this._updateAutoSaveIndicator('saving');
+        }
     }
 
     _onSaveResult(data) {
         if (data.success) {
+            this._hasUnsavedChanges = false;
+            this._updateAutoSaveIndicator('saved');
+            
+            if (!this._editPost && data.id) {
+                this._editPost = { _id: data.id };
+            } else if (this._editPost && data.id) {
+                this._editPost._id = data.id;
+            }
+            
             this._toast('success', data.message || 'Post saved!');
-            if (!this._editPost && data.id) this._editPost = { _id: data.id };
-            else if (this._editPost && data.id) this._editPost._id = data.id;
         } else {
+            this._updateAutoSaveIndicator('error');
             this._toast('error', data.message || 'Save failed.');
         }
     }
@@ -1809,6 +1883,48 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         if (el) { 
             el.value = slug; 
             this._meta.slug = slug; 
+        }
+    }
+
+    _startAutoSave() {
+        this._stopAutoSave();
+        
+        this._autoSaveInterval = setInterval(() => {
+            if (this._hasUnsavedChanges && this._toastEditor) {
+                console.log('Auto-saving...');
+                this._save('draft', true);
+            }
+        }, 10000);
+    }
+
+    _stopAutoSave() {
+        if (this._autoSaveInterval) {
+            clearInterval(this._autoSaveInterval);
+            this._autoSaveInterval = null;
+        }
+    }
+
+    _updateAutoSaveIndicator(state) {
+        const indicator = this.querySelector('#autoSaveIndicator');
+        if (!indicator) return;
+        
+        indicator.className = 'mdx-autosave-indicator';
+        
+        if (state === 'saving') {
+            indicator.classList.add('saving');
+            indicator.textContent = '💾 Saving...';
+        } else if (state === 'saved') {
+            indicator.classList.add('saved');
+            indicator.textContent = '✓ Saved';
+            setTimeout(() => {
+                indicator.textContent = '';
+                indicator.className = 'mdx-autosave-indicator';
+            }, 3000);
+        } else if (state === 'error') {
+            indicator.textContent = '⚠ Save failed';
+            setTimeout(() => {
+                indicator.textContent = '';
+            }, 5000);
         }
     }
 
@@ -2122,4 +2238,4 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 }
 
 customElements.define('mdx-blog-editor', MdxBlogEditor);
-console.log('✍️ MdxBlogEditor v8 (Complete) registered');
+console.log('✍️ MdxBlogEditor v9 (FINAL - BUG FIXED) registered');
