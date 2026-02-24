@@ -12,6 +12,8 @@ class MdxBlogEditor extends HTMLElement {
         this._readabilityScore = 0;
         this._seoAnalysis = [];
         this._readabilityAnalysis = [];
+        this._relatedPosts = [];
+        this._allPostsForRelated = [];
     }
 
     _freshMeta() {
@@ -35,13 +37,12 @@ class MdxBlogEditor extends HTMLElement {
             seoOgImage: '',
             seoKeywords: '',
             focusKeyphrase: '',
-            relatedPosts: [],
-            internalLinks: []
+            relatedPosts: []
         };
     }
 
     static get observedAttributes() {
-        return ['post-list','upload-result','save-result','delete-result','notification','load-data','search-results'];
+        return ['post-list','upload-result','save-result','delete-result','notification','load-data'];
     }
 
     attributeChangedCallback(name, oldVal, newVal) {
@@ -64,7 +65,6 @@ class MdxBlogEditor extends HTMLElement {
             if (name === 'delete-result') this._onDeleteResult(d);
             if (name === 'notification') this._toast(d.type, d.message);
             if (name === 'load-data') this._populateEditor(d);
-            if (name === 'search-results') this._onSearchResults(d);
         } catch(e) {}
     }
 
@@ -102,19 +102,19 @@ class MdxBlogEditor extends HTMLElement {
             edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
             plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
             save: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`,
-            eye:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+            eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
             gear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
-            seo:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v3l2 2" stroke-linecap="round"/></svg>`,
+            seo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v3l2 2" stroke-linecap="round"/></svg>`,
             back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>`,
-            check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
-            trash:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
-            image:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
+            check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
+            trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
+            image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
             code: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
-            video:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
+            video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
             html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
             book: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
             link: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
-            search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+            x: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
         };
         return I[k] || I.edit;
     }
@@ -224,14 +224,14 @@ mdx-blog-editor .mdx-btn {
     white-space: nowrap;
 }
 mdx-blog-editor .mdx-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
-mdx-blog-editor .mdx-btn-ghost  { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); }
-mdx-blog-editor .mdx-btn-ghost:hover  { background: rgba(255,255,255,.22); }
+mdx-blog-editor .mdx-btn-ghost { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); }
+mdx-blog-editor .mdx-btn-ghost:hover { background: rgba(255,255,255,.22); }
 mdx-blog-editor .mdx-btn-accent { background: var(--accent); color: #fff; }
 mdx-blog-editor .mdx-btn-accent:hover { opacity: .88; }
-mdx-blog-editor .mdx-btn-light  { background: var(--paper2); color: var(--ink2); border: 1px solid var(--border); }
-mdx-blog-editor .mdx-btn-light:hover  { background: var(--paper3); }
-mdx-blog-editor .mdx-btn-red    { background: #fff2f0; color: #a8071a; border: 1px solid #ffccc7; }
-mdx-blog-editor .mdx-btn-red:hover    { background: #ffccc7; }
+mdx-blog-editor .mdx-btn-light { background: var(--paper2); color: var(--ink2); border: 1px solid var(--border); }
+mdx-blog-editor .mdx-btn-light:hover { background: var(--paper3); }
+mdx-blog-editor .mdx-btn-red { background: #fff2f0; color: #a8071a; border: 1px solid #ffccc7; }
+mdx-blog-editor .mdx-btn-red:hover { background: #ffccc7; }
 mdx-blog-editor .mdx-btn-sm { padding: 5px 10px; font-size: 12px; }
 
 mdx-blog-editor .mdx-list-view {
@@ -323,7 +323,7 @@ mdx-blog-editor .mdx-badge {
     text-transform: uppercase;
     letter-spacing: .4px;
 }
-mdx-blog-editor .mdx-badge-pub   { background: #d1fae5; color: #065f46; }
+mdx-blog-editor .mdx-badge-pub { background: #d1fae5; color: #065f46; }
 mdx-blog-editor .mdx-badge-draft { background: #fef3c7; color: #92400e; }
 
 mdx-blog-editor .mdx-row-actions { display: flex; gap: 6px; }
@@ -640,9 +640,9 @@ mdx-blog-editor .mdx-md-panel { display: none; flex: 1; min-height: 0; backgroun
 mdx-blog-editor .mdx-md-panel.active { display: flex; flex-direction: column; }
 mdx-blog-editor .mdx-md-area { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; padding: 22px; border: none; outline: none; resize: none; background: #1e1e2e; color: #cdd6f4; }
 
-mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel, mdx-blog-editor .mdx-related-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
-mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active, mdx-blog-editor .mdx-related-panel.active { display: block; }
-mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner, mdx-blog-editor .mdx-related-inner { padding: 20px; }
+mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active { display: block; }
+mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner { padding: 20px; }
 
 mdx-blog-editor .mdx-msec { background: var(--paper); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 14px; overflow: hidden; }
 mdx-blog-editor .mdx-msec-title { padding: 10px 14px; background: var(--paper2); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--ink3); }
@@ -669,104 +669,108 @@ mdx-blog-editor .mdx-fimg-zone p { font-size: 12px; color: var(--ink3); }
 mdx-blog-editor .mdx-fimg-zone input[type=file] { display: none; }
 mdx-blog-editor .mdx-fimg-prev { max-width: 100%; border-radius: 5px; margin-top: 7px; }
 
-mdx-blog-editor .mdx-related-search-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+mdx-blog-editor .mdx-related-posts-section {
+    padding: 14px;
 }
 
 mdx-blog-editor .mdx-related-search {
-    flex: 1;
-    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+mdx-blog-editor .mdx-related-search input {
+    width: 100%;
+    padding: 8px 10px;
     border: 1.5px solid var(--border);
     border-radius: 5px;
     font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    background: var(--paper);
-    color: var(--ink);
+    font-size: 13px;
     outline: none;
 }
 
-mdx-blog-editor .mdx-related-search:focus {
+mdx-blog-editor .mdx-related-search input:focus {
     border-color: var(--accent);
 }
 
 mdx-blog-editor .mdx-related-list {
-    background: #fff;
+    max-height: 200px;
+    overflow-y: auto;
     border: 1px solid var(--border);
-    border-radius: var(--r);
-    overflow: hidden;
+    border-radius: 5px;
+    background: #fff;
 }
 
-mdx-blog-editor .mdx-related-post {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
+mdx-blog-editor .mdx-related-list::-webkit-scrollbar { width: 5px; }
+mdx-blog-editor .mdx-related-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+mdx-blog-editor .mdx-related-item {
+    padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
+    font-size: 13px;
     transition: background .15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-mdx-blog-editor .mdx-related-post:last-child {
+mdx-blog-editor .mdx-related-item:last-child {
     border-bottom: none;
 }
 
-mdx-blog-editor .mdx-related-post:hover {
+mdx-blog-editor .mdx-related-item:hover {
     background: var(--paper2);
 }
 
-mdx-blog-editor .mdx-related-post.selected {
-    background: #e6f4ff;
-    border-color: var(--blue);
-}
-
-mdx-blog-editor .mdx-related-check {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border);
-    border-radius: 3px;
-    margin-right: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+mdx-blog-editor .mdx-related-item input[type="checkbox"] {
     flex-shrink: 0;
 }
 
-mdx-blog-editor .mdx-related-post.selected .mdx-related-check {
-    background: var(--blue);
-    border-color: var(--blue);
-    color: #fff;
+mdx-blog-editor .mdx-related-selected {
+    margin-top: 12px;
+    padding: 10px;
+    background: var(--paper2);
+    border-radius: 5px;
+    font-size: 12px;
 }
 
-mdx-blog-editor .mdx-related-info {
-    flex: 1;
+mdx-blog-editor .mdx-related-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 4px 4px 4px 0;
+    font-size: 12px;
 }
 
-mdx-blog-editor .mdx-related-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--ink);
-    margin-bottom: 2px;
-}
-
-mdx-blog-editor .mdx-related-slug {
-    font-size: 11px;
+mdx-blog-editor .mdx-related-tag button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
     color: var(--ink3);
-    font-family: 'JetBrains Mono', monospace;
 }
 
-mdx-blog-editor .mdx-related-count {
-    font-size: 13px;
-    color: var(--ink3);
-    margin-bottom: 10px;
+mdx-blog-editor .mdx-related-tag button:hover {
+    color: var(--red);
+}
+
+mdx-blog-editor .mdx-related-tag svg {
+    width: 12px;
+    height: 12px;
 }
 
 mdx-blog-editor .mdx-toasts { position: fixed; top: 14px; right: 14px; z-index: 9999; display: flex; flex-direction: column; gap: 7px; }
 mdx-blog-editor .mdx-toast { padding: 11px 16px; border-radius: var(--r); font-size: 13px; font-weight: 500; box-shadow: var(--shadow); animation: mdx-tIn .25s ease; max-width: 340px; font-family: 'DM Sans', sans-serif; }
 @keyframes mdx-tIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 mdx-blog-editor .mdx-toast-success { background: #f6ffed; border: 1px solid #b7eb8f; color: #135200; }
-mdx-blog-editor .mdx-toast-error   { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
-mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91caff; color: #003eb3; }
+mdx-blog-editor .mdx-toast-error { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
+mdx-blog-editor .mdx-toast-info { background: #e6f4ff; border: 1px solid #91caff; color: #003eb3; }
 
 @media (max-width: 1200px) {
     mdx-blog-editor .mdx-sidebar {
@@ -815,7 +819,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <button class="mdx-tab" data-tab="preview">${this._icon('eye')} Preview</button>
         <button class="mdx-tab" data-tab="markdown">${this._icon('code')} Markdown</button>
         <button class="mdx-tab" data-tab="meta">${this._icon('gear')} Settings</button>
-        <button class="mdx-tab" data-tab="related">${this._icon('link')} Related Posts</button>
         <button class="mdx-tab" data-tab="seo">${this._icon('seo')} SEO</button>
     </div>
 
@@ -843,10 +846,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
             <div class="mdx-meta-panel" id="metaPanel">
                 <div class="mdx-meta-inner">${this._metaHTML()}</div>
-            </div>
-
-            <div class="mdx-related-panel" id="relatedPanel">
-                <div class="mdx-related-inner">${this._relatedHTML()}</div>
             </div>
 
             <div class="mdx-seo-panel" id="seoPanel">
@@ -904,7 +903,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 <div class="mdx-msec">
     <div class="mdx-msec-title">Post Details</div>
     <div class="mdx-mfields">
-        <div class="mdx-mfield mdx-mfull"><label>Slug</label><input class="mdx-minp" id="m-slug" type="text" placeholder="post-url-slug" data-m="slug" readonly></div>
+        <div class="mdx-mfield mdx-mfull"><label>Slug (Auto-generated)</label><input class="mdx-minp" id="m-slug" type="text" placeholder="post-url-slug" data-m="slug" readonly></div>
         <div class="mdx-mfield mdx-mfull"><label>Excerpt</label><textarea class="mdx-mtxt" placeholder="Short description…" data-m="excerpt" rows="3"></textarea></div>
         <div class="mdx-mfield"><label>Author</label><input class="mdx-minp" type="text" placeholder="Author name" data-m="author"></div>
         <div class="mdx-mfield"><label>Category</label><input class="mdx-minp" type="text" placeholder="Category" data-m="category"></div>
@@ -923,6 +922,16 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     </div>
 </div>
 <div class="mdx-msec">
+    <div class="mdx-msec-title">Related Posts</div>
+    <div class="mdx-related-posts-section">
+        <div class="mdx-related-search">
+            <input type="text" id="relatedSearch" placeholder="Search posts...">
+        </div>
+        <div class="mdx-related-list" id="relatedList"></div>
+        <div class="mdx-related-selected" id="relatedSelected"></div>
+    </div>
+</div>
+<div class="mdx-msec">
     <div class="mdx-msec-title">Author Image</div>
     <div class="mdx-fimg-zone" id="authorZone">
         <input type="file" id="authorFile" accept="image/*">${this._icon('image')}
@@ -936,22 +945,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <input type="file" id="featuredFile" accept="image/*">${this._icon('image')}
         <p>Click to upload featured image</p>
         <img class="mdx-fimg-prev" id="featuredPrev" style="display:none">
-    </div>
-</div>`; }
-
-    _relatedHTML() { return `
-<div class="mdx-msec">
-    <div class="mdx-msec-title">Related Posts</div>
-    <div style="padding: 14px;">
-        <div class="mdx-related-search-bar">
-            <input type="text" 
-                   class="mdx-related-search" 
-                   id="relatedSearchInput" 
-                   placeholder="Search posts by title...">
-            <button class="mdx-btn mdx-btn-light mdx-btn-sm" id="clearRelatedSearch">${this._icon('back')} Clear</button>
-        </div>
-        <div class="mdx-related-count" id="relatedCount">0 posts selected</div>
-        <div class="mdx-related-list" id="relatedPostsList"></div>
     </div>
 </div>`; }
 
@@ -988,6 +981,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             });
         });
         
+        const slugInput = this.querySelector('#m-slug');
         const blogTitleInput = this.querySelector('#blogTitleInput');
         
         blogTitleInput.addEventListener('input', (e) => {
@@ -1000,90 +994,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
         this._wireImgZone('ogZone', 'ogFile', 'ogPrev', 'seoOgImage');
         
-        this._wireRelatedPosts();
-    }
-
-    _wireRelatedPosts() {
-        const searchInput = this.querySelector('#relatedSearchInput');
-        const clearBtn = this.querySelector('#clearRelatedSearch');
-        
-        if (searchInput) {
-            let searchTimeout;
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this._renderRelatedPostsList(e.target.value);
-                }, 300);
+        const relatedSearch = this.querySelector('#relatedSearch');
+        if (relatedSearch) {
+            relatedSearch.addEventListener('input', (e) => {
+                this._filterRelatedPosts(e.target.value);
             });
         }
-        
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                if (searchInput) searchInput.value = '';
-                this._renderRelatedPostsList('');
-            });
-        }
-    }
-
-    _renderRelatedPostsList(searchQuery = '') {
-        const listEl = this.querySelector('#relatedPostsList');
-        const countEl = this.querySelector('#relatedCount');
-        if (!listEl) return;
-        
-        const currentPostId = this._editPost?._id;
-        const selectedIds = this._meta.relatedPosts || [];
-        
-        let filteredPosts = this._posts.filter(p => p._id !== currentPostId);
-        
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filteredPosts = filteredPosts.filter(p => 
-                (p.blogTitle || p.title || '').toLowerCase().includes(query) ||
-                (p.slug || '').toLowerCase().includes(query)
-            );
-        }
-        
-        if (countEl) {
-            countEl.textContent = `${selectedIds.length} post${selectedIds.length !== 1 ? 's' : ''} selected`;
-        }
-        
-        if (!filteredPosts.length) {
-            listEl.innerHTML = '<div class="mdx-state-box"><p>No posts found</p></div>';
-            return;
-        }
-        
-        listEl.innerHTML = filteredPosts.map(post => {
-            const isSelected = selectedIds.includes(post._id);
-            return `
-                <div class="mdx-related-post ${isSelected ? 'selected' : ''}" data-id="${post._id}">
-                    <div class="mdx-related-check">${isSelected ? '✓' : ''}</div>
-                    <div class="mdx-related-info">
-                        <div class="mdx-related-title">${post.blogTitle || post.title || '(Untitled)'}</div>
-                        <div class="mdx-related-slug">${post.slug || ''}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        listEl.querySelectorAll('.mdx-related-post').forEach(el => {
-            el.addEventListener('click', () => {
-                const postId = el.dataset.id;
-                if (!this._meta.relatedPosts) this._meta.relatedPosts = [];
-                
-                const index = this._meta.relatedPosts.indexOf(postId);
-                if (index > -1) {
-                    this._meta.relatedPosts.splice(index, 1);
-                } else {
-                    this._meta.relatedPosts.push(postId);
-                }
-                
-                this._renderRelatedPostsList(this.querySelector('#relatedSearchInput')?.value || '');
-            });
-        });
-    }
-
-    _onSearchResults(data) {
-        // Not used anymore - search handled locally
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
@@ -1254,6 +1170,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this.querySelector('#editorView').classList.add('hidden');
         this.querySelector('#topActs').innerHTML = '';
         this._currentView = 'list';
+        this.querySelector('#listLoading').style.display = 'flex';
+        this.querySelector('#listContent').style.display = 'none';
         
         if (this._toastEditor) {
             try {
@@ -1304,6 +1222,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             this._initToastEditor(initialMarkdown);
             if (post) {
                 setTimeout(() => {
+                    this._currentMarkdown = initialMarkdown;
                     this._runAnalysis();
                 }, 500);
             }
@@ -1316,6 +1235,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         content.style.display = 'block';
 
         this._posts = data.posts || [];
+        this._allPostsForRelated = [...this._posts];
         const total = data.totalCount || this._posts.length;
         this.querySelector('#listCount').textContent = `(${total})`;
 
@@ -1358,7 +1278,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 <td>
     <div class="mdx-row-actions">
         <button class="mdx-btn mdx-btn-light mdx-btn-sm edit-btn" data-i="${idx}">${this._icon('edit')} Edit</button>
-        <button class="mdx-btn mdx-btn-red   mdx-btn-sm del-btn"  data-i="${idx}">${this._icon('trash')} Delete</button>
+        <button class="mdx-btn mdx-btn-red mdx-btn-sm del-btn" data-i="${idx}">${this._icon('trash')} Delete</button>
     </div>
 </td>`;
             tbody.appendChild(tr);
@@ -1410,12 +1330,11 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this.querySelector('#prevPanel').classList.toggle('active', tab === 'preview');
         this.querySelector('#mdPanel').classList.toggle('active', tab === 'markdown');
         this.querySelector('#metaPanel').classList.toggle('active', tab === 'meta');
-        this.querySelector('#relatedPanel').classList.toggle('active', tab === 'related');
         this.querySelector('#seoPanel').classList.toggle('active', tab === 'seo');
 
         if (tab === 'preview') this._buildPreview();
         if (tab === 'markdown') this.querySelector('#mdArea').value = this._currentMarkdown || '';
-        if (tab === 'related') this._renderRelatedPostsList('');
+        if (tab === 'meta') this._renderRelatedPosts();
     }
 
     _buildPreview() {
@@ -1467,6 +1386,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     _resetEditorState() {
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
+        this._relatedPosts = [];
         this.querySelectorAll('[data-m]').forEach(el => {
             if (el.type === 'checkbox') el.checked = false; else el.value = '';
         });
@@ -1480,52 +1400,34 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _populateEditor(data) {
-    if (!data) return;
-    
-    // First, populate all meta fields
-    Object.keys(this._meta).forEach(k => { 
-        if (data[k] !== undefined) {
-            this._meta[k] = data[k];
+        if (!data) return;
+        
+        Object.keys(this._meta).forEach(k => { 
+            if (data[k] !== undefined) this._meta[k] = data[k]; 
+        });
+        
+        this.querySelectorAll('[data-m]').forEach(el => {
+            const k = el.dataset.m;
+            if (el.type === 'checkbox') el.checked = !!this._meta[k];
+            else el.value = this._meta[k] || '';
+        });
+        
+        this._currentMarkdown = data.content || '';
+        this._relatedPosts = Array.isArray(data.relatedPosts) ? data.relatedPosts : [];
+        
+        if (data.authorImage) {
+            const prev = this.querySelector('#authorPrev');
+            if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
         }
-    });
-    
-    // Then update all form inputs
-    this.querySelectorAll('[data-m]').forEach(el => {
-        const k = el.dataset.m;
-        if (k in this._meta) {
-            if (el.type === 'checkbox') {
-                el.checked = !!this._meta[k];
-            } else {
-                el.value = this._meta[k] || '';
-            }
+        if (data.featuredImage) {
+            const prev = this.querySelector('#featuredPrev');
+            if (prev) { prev.src = data.featuredImage; prev.style.display = 'block'; }
         }
-    });
-    
-    this._currentMarkdown = data.content || '';
-    
-    // Now update image previews from this._meta (which has been populated)
-    if (this._meta.authorImage) {
-        const prev = this.querySelector('#authorPrev');
-        if (prev) { 
-            prev.src = this._meta.authorImage; 
-            prev.style.display = 'block'; 
+        if (data.seoOgImage) {
+            const prev = this.querySelector('#ogPrev');
+            if (prev) { prev.src = data.seoOgImage; prev.style.display = 'block'; }
         }
     }
-    if (this._meta.featuredImage) {
-        const prev = this.querySelector('#featuredPrev');
-        if (prev) { 
-            prev.src = this._meta.featuredImage; 
-            prev.style.display = 'block'; 
-        }
-    }
-    if (this._meta.seoOgImage) {
-        const prev = this.querySelector('#ogPrev');
-        if (prev) { 
-            prev.src = this._meta.seoOgImage; 
-            prev.style.display = 'block'; 
-        }
-    }
-}
 
     _save(status) {
         const md = this._cleanMarkdown(this._currentMarkdown || '');
@@ -1534,6 +1436,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             content: md,
             status,
             readTime: Math.max(1, Math.ceil(md.split(/\s+/).length / 200)),
+            relatedPosts: this._relatedPosts,
             _id: this._editPost?._id || null
         });
     }
@@ -1563,11 +1466,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
         if (data.metaKey) {
             this._meta[data.metaKey] = this._wixUrl(data.url);
-            const prev = this.querySelector(`#${data.metaKey === 'authorImage' ? 'authorPrev' : data.metaKey === 'featuredImage' ? 'featuredPrev' : 'ogPrev'}`);
-            if (prev) {
-                prev.src = this._meta[data.metaKey];
-                prev.style.display = 'block';
-            }
             this._toast('success', 'Image uploaded!');
         }
     }
@@ -1579,14 +1477,11 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
         
-        const existingSlugs = this._posts
-            .filter(p => p._id !== this._editPost?._id)
-            .map(p => p.slug);
-        
         let slug = baseSlug;
         let counter = 1;
         
-        while (existingSlugs.includes(slug)) {
+        const currentId = this._editPost?._id;
+        while (this._posts.some(p => p.slug === slug && p._id !== currentId)) {
             slug = `${baseSlug}-${counter}`;
             counter++;
         }
@@ -1596,6 +1491,121 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             el.value = slug; 
             this._meta.slug = slug; 
         }
+    }
+
+    _renderRelatedPosts() {
+        const listEl = this.querySelector('#relatedList');
+        const selectedEl = this.querySelector('#relatedSelected');
+        if (!listEl || !selectedEl) return;
+
+        const currentId = this._editPost?._id;
+        const availablePosts = this._allPostsForRelated.filter(p => p._id !== currentId);
+
+        listEl.innerHTML = availablePosts.map(post => {
+            const isSelected = this._relatedPosts.includes(post._id);
+            const displayTitle = post.blogTitle || post.title || '(Untitled)';
+            return `
+                <div class="mdx-related-item">
+                    <input type="checkbox" 
+                           data-post-id="${post._id}" 
+                           ${isSelected ? 'checked' : ''}>
+                    <span>${displayTitle}</span>
+                </div>
+            `;
+        }).join('');
+
+        listEl.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const postId = e.target.dataset.postId;
+                if (e.target.checked) {
+                    if (!this._relatedPosts.includes(postId)) {
+                        this._relatedPosts.push(postId);
+                    }
+                } else {
+                    this._relatedPosts = this._relatedPosts.filter(id => id !== postId);
+                }
+                this._updateRelatedSelected();
+            });
+        });
+
+        this._updateRelatedSelected();
+    }
+
+    _updateRelatedSelected() {
+        const selectedEl = this.querySelector('#relatedSelected');
+        if (!selectedEl) return;
+
+        if (this._relatedPosts.length === 0) {
+            selectedEl.innerHTML = '<div style="color: var(--ink3); font-size: 12px;">No related posts selected</div>';
+            return;
+        }
+
+        const selectedPosts = this._relatedPosts.map(id => {
+            const post = this._allPostsForRelated.find(p => p._id === id);
+            return post ? (post.blogTitle || post.title || '(Untitled)') : null;
+        }).filter(Boolean);
+
+        selectedEl.innerHTML = `
+            <div style="margin-bottom: 6px; color: var(--ink3);">Selected (${this._relatedPosts.length}):</div>
+            ${selectedPosts.map((title, idx) => `
+                <span class="mdx-related-tag">
+                    ${title}
+                    <button type="button" data-idx="${idx}">
+                        ${this._icon('x')}
+                    </button>
+                </span>
+            `).join('')}
+        `;
+
+        selectedEl.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.dataset.idx);
+                this._relatedPosts.splice(idx, 1);
+                this._renderRelatedPosts();
+            });
+        });
+    }
+
+    _filterRelatedPosts(query) {
+        const listEl = this.querySelector('#relatedList');
+        if (!listEl) return;
+
+        const currentId = this._editPost?._id;
+        const availablePosts = this._allPostsForRelated.filter(p => p._id !== currentId);
+
+        const filtered = query.trim() === '' 
+            ? availablePosts 
+            : availablePosts.filter(post => {
+                const displayTitle = (post.blogTitle || post.title || '').toLowerCase();
+                return displayTitle.includes(query.toLowerCase());
+            });
+
+        listEl.innerHTML = filtered.map(post => {
+            const isSelected = this._relatedPosts.includes(post._id);
+            const displayTitle = post.blogTitle || post.title || '(Untitled)';
+            return `
+                <div class="mdx-related-item">
+                    <input type="checkbox" 
+                           data-post-id="${post._id}" 
+                           ${isSelected ? 'checked' : ''}>
+                    <span>${displayTitle}</span>
+                </div>
+            `;
+        }).join('');
+
+        listEl.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const postId = e.target.dataset.postId;
+                if (e.target.checked) {
+                    if (!this._relatedPosts.includes(postId)) {
+                        this._relatedPosts.push(postId);
+                    }
+                } else {
+                    this._relatedPosts = this._relatedPosts.filter(id => id !== postId);
+                }
+                this._updateRelatedSelected();
+            });
+        });
     }
 
     _runAnalysis() {
@@ -1616,152 +1626,114 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
 
         if (keyphrase.length > 0) {
-            score += 8;
+            score += 10;
             checks.push({ status: 'good', text: 'Focus keyphrase is set' });
         } else {
-            checks.push({ status: 'bad', text: 'Set a focus keyphrase to target' });
+            checks.push({ status: 'bad', text: 'Add a focus keyphrase' });
         }
 
         if (keyphrase && blogTitle.toLowerCase().includes(keyphrase.toLowerCase())) {
-            const position = blogTitle.toLowerCase().indexOf(keyphrase.toLowerCase());
-            if (position === 0) {
-                score += 12;
-                checks.push({ status: 'good', text: 'Keyphrase appears at the beginning of title' });
-            } else {
-                score += 8;
-                checks.push({ status: 'ok', text: 'Keyphrase appears in title but not at the beginning' });
-            }
+            score += 15;
+            checks.push({ status: 'good', text: 'Keyphrase appears in blog title' });
         } else if (keyphrase) {
-            checks.push({ status: 'bad', text: 'Keyphrase should appear in blog title, preferably at the beginning' });
+            checks.push({ status: 'bad', text: 'Add keyphrase to blog title' });
         }
 
         if (keyphrase && seoTitle.toLowerCase().includes(keyphrase.toLowerCase())) {
             score += 10;
-            checks.push({ status: 'good', text: 'Keyphrase appears in SEO title' });
+            checks.push({ status: 'good', text: 'Keyphrase in SEO title' });
         } else if (keyphrase && seoTitle) {
-            checks.push({ status: 'bad', text: 'Add keyphrase to SEO title' });
+            checks.push({ status: 'ok', text: 'Consider adding keyphrase to SEO title' });
+        }
+
+        const titleInFirst10 = keyphrase && content.substring(0, Math.min(content.length, 500)).toLowerCase().includes(keyphrase.toLowerCase());
+        if (titleInFirst10) {
+            score += 5;
+            checks.push({ status: 'good', text: 'Keyphrase appears early in content' });
+        } else if (keyphrase && wordCount > 50) {
+            checks.push({ status: 'ok', text: 'Place keyphrase in first paragraph' });
         }
 
         if (seoTitle.length >= 50 && seoTitle.length <= 60) {
             score += 10;
-            checks.push({ status: 'good', text: `SEO title length is optimal (${seoTitle.length} chars)` });
+            checks.push({ status: 'good', text: `SEO title optimal (${seoTitle.length} chars)` });
         } else if (seoTitle.length > 0 && seoTitle.length < 70) {
             score += 5;
-            checks.push({ status: 'ok', text: `SEO title: ${seoTitle.length} chars (optimal: 50-60)` });
+            checks.push({ status: 'ok', text: `SEO title okay (${seoTitle.length} chars, aim 50-60)` });
         } else if (seoTitle.length > 70) {
-            checks.push({ status: 'bad', text: `SEO title too long (${seoTitle.length} chars, max 60)` });
+            checks.push({ status: 'bad', text: `SEO title too long (${seoTitle.length} chars)` });
         } else {
-            checks.push({ status: 'bad', text: 'Add SEO title (50-60 characters)' });
+            checks.push({ status: 'bad', text: 'Add SEO title (50-60 chars)' });
         }
 
         if (seoDesc.length >= 120 && seoDesc.length <= 160) {
-            score += 12;
-            checks.push({ status: 'good', text: `Meta description length optimal (${seoDesc.length} chars)` });
-        } else if (seoDesc.length >= 100 && seoDesc.length < 170) {
-            score += 7;
-            checks.push({ status: 'ok', text: `Meta description: ${seoDesc.length} chars (optimal: 120-160)` });
+            score += 15;
+            checks.push({ status: 'good', text: `Meta description optimal (${seoDesc.length} chars)` });
+        } else if (seoDesc.length > 0 && seoDesc.length < 170) {
+            score += 8;
+            checks.push({ status: 'ok', text: `Meta description okay (${seoDesc.length} chars, aim 120-160)` });
         } else if (seoDesc.length > 170) {
-            checks.push({ status: 'bad', text: `Meta description too long (${seoDesc.length} chars, max 160)` });
+            checks.push({ status: 'bad', text: `Meta description too long (${seoDesc.length} chars)` });
         } else {
-            checks.push({ status: 'bad', text: 'Add meta description (120-160 characters)' });
+            checks.push({ status: 'bad', text: 'Add meta description (120-160 chars)' });
         }
 
         if (keyphrase && seoDesc.toLowerCase().includes(keyphrase.toLowerCase())) {
             score += 10;
-            checks.push({ status: 'good', text: 'Keyphrase appears in meta description' });
+            checks.push({ status: 'good', text: 'Keyphrase in meta description' });
         } else if (keyphrase && seoDesc) {
-            checks.push({ status: 'bad', text: 'Include keyphrase in meta description' });
+            checks.push({ status: 'bad', text: 'Add keyphrase to meta description' });
         }
 
-        if (wordCount >= 600) {
-            score += 12;
-            checks.push({ status: 'good', text: `Excellent content length (${wordCount} words)` });
-        } else if (wordCount >= 300) {
-            score += 8;
-            checks.push({ status: 'ok', text: `Good content length (${wordCount} words)` });
+        if (wordCount >= 300) {
+            score += 15;
+            checks.push({ status: 'good', text: `Good content length (${wordCount} words)` });
         } else if (wordCount >= 150) {
-            score += 4;
-            checks.push({ status: 'ok', text: `Content is short (${wordCount} words, aim for 300+)` });
+            score += 8;
+            checks.push({ status: 'ok', text: `Content short (${wordCount} words, aim 300+)` });
         } else {
-            checks.push({ status: 'bad', text: `Content too short (${wordCount} words, minimum 300)` });
+            checks.push({ status: 'bad', text: `Content too short (${wordCount} words)` });
         }
 
         if (keyphrase && content) {
             const keyphraseCount = (content.toLowerCase().match(new RegExp(keyphrase.toLowerCase(), 'g')) || []).length;
-            const density = wordCount > 0 ? (keyphraseCount / wordCount) * 100 : 0;
+            const density = (keyphraseCount / wordCount) * 100;
             
             if (density >= 0.5 && density <= 2.5) {
-                score += 8;
+                score += 10;
                 checks.push({ status: 'good', text: `Keyphrase density good (${density.toFixed(1)}%)` });
             } else if (density > 0 && density < 0.5) {
-                score += 4;
+                score += 5;
                 checks.push({ status: 'ok', text: `Use keyphrase more (${density.toFixed(1)}%, aim 0.5-2.5%)` });
             } else if (density > 2.5) {
-                checks.push({ status: 'bad', text: `Keyphrase overused (${density.toFixed(1)}%, max 2.5%)` });
+                checks.push({ status: 'bad', text: `Keyphrase overused (${density.toFixed(1)}%)` });
             } else {
-                checks.push({ status: 'bad', text: 'Keyphrase not found in content' });
-            }
-            
-            const firstParagraph = content.split('\n\n')[0] || '';
-            if (firstParagraph.toLowerCase().includes(keyphrase.toLowerCase())) {
-                score += 8;
-                checks.push({ status: 'good', text: 'Keyphrase in first paragraph' });
-            } else if (wordCount > 50) {
-                checks.push({ status: 'bad', text: 'Add keyphrase to first paragraph' });
+                checks.push({ status: 'bad', text: 'Keyphrase not in content' });
             }
         }
 
-        const h1Count = (content.match(/^# /gm) || []).length;
-        const h2Count = (content.match(/^## /gm) || []).length;
-        const h3Count = (content.match(/^### /gm) || []).length;
-        
-        if (h1Count === 0 && h2Count > 0) {
-            score += 6;
-            checks.push({ status: 'good', text: 'Good heading structure' });
-        } else if (h1Count > 1) {
-            checks.push({ status: 'bad', text: 'Use only one H1 (use H2-H6 for subheadings)' });
-        }
-        
-        if (h2Count > 0) {
-            score += 4;
-            checks.push({ status: 'good', text: `${h2Count} subheading${h2Count > 1 ? 's' : ''} found` });
-        } else if (wordCount > 300) {
-            checks.push({ status: 'bad', text: 'Add subheadings (H2) to structure content' });
+        const hasHeadings = /^#{1,6}\s/m.test(content);
+        if (hasHeadings) {
+            score += 5;
+            checks.push({ status: 'good', text: 'Content uses headings' });
+        } else if (wordCount > 100) {
+            checks.push({ status: 'bad', text: 'Add headings for structure' });
         }
 
-        const images = (content.match(/!\[/g) || []).length;
-        if (images > 0) {
-            score += 4;
-            checks.push({ status: 'good', text: `${images} image${images > 1 ? 's' : ''} in content` });
-            
-            const altMissing = (content.match(/!\[\]\(/g) || []).length;
-            if (altMissing > 0) {
-                checks.push({ status: 'bad', text: `${altMissing} image${altMissing > 1 ? 's' : ''} missing alt text` });
-            } else {
-                score += 4;
-                checks.push({ status: 'good', text: 'All images have alt text' });
-            }
+        const hasImages = /!\[.*\]\(.*\)/.test(content);
+        if (hasImages) {
+            score += 5;
+            checks.push({ status: 'good', text: 'Content includes images' });
         } else if (wordCount > 300) {
             checks.push({ status: 'ok', text: 'Consider adding images' });
         }
 
-        const internalLinks = (content.match(/\[([^\]]+)\]\((?!http)/g) || []).length;
-        if (internalLinks >= 2) {
-            score += 6;
-            checks.push({ status: 'good', text: `${internalLinks} internal link${internalLinks > 1 ? 's' : ''}` });
-        } else if (internalLinks === 1) {
-            score += 3;
-            checks.push({ status: 'ok', text: 'Add more internal links (2+ recommended)' });
-        } else if (wordCount > 300) {
-            checks.push({ status: 'bad', text: 'Add internal links to other content' });
-        }
-
-        const externalLinks = (content.match(/\[([^\]]+)\]\(http/g) || []).length;
-        if (externalLinks > 0 && externalLinks <= 5) {
-            score += 4;
-            checks.push({ status: 'good', text: `${externalLinks} external link${externalLinks > 1 ? 's' : ''}` });
-        } else if (externalLinks > 5) {
-            checks.push({ status: 'ok', text: 'Many external links - ensure quality sources' });
+        const hasLinks = /\[.*\]\(.*\)/.test(content) && !/!\[.*\]\(.*\)/.test(content);
+        if (hasLinks) {
+            score += 5;
+            checks.push({ status: 'good', text: 'Content has links' });
+        } else if (wordCount > 200) {
+            checks.push({ status: 'ok', text: 'Add internal/external links' });
         }
 
         this._seoScore = Math.min(score, maxScore);
@@ -1786,94 +1758,65 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
         if (wordCount === 0) {
             this._readabilityScore = 0;
-            this._readabilityAnalysis = [{ status: 'bad', text: 'Start writing to analyze readability' }];
+            this._readabilityAnalysis = [{ status: 'bad', text: 'Start writing content' }];
             this._updateScoreDisplay();
             return;
         }
 
         const avgSentenceLength = wordCount / Math.max(sentences.length, 1);
-        if (avgSentenceLength <= 15) {
-            score += 20;
-            checks.push({ status: 'good', text: `Excellent sentence length (avg ${avgSentenceLength.toFixed(1)} words)` });
-        } else if (avgSentenceLength <= 20) {
-            score += 15;
-            checks.push({ status: 'good', text: `Good sentence length (avg ${avgSentenceLength.toFixed(1)} words)` });
+        if (avgSentenceLength <= 20) {
+            score += 25;
+            checks.push({ status: 'good', text: `Easy to read sentences (avg ${avgSentenceLength.toFixed(1)} words)` });
         } else if (avgSentenceLength <= 25) {
-            score += 10;
-            checks.push({ status: 'ok', text: `Acceptable sentences (avg ${avgSentenceLength.toFixed(1)} words, aim <20)` });
+            score += 15;
+            checks.push({ status: 'ok', text: `Sentence length okay (avg ${avgSentenceLength.toFixed(1)} words)` });
         } else {
             score += 5;
-            checks.push({ status: 'bad', text: `Sentences too long (avg ${avgSentenceLength.toFixed(1)} words, aim <20)` });
-        }
-
-        const longSentences = sentences.filter(s => s.split(/\s+/).length > 25).length;
-        const longSentenceRatio = longSentences / Math.max(sentences.length, 1);
-        if (longSentenceRatio === 0) {
-            score += 15;
-            checks.push({ status: 'good', text: 'No overly long sentences' });
-        } else if (longSentenceRatio < 0.25) {
-            score += 10;
-            checks.push({ status: 'ok', text: `${longSentences} long sentence${longSentences > 1 ? 's' : ''} (>25 words)` });
-        } else {
-            score += 3;
-            checks.push({ status: 'bad', text: `${longSentences} very long sentences - split them up` });
+            checks.push({ status: 'bad', text: `Sentences too long (avg ${avgSentenceLength.toFixed(1)} words)` });
         }
 
         const paragraphs = textContent.split(/\n\n+/).filter(p => p.trim().length > 0);
         const longParagraphs = paragraphs.filter(p => p.split(/\s+/).length > 150).length;
         const paragraphRatio = longParagraphs / Math.max(paragraphs.length, 1);
         
-        if (paragraphRatio === 0 && paragraphs.length > 0) {
-            score += 15;
+        if (paragraphRatio === 0) {
+            score += 20;
             checks.push({ status: 'good', text: 'All paragraphs concise' });
         } else if (paragraphRatio < 0.3) {
             score += 10;
             checks.push({ status: 'ok', text: 'Most paragraphs good length' });
         } else {
-            score += 3;
-            checks.push({ status: 'bad', text: `${longParagraphs} long paragraph${longParagraphs > 1 ? 's' : ''} (>150 words)` });
+            checks.push({ status: 'bad', text: 'Some paragraphs too long' });
         }
 
         const headings = (content.match(/^#{2,6}\s/gm) || []).length;
-        const wordsPerHeading = headings > 0 ? wordCount / headings : wordCount;
+        const wordsPerHeading = wordCount / Math.max(headings, 1);
         
-        if (headings > 0 && wordsPerHeading <= 250) {
-            score += 15;
-            checks.push({ status: 'good', text: 'Excellent use of subheadings' });
-        } else if (headings > 0 && wordsPerHeading <= 400) {
-            score += 10;
-            checks.push({ status: 'ok', text: 'Good subheading distribution' });
+        if (headings > 0 && wordsPerHeading <= 300) {
+            score += 20;
+            checks.push({ status: 'good', text: 'Good subheading distribution' });
         } else if (headings > 0) {
-            score += 5;
-            checks.push({ status: 'ok', text: 'Add more subheadings (every 250-300 words)' });
+            score += 10;
+            checks.push({ status: 'ok', text: 'Add more subheadings' });
         } else if (wordCount > 300) {
-            checks.push({ status: 'bad', text: 'Add subheadings to break up text' });
+            checks.push({ status: 'bad', text: 'Add subheadings (every 300 words)' });
         }
 
-        const transitionWords = [
-            'however', 'therefore', 'furthermore', 'moreover', 'nevertheless', 'consequently',
-            'additionally', 'meanwhile', 'similarly', 'likewise', 'thus', 'hence', 'also',
-            'besides', 'first', 'second', 'third', 'finally', 'for example', 'for instance',
-            'in addition', 'as a result', 'on the other hand', 'in contrast', 'in conclusion'
-        ];
-        
-        const transitionCount = transitionWords.filter(word =>
+        const transitionWords = ['however', 'therefore', 'furthermore', 'moreover', 'nevertheless', 'consequently', 
+                                 'additionally', 'meanwhile', 'similarly', 'likewise', 'thus', 'hence', 'also', 
+                                 'besides', 'first', 'second', 'finally', 'for example', 'for instance'];
+        const transitionCount = transitionWords.filter(word => 
             textContent.toLowerCase().includes(word)
         ).length;
         
-        const transitionRatio = transitionCount / Math.max(paragraphs.length, 1);
-        
-        if (transitionRatio >= 0.3) {
-            score += 12;
-            checks.push({ status: 'good', text: 'Excellent use of transition words' });
-        } else if (transitionRatio >= 0.2) {
-            score += 8;
-            checks.push({ status: 'ok', text: 'Good use of transition words' });
+        if (transitionCount >= 3) {
+            score += 15;
+            checks.push({ status: 'good', text: 'Good use of transition words' });
         } else if (transitionCount > 0) {
-            score += 4;
-            checks.push({ status: 'ok', text: 'Use more transition words for better flow' });
+            score += 8;
+            checks.push({ status: 'ok', text: 'Use more transition words' });
         } else if (wordCount > 200) {
-            checks.push({ status: 'bad', text: 'Add transition words to improve flow' });
+            checks.push({ status: 'bad', text: 'Add transition words for flow' });
         }
 
         const passiveIndicators = ['was', 'were', 'been', 'being', 'is', 'are', 'am'];
@@ -1881,54 +1824,21 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             const matches = textContent.toLowerCase().match(new RegExp(`\\b${word}\\b`, 'g'));
             return count + (matches ? matches.length : 0);
         }, 0);
-        const passiveRatio = passiveCount / Math.max(sentences.length, 1);
+        const passiveRatio = passiveCount / sentences.length;
         
-        if (passiveRatio < 0.2) {
-            score += 15;
-            checks.push({ status: 'good', text: 'Excellent - very little passive voice' });
-        } else if (passiveRatio < 0.3) {
-            score += 12;
+        if (passiveRatio < 0.3) {
+            score += 20;
             checks.push({ status: 'good', text: 'Minimal passive voice' });
         } else if (passiveRatio < 0.5) {
-            score += 6;
-            checks.push({ status: 'ok', text: 'Some passive voice - use more active voice' });
+            score += 10;
+            checks.push({ status: 'ok', text: 'Use more active voice' });
         } else {
-            checks.push({ status: 'bad', text: 'Too much passive voice - rewrite in active voice' });
-        }
-
-        const consecutiveSentences = this._findConsecutiveSentences(sentences);
-        if (consecutiveSentences === 0) {
-            score += 8;
-            checks.push({ status: 'good', text: 'Good sentence variety' });
-        } else if (consecutiveSentences < 3) {
-            score += 5;
-            checks.push({ status: 'ok', text: 'Vary sentence structure more' });
-        } else {
-            checks.push({ status: 'bad', text: `${consecutiveSentences} consecutive similar sentences` });
+            checks.push({ status: 'bad', text: 'Too much passive voice' });
         }
 
         this._readabilityScore = Math.min(score, maxScore);
         this._readabilityAnalysis = checks;
         this._updateScoreDisplay();
-    }
-
-    _findConsecutiveSentences(sentences) {
-        let maxConsecutive = 0;
-        let currentConsecutive = 1;
-        
-        for (let i = 1; i < sentences.length; i++) {
-            const prevWords = sentences[i - 1].trim().split(/\s+/).length;
-            const currWords = sentences[i].trim().split(/\s+/).length;
-            
-            if (Math.abs(prevWords - currWords) <= 2) {
-                currentConsecutive++;
-                maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
-            } else {
-                currentConsecutive = 1;
-            }
-        }
-        
-        return maxConsecutive > 2 ? maxConsecutive : 0;
     }
 
     _updateScoreDisplay() {
@@ -1952,9 +1862,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             } else if (this._seoScore >= 60) {
                 color = '#fa8c16';
                 label = 'Good';
-            } else if (this._seoScore >= 40) {
-                color = '#fa8c16';
-                label = 'OK';
             }
             
             seoCircle.style.stroke = color;
@@ -1992,9 +1899,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             } else if (this._readabilityScore >= 60) {
                 color = '#fa8c16';
                 label = 'Fairly easy';
-            } else if (this._readabilityScore >= 40) {
-                color = '#fa8c16';
-                label = 'OK';
             }
             
             readCircle.style.stroke = color;
