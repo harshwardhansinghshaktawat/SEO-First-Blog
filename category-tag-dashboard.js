@@ -798,160 +798,158 @@ class BlogDashboard extends HTMLElement {
         this.renderForm();
     }
 
-    renderForm() {
-        const formContent = this.querySelector('#formContent');
-        if (!formContent) return;
+    // CUSTOM ELEMENT - Updated renderForm() method
+renderForm() {
+    const formContent = this.querySelector('#formContent');
+    if (!formContent) return;
 
-        const isCategory = this.state.activeTab === 'categories';
-        const item = this.state.editingItem || {};
+    const isCategory = this.state.activeTab === 'categories';
+    const item = this.state.editingItem || {};
 
-        formContent.innerHTML = `
-            <form id="itemForm" class="form-grid">
-                <div class="form-section">
-                    <h3 class="form-section-title">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                        </svg>
-                        Basic Information
-                    </h3>
-
-                    ${isCategory ? `
-                        <div class="form-group">
-                            <label class="form-label required">Title</label>
-                            <input 
-                                type="text" 
-                                class="form-input" 
-                                id="titleInput" 
-                                value="${this.escapeHtml(item.title || '')}"
-                                required
-                            />
-                            <div class="form-hint">Display title for the category</div>
-                        </div>
-                    ` : ''}
-
-                    <div class="form-group">
-                        <label class="form-label required">Name</label>
-                        <input 
-                            type="text" 
-                            class="form-input" 
-                            id="nameInput" 
-                            value="${this.escapeHtml(item.name || '')}"
-                            required
-                        />
-                        <div class="form-hint">Internal name for the ${isCategory ? 'category' : 'tag'}</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label required">Slug</label>
-                        <input 
-                            type="text" 
-                            class="form-input" 
-                            id="slugInput" 
-                            value="${this.escapeHtml(item.slug || '')}"
-                            ${item ? 'readonly' : ''}
-                            required
-                        />
-                        <div class="form-hint">URL-friendly identifier (auto-generated from name)</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Description</label>
-                        <textarea 
-                            class="form-textarea" 
-                            id="descriptionInput"
-                        >${this.escapeHtml(item.description || '')}</textarea>
-                        <div class="form-hint">Brief description of this ${isCategory ? 'category' : 'tag'}</div>
-                    </div>
-                </div>
+    formContent.innerHTML = `
+        <form id="itemForm" class="form-grid">
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                    </svg>
+                    Basic Information
+                </h3>
 
                 ${isCategory ? `
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                            </svg>
-                            Posts
-                        </h3>
-                        <div id="postsSelector"></div>
+                    <div class="form-group">
+                        <label class="form-label required">Title</label>
+                        <input 
+                            type="text" 
+                            class="form-input" 
+                            id="titleInput" 
+                            value="${this.escapeHtml(item.title || '')}"
+                            required
+                        />
+                        <div class="form-hint">Display title for the category</div>
                     </div>
                 ` : ''}
 
-                <div class="form-section">
-                    <h3 class="form-section-title">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M21 11H6.83l3.58-3.59L9 6l-6 6 6 6 1.41-1.41L6.83 13H21z"/>
-                        </svg>
-                        SEO Settings
-                    </h3>
-
-                    <div class="form-group">
-                        <label class="form-label">SEO Title</label>
-                        <input 
-                            type="text" 
-                            class="form-input" 
-                            id="seoTitleInput" 
-                            value="${this.escapeHtml(item.seoTitle || '')}"
-                            maxlength="60"
-                        />
-                        <div class="form-hint">Recommended: 50-60 characters</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">SEO Description</label>
-                        <textarea 
-                            class="form-textarea" 
-                            id="seoDescriptionInput"
-                            maxlength="160"
-                        >${this.escapeHtml(item.seoDescription || '')}</textarea>
-                        <div class="form-hint">Recommended: 150-160 characters</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">SEO Keywords</label>
-                        <input 
-                            type="text" 
-                            class="form-input" 
-                            id="seoKeywordsInput" 
-                            value="${this.escapeHtml(item.seoKeywords || '')}"
-                        />
-                        <div class="form-hint">Comma-separated keywords</div>
-                    </div>
+                <div class="form-group">
+                    <label class="form-label required">Name</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="nameInput" 
+                        value="${this.escapeHtml(item.name || '')}"
+                        required
+                    />
+                    <div class="form-hint">Internal name for the ${isCategory ? 'category' : 'tag'}</div>
                 </div>
 
-                <div class="form-actions">
-                    <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-                        </svg>
-                        ${item ? 'Update' : 'Create'}
-                    </button>
+                <div class="form-group">
+                    <label class="form-label required">Slug</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="slugInput" 
+                        value="${this.escapeHtml(item.slug || '')}"
+                        ${item ? 'readonly' : ''}
+                        required
+                    />
+                    <div class="form-hint">URL-friendly identifier (auto-generated from name)</div>
                 </div>
-            </form>
-        `;
 
-        if (isCategory) {
-            this.renderPostsSelector();
-        }
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea 
+                        class="form-textarea" 
+                        id="descriptionInput"
+                    >${this.escapeHtml(item.description || '')}</textarea>
+                    <div class="form-hint">Brief description of this ${isCategory ? 'category' : 'tag'}</div>
+                </div>
+            </div>
 
-        const nameInput = this.querySelector('#nameInput');
-        const slugInput = this.querySelector('#slugInput');
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                    </svg>
+                    Posts
+                </h3>
+                <div id="postsSelector"></div>
+            </div>
 
-        if (!item && nameInput && slugInput) {
-            nameInput.addEventListener('input', () => {
-                slugInput.value = this.generateSlug(nameInput.value);
-            });
-        }
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 11H6.83l3.58-3.59L9 6l-6 6 6 6 1.41-1.41L6.83 13H21z"/>
+                    </svg>
+                    SEO Settings
+                </h3>
 
-        this.querySelector('#cancelBtn').addEventListener('click', () => {
-            this.hideForm();
-        });
+                <div class="form-group">
+                    <label class="form-label">SEO Title</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="seoTitleInput" 
+                        value="${this.escapeHtml(item.seoTitle || '')}"
+                        maxlength="60"
+                    />
+                    <div class="form-hint">Recommended: 50-60 characters</div>
+                </div>
 
-        this.querySelector('#itemForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveItem();
+                <div class="form-group">
+                    <label class="form-label">SEO Description</label>
+                    <textarea 
+                        class="form-textarea" 
+                        id="seoDescriptionInput"
+                        maxlength="160"
+                    >${this.escapeHtml(item.seoDescription || '')}</textarea>
+                    <div class="form-hint">Recommended: 150-160 characters</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">SEO Keywords</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="seoKeywordsInput" 
+                        value="${this.escapeHtml(item.seoKeywords || '')}"
+                    />
+                    <div class="form-hint">Comma-separated keywords</div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                    </svg>
+                    ${item ? 'Update' : 'Create'}
+                </button>
+            </div>
+        </form>
+    `;
+
+    // Render posts selector for BOTH categories and tags
+    this.renderPostsSelector();
+
+    const nameInput = this.querySelector('#nameInput');
+    const slugInput = this.querySelector('#slugInput');
+
+    if (!item && nameInput && slugInput) {
+        nameInput.addEventListener('input', () => {
+            slugInput.value = this.generateSlug(nameInput.value);
         });
     }
+
+    this.querySelector('#cancelBtn').addEventListener('click', () => {
+        this.hideForm();
+    });
+
+    this.querySelector('#itemForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.saveItem();
+    });
+}
 
     renderPostsSelector() {
         const selector = this.querySelector('#postsSelector');
@@ -1007,36 +1005,38 @@ class BlogDashboard extends HTMLElement {
         this.querySelector('#formPanel').classList.add('hidden');
     }
 
-    saveItem() {
-        const isCategory = this.state.activeTab === 'categories';
-        
-        const data = {
-            name: this.querySelector('#nameInput').value.trim(),
-            slug: this.querySelector('#slugInput').value.trim(),
-            description: this.querySelector('#descriptionInput').value.trim(),
-            seoTitle: this.querySelector('#seoTitleInput').value.trim(),
-            seoDescription: this.querySelector('#seoDescriptionInput').value.trim(),
-            seoKeywords: this.querySelector('#seoKeywordsInput').value.trim()
-        };
+    // CUSTOM ELEMENT - Updated saveItem() method
+saveItem() {
+    const isCategory = this.state.activeTab === 'categories';
+    
+    const data = {
+        name: this.querySelector('#nameInput').value.trim(),
+        slug: this.querySelector('#slugInput').value.trim(),
+        description: this.querySelector('#descriptionInput').value.trim(),
+        seoTitle: this.querySelector('#seoTitleInput').value.trim(),
+        seoDescription: this.querySelector('#seoDescriptionInput').value.trim(),
+        seoKeywords: this.querySelector('#seoKeywordsInput').value.trim()
+    };
 
-        if (isCategory) {
-            data.title = this.querySelector('#titleInput').value.trim();
-            
-            const selectedPosts = Array.from(this.querySelectorAll('.post-item.selected'))
-                .map(item => item.dataset.id);
-            data.selectedPosts = selectedPosts;
-            data.postCount = selectedPosts.length;
-        }
-
-        if (this.state.editingItem) {
-            data._id = this.state.editingItem._id;
-        }
-
-        this.emitEvent('save-item', {
-            type: isCategory ? 'category' : 'tag',
-            data: data
-        });
+    if (isCategory) {
+        data.title = this.querySelector('#titleInput').value.trim();
     }
+    
+    // Get selected posts for BOTH categories and tags
+    const selectedPosts = Array.from(this.querySelectorAll('.post-item.selected'))
+        .map(item => item.dataset.id);
+    data.selectedPosts = selectedPosts;
+    data.postCount = selectedPosts.length;
+
+    if (this.state.editingItem) {
+        data._id = this.state.editingItem._id;
+    }
+
+    this.emitEvent('save-item', {
+        type: isCategory ? 'category' : 'tag',
+        data: data
+    });
+}
 
     deleteItem(id) {
         const isCategory = this.state.activeTab === 'categories';
