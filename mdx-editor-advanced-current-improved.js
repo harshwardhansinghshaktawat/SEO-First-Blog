@@ -1202,49 +1202,55 @@ mdx-blog-editor .mdx-toast-info { background: #e6f4ff; border: 1px solid #91caff
     }
 
     _openEditor(post) {
-        this._editPost = post;
-        this._resetEditorState();
-        
-        let initialMarkdown = '';
-        
-        if (post && post.content) {
-            initialMarkdown = post.content;
-            this._populateEditor(post);
-        }
-        
-        this._showEditorView();
-        this._switchTab('editor');
-        
-        const wrapper = this.querySelector('#toastEditorWrapper');
-        if (wrapper) wrapper.innerHTML = '';
-        
-        setTimeout(() => {
-            this._initToastEditor(initialMarkdown);
-            if (post) {
-                setTimeout(() => {
-                    this._currentMarkdown = initialMarkdown;
-                    this._runAnalysis();
-                }, 500);
-            }
-        }, 200);
+    this._editPost = post;
+    this._resetEditorState();
+    
+    let initialMarkdown = '';
+    
+    if (post) {
+        initialMarkdown = post.content || '';
+        this._populateEditor(post);
     }
+    
+    this._showEditorView();
+    this._switchTab('editor');
+    
+    const wrapper = this.querySelector('#toastEditorWrapper');
+    if (wrapper) wrapper.innerHTML = '';
+    
+    setTimeout(() => {
+        this._initToastEditor(initialMarkdown);
+        if (post) {
+            setTimeout(() => {
+                this._currentMarkdown = initialMarkdown;
+                this._runAnalysis();
+            }, 500);
+        }
+    }, 200);
+}
 
     _onPostList(data) {
-        this.querySelector('#listLoading').style.display = 'none';
-        const content = this.querySelector('#listContent');
-        content.style.display = 'block';
+    this.querySelector('#listLoading').style.display = 'none';
+    const content = this.querySelector('#listContent');
+    content.style.display = 'block';
 
-        this._posts = data.posts || [];
-        this._allPostsForRelated = [...this._posts];
-        const total = data.totalCount || this._posts.length;
-        this.querySelector('#listCount').textContent = `(${total})`;
+    this._posts = data.posts || [];
+    this._allPostsForRelated = this._posts.map(p => ({
+        _id: p._id,
+        blogTitle: p.blogTitle,
+        title: p.title,
+        slug: p.slug
+    }));
+    
+    const total = data.totalCount || this._posts.length;
+    this.querySelector('#listCount').textContent = `(${total})`;
 
-        if (!this._posts.length) {
-            content.innerHTML = `<div class="mdx-state-box">${this._icon('image')}<p>No posts yet. Click "New Post" to create your first!</p></div>`;
-            return;
-        }
+    if (!this._posts.length) {
+        content.innerHTML = `<div class="mdx-state-box">${this._icon('image')}<p>No posts yet. Click "New Post" to create your first!</p></div>`;
+        return;
+    }
 
-        content.innerHTML = `
+    content.innerHTML = `
 <table class="mdx-posts-table">
     <thead>
         <tr>
@@ -1258,16 +1264,16 @@ mdx-blog-editor .mdx-toast-info { background: #e6f4ff; border: 1px solid #91caff
     <tbody id="postsBody"></tbody>
 </table>`;
 
-        const tbody = content.querySelector('#postsBody');
-        this._posts.forEach((post, idx) => {
-            const tr = document.createElement('tr');
-            const dateStr = post.publishedDate
-                ? new Date(post.publishedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                : '—';
-            const badgeClass = post.status === 'published' ? 'mdx-badge-pub' : 'mdx-badge-draft';
-            const displayTitle = post.blogTitle || post.title || '(Untitled)';
+    const tbody = content.querySelector('#postsBody');
+    this._posts.forEach((post, idx) => {
+        const tr = document.createElement('tr');
+        const dateStr = post.publishedDate
+            ? new Date(post.publishedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : '—';
+        const badgeClass = post.status === 'published' ? 'mdx-badge-pub' : 'mdx-badge-draft';
+        const displayTitle = post.blogTitle || post.title || '(Untitled)';
 
-            tr.innerHTML = `
+        tr.innerHTML = `
 <td class="mdx-col-title">
     <div class="mdx-post-title-txt">${displayTitle}</div>
     <div class="mdx-post-slug">${post.slug || ''}</div>
@@ -1281,26 +1287,26 @@ mdx-blog-editor .mdx-toast-info { background: #e6f4ff; border: 1px solid #91caff
         <button class="mdx-btn mdx-btn-red mdx-btn-sm del-btn" data-i="${idx}">${this._icon('trash')} Delete</button>
     </div>
 </td>`;
-            tbody.appendChild(tr);
-        });
+        tbody.appendChild(tr);
+    });
 
-        tbody.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.i);
-                const post = this._posts[idx];
-                this._openEditor(post);
-            });
+    tbody.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.i);
+            const post = this._posts[idx];
+            this._openEditor(post);
         });
-        
-        tbody.querySelectorAll('.del-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const p = this._posts[parseInt(btn.dataset.i)];
-                const displayTitle = p.blogTitle || p.title || 'this post';
-                if (!confirm(`Delete "${displayTitle}"?\n\nThis cannot be undone.`)) return;
-                this._emit('delete-post', { id: p._id, slug: p.slug });
-            });
+    });
+    
+    tbody.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const p = this._posts[parseInt(btn.dataset.i)];
+            const displayTitle = p.blogTitle || p.title || 'this post';
+            if (!confirm(`Delete "${displayTitle}"?\n\nThis cannot be undone.`)) return;
+            this._emit('delete-post', { id: p._id, slug: p.slug });
         });
-    }
+    });
+}
 
     _onDeleteResult(data) {
         if (data.success) {
@@ -1400,34 +1406,82 @@ mdx-blog-editor .mdx-toast-info { background: #e6f4ff; border: 1px solid #91caff
     }
 
     _populateEditor(data) {
-        if (!data) return;
+    if (!data) return;
+    
+    Object.keys(this._meta).forEach(k => { 
+        if (data[k] !== undefined) this._meta[k] = data[k]; 
+    });
+    
+    this.querySelectorAll('[data-m]').forEach(el => {
+        const k = el.dataset.m;
+        const value = this._meta[k];
         
-        Object.keys(this._meta).forEach(k => { 
-            if (data[k] !== undefined) this._meta[k] = data[k]; 
-        });
-        
-        this.querySelectorAll('[data-m]').forEach(el => {
-            const k = el.dataset.m;
-            if (el.type === 'checkbox') el.checked = !!this._meta[k];
-            else el.value = this._meta[k] || '';
-        });
-        
-        this._currentMarkdown = data.content || '';
-        this._relatedPosts = Array.isArray(data.relatedPosts) ? data.relatedPosts : [];
-        
-        if (data.authorImage) {
-            const prev = this.querySelector('#authorPrev');
-            if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
+        if (el.type === 'checkbox') {
+            el.checked = !!value;
+        } else if (el.type === 'datetime-local' && value) {
+            try {
+                const date = new Date(value);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                el.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            } catch(e) {
+                el.value = '';
+            }
+        } else {
+            el.value = value || '';
         }
-        if (data.featuredImage) {
-            const prev = this.querySelector('#featuredPrev');
-            if (prev) { prev.src = data.featuredImage; prev.style.display = 'block'; }
-        }
-        if (data.seoOgImage) {
-            const prev = this.querySelector('#ogPrev');
-            if (prev) { prev.src = data.seoOgImage; prev.style.display = 'block'; }
+    });
+    
+    this._currentMarkdown = data.content || '';
+    this._relatedPosts = Array.isArray(data.relatedPosts) ? data.relatedPosts : [];
+    
+    if (data.authorImage) {
+        const url = this._formatImageUrl(data.authorImage);
+        const prev = this.querySelector('#authorPrev');
+        if (prev && url) { 
+            prev.src = url; 
+            prev.style.display = 'block'; 
         }
     }
+    
+    if (data.featuredImage) {
+        const url = this._formatImageUrl(data.featuredImage);
+        const prev = this.querySelector('#featuredPrev');
+        if (prev && url) { 
+            prev.src = url; 
+            prev.style.display = 'block'; 
+        }
+    }
+    
+    if (data.seoOgImage) {
+        const url = this._formatImageUrl(data.seoOgImage);
+        const prev = this.querySelector('#ogPrev');
+        if (prev && url) { 
+            prev.src = url; 
+            prev.style.display = 'block'; 
+        }
+    }
+}
+
+_formatImageUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    
+    const wixMatch = url.match(/^wix:image:\/\/v1\/([^/]+)\//);
+    if (wixMatch) {
+        return `https://static.wixstatic.com/media/${wixMatch[1]}`;
+    }
+    
+    const mediaMatch = url.match(/\/([a-f0-9]{32})/);
+    if (mediaMatch) {
+        return `https://static.wixstatic.com/media/${mediaMatch[1]}`;
+    }
+    
+    return url;
+}
 
     _save(status) {
         const md = this._cleanMarkdown(this._currentMarkdown || '');
