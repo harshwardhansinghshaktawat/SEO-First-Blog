@@ -1480,49 +1480,52 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _populateEditor(data) {
-        if (!data) return;
-        
-        Object.keys(this._meta).forEach(k => { 
-            if (data[k] !== undefined) {
-                this._meta[k] = data[k];
-            }
-        });
-        
-        this.querySelectorAll('[data-m]').forEach(el => {
-            const k = el.dataset.m;
-            if (k in this._meta) {
-                if (el.type === 'checkbox') {
-                    el.checked = !!this._meta[k];
-                } else {
-                    el.value = this._meta[k] || '';
-                }
-            }
-        });
-        
-        this._currentMarkdown = data.content || '';
-        
-        if (this._meta.authorImage) {
-            const prev = this.querySelector('#authorPrev');
-            if (prev) { 
-                prev.src = this._meta.authorImage; 
-                prev.style.display = 'block'; 
+    if (!data) return;
+    
+    // First, populate all meta fields
+    Object.keys(this._meta).forEach(k => { 
+        if (data[k] !== undefined) {
+            this._meta[k] = data[k];
+        }
+    });
+    
+    // Then update all form inputs
+    this.querySelectorAll('[data-m]').forEach(el => {
+        const k = el.dataset.m;
+        if (k in this._meta) {
+            if (el.type === 'checkbox') {
+                el.checked = !!this._meta[k];
+            } else {
+                el.value = this._meta[k] || '';
             }
         }
-        if (this._meta.featuredImage) {
-            const prev = this.querySelector('#featuredPrev');
-            if (prev) { 
-                prev.src = this._meta.featuredImage; 
-                prev.style.display = 'block'; 
-            }
-        }
-        if (this._meta.seoOgImage) {
-            const prev = this.querySelector('#ogPrev');
-            if (prev) { 
-                prev.src = this._meta.seoOgImage; 
-                prev.style.display = 'block'; 
-            }
+    });
+    
+    this._currentMarkdown = data.content || '';
+    
+    // Now update image previews from this._meta (which has been populated)
+    if (this._meta.authorImage) {
+        const prev = this.querySelector('#authorPrev');
+        if (prev) { 
+            prev.src = this._meta.authorImage; 
+            prev.style.display = 'block'; 
         }
     }
+    if (this._meta.featuredImage) {
+        const prev = this.querySelector('#featuredPrev');
+        if (prev) { 
+            prev.src = this._meta.featuredImage; 
+            prev.style.display = 'block'; 
+        }
+    }
+    if (this._meta.seoOgImage) {
+        const prev = this.querySelector('#ogPrev');
+        if (prev) { 
+            prev.src = this._meta.seoOgImage; 
+            prev.style.display = 'block'; 
+        }
+    }
+}
 
     _save(status) {
         const md = this._cleanMarkdown(this._currentMarkdown || '');
