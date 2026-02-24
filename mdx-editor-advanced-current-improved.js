@@ -63,9 +63,14 @@ class MdxBlogEditor extends HTMLElement {
             if (name === 'save-result') this._onSaveResult(d);
             if (name === 'delete-result') this._onDeleteResult(d);
             if (name === 'notification') this._toast(d.type, d.message);
-            if (name === 'load-data') this._populateEditor(d);
+            if (name === 'load-data') {
+                console.log('🔵 attributeChangedCallback - load-data received:', d);
+                this._populateEditor(d);
+            }
             if (name === 'search-results') this._onSearchResults(d);
-        } catch(e) {}
+        } catch(e) {
+            console.error('❌ Error in attributeChangedCallback:', e);
+        }
     }
 
     connectedCallback() {
@@ -1083,7 +1088,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _onSearchResults(data) {
-        // Not used anymore - search handled locally
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
@@ -1284,6 +1288,16 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _openEditor(post) {
+        console.log('🟢 _openEditor called with post:', post);
+        console.log('🔍 Post keys:', post ? Object.keys(post) : 'null');
+        console.log('🖼️ Image fields in post:', {
+            authorImage: post?.authorImage,
+            'Author Image': post?.['Author Image'],
+            featuredImage: post?.featuredImage,
+            'Featured Image': post?.['Featured Image'],
+            seoOgImage: post?.seoOgImage
+        });
+        
         this._editPost = post;
         this._resetEditorState();
         
@@ -1291,6 +1305,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         
         if (post && post.content) {
             initialMarkdown = post.content;
+            console.log('📝 About to call _populateEditor with data');
             this._populateEditor(post);
         }
         
@@ -1311,11 +1326,15 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _onPostList(data) {
+        console.log('📋 _onPostList received data:', data);
+        
         this.querySelector('#listLoading').style.display = 'none';
         const content = this.querySelector('#listContent');
         content.style.display = 'block';
 
         this._posts = data.posts || [];
+        console.log('💾 Stored posts:', this._posts.length);
+        
         const total = data.totalCount || this._posts.length;
         this.querySelector('#listCount').textContent = `(${total})`;
 
@@ -1368,6 +1387,8 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             btn.addEventListener('click', () => {
                 const idx = parseInt(btn.dataset.i);
                 const post = this._posts[idx];
+                console.log('🖱️ Edit button clicked for index:', idx);
+                console.log('📦 Post data being passed to _openEditor:', post);
                 this._openEditor(post);
             });
         });
@@ -1465,6 +1486,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _resetEditorState() {
+        console.log('🔄 _resetEditorState called');
         this._currentMarkdown = '';
         this._meta = this._freshMeta();
         this.querySelectorAll('[data-m]').forEach(el => {
@@ -1480,48 +1502,98 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _populateEditor(data) {
-        if (!data) return;
+        console.log('🎯 _populateEditor START');
+        console.log('📥 Raw data received:', data);
+        console.log('🔑 All keys in data:', Object.keys(data));
+        
+        if (!data) {
+            console.log('❌ No data provided to _populateEditor');
+            return;
+        }
+        
+        console.log('🖼️ Checking image fields in raw data:');
+        console.log('  - data.authorImage:', data.authorImage);
+        console.log('  - data["Author Image"]:', data['Author Image']);
+        console.log('  - data.featuredImage:', data.featuredImage);
+        console.log('  - data["Featured Image"]:', data['Featured Image']);
+        console.log('  - data.seoOgImage:', data.seoOgImage);
         
         Object.keys(this._meta).forEach(k => { 
             if (data[k] !== undefined) {
                 this._meta[k] = data[k];
+                console.log(`✅ Set this._meta.${k} =`, data[k]);
             }
         });
+        
+        console.log('📋 Final this._meta after population:', this._meta);
         
         this.querySelectorAll('[data-m]').forEach(el => {
             const k = el.dataset.m;
             if (k in this._meta) {
                 if (el.type === 'checkbox') {
                     el.checked = !!this._meta[k];
+                    console.log(`☑️ Set checkbox ${k} =`, el.checked);
                 } else {
                     el.value = this._meta[k] || '';
+                    console.log(`📝 Set input ${k} =`, el.value);
                 }
             }
         });
         
         this._currentMarkdown = data.content || '';
+        console.log('📄 Set markdown content length:', this._currentMarkdown.length);
         
-        if (this._meta.authorImage) {
+        console.log('🖼️ Processing image previews...');
+        
+        const authorImgUrl = this._meta.authorImage;
+        console.log('👤 authorImage URL from meta:', authorImgUrl);
+        if (authorImgUrl) {
             const prev = this.querySelector('#authorPrev');
+            console.log('  - Found #authorPrev element:', !!prev);
             if (prev) { 
-                prev.src = this._meta.authorImage; 
-                prev.style.display = 'block'; 
+                prev.src = authorImgUrl; 
+                prev.style.display = 'block';
+                console.log('  ✅ Set author image src and display');
+            } else {
+                console.log('  ❌ #authorPrev element not found in DOM');
             }
+        } else {
+            console.log('  ⚠️ No authorImage URL in meta');
         }
-        if (this._meta.featuredImage) {
+        
+        const featuredImgUrl = this._meta.featuredImage;
+        console.log('🎨 featuredImage URL from meta:', featuredImgUrl);
+        if (featuredImgUrl) {
             const prev = this.querySelector('#featuredPrev');
+            console.log('  - Found #featuredPrev element:', !!prev);
             if (prev) { 
-                prev.src = this._meta.featuredImage; 
-                prev.style.display = 'block'; 
+                prev.src = featuredImgUrl; 
+                prev.style.display = 'block';
+                console.log('  ✅ Set featured image src and display');
+            } else {
+                console.log('  ❌ #featuredPrev element not found in DOM');
             }
+        } else {
+            console.log('  ⚠️ No featuredImage URL in meta');
         }
-        if (this._meta.seoOgImage) {
+        
+        const ogImgUrl = this._meta.seoOgImage;
+        console.log('🌐 seoOgImage URL from meta:', ogImgUrl);
+        if (ogImgUrl) {
             const prev = this.querySelector('#ogPrev');
+            console.log('  - Found #ogPrev element:', !!prev);
             if (prev) { 
-                prev.src = this._meta.seoOgImage; 
-                prev.style.display = 'block'; 
+                prev.src = ogImgUrl; 
+                prev.style.display = 'block';
+                console.log('  ✅ Set OG image src and display');
+            } else {
+                console.log('  ❌ #ogPrev element not found in DOM');
             }
+        } else {
+            console.log('  ⚠️ No seoOgImage URL in meta');
         }
+        
+        console.log('🏁 _populateEditor END');
     }
 
     _save(status) {
