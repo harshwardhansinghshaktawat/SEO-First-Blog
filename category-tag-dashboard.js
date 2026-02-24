@@ -849,10 +849,10 @@ renderForm() {
                         class="form-input" 
                         id="slugInput" 
                         value="${this.escapeHtml(item.slug || '')}"
-                        ${item ? 'readonly' : ''}
+                        ${item && item._id ? 'readonly' : ''}
                         required
                     />
-                    <div class="form-hint">URL-friendly identifier (auto-generated from name)</div>
+                    <div class="form-hint">URL-friendly identifier ${item && item._id ? '(cannot be changed)' : '(auto-generated from name)'}</div>
                 </div>
 
                 <div class="form-group">
@@ -923,7 +923,7 @@ renderForm() {
                     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                     </svg>
-                    ${item ? 'Update' : 'Create'}
+                    ${item && item._id ? 'Update' : 'Create'}
                 </button>
             </div>
         </form>
@@ -932,21 +932,53 @@ renderForm() {
     // Render posts selector for BOTH categories and tags
     this.renderPostsSelector();
 
+    // Setup auto-slug generation for NEW items only
     const nameInput = this.querySelector('#nameInput');
     const slugInput = this.querySelector('#slugInput');
+    const isNewItem = !item || !item._id;
 
-    if (!item && nameInput && slugInput) {
-        nameInput.addEventListener('input', () => {
+    console.log('Form rendered - isNewItem:', isNewItem, 'nameInput:', !!nameInput, 'slugInput:', !!slugInput);
+
+    if (isNewItem && nameInput && slugInput) {
+        console.log('Setting up slug auto-generation');
+        
+        // Generate initial slug if name has value but slug doesn't
+        if (nameInput.value && !slugInput.value) {
             slugInput.value = this.generateSlug(nameInput.value);
+            console.log('Generated initial slug:', slugInput.value);
+        }
+        
+        // Auto-generate slug as user types
+        nameInput.addEventListener('input', (e) => {
+            const newSlug = this.generateSlug(e.target.value);
+            slugInput.value = newSlug;
+            console.log('Auto-generated slug:', newSlug, 'from name:', e.target.value);
+        });
+        
+        // Allow manual editing of slug
+        slugInput.addEventListener('input', (e) => {
+            console.log('Manual slug edit:', e.target.value);
         });
     }
 
+    // Setup cancel button
     this.querySelector('#cancelBtn').addEventListener('click', () => {
         this.hideForm();
     });
 
+    // Setup form submission
     this.querySelector('#itemForm').addEventListener('submit', (e) => {
         e.preventDefault();
+        
+        // Validate slug is not empty
+        const slugValue = slugInput.value.trim();
+        if (!slugValue) {
+            alert('Slug cannot be empty. It will be auto-generated from the name.');
+            slugInput.value = this.generateSlug(nameInput.value);
+            return;
+        }
+        
+        console.log('Form submitted with slug:', slugValue);
         this.saveItem();
     });
 }
@@ -1009,9 +1041,32 @@ renderForm() {
 saveItem() {
     const isCategory = this.state.activeTab === 'categories';
     
+    const nameInput = this.querySelector('#nameInput');
+    const slugInput = this.querySelector('#slugInput');
+    
+    const name = nameInput.value.trim();
+    let slug = slugInput.value.trim();
+    
+    // If slug is empty, generate it from name
+    if (!slug && name) {
+        slug = this.generateSlug(name);
+        console.log('Slug was empty, generated from name:', slug);
+    }
+    
+    // Validate
+    if (!name) {
+        alert('Name is required');
+        return;
+    }
+    
+    if (!slug) {
+        alert('Slug is required');
+        return;
+    }
+    
     const data = {
-        name: this.querySelector('#nameInput').value.trim(),
-        slug: this.querySelector('#slugInput').value.trim(),
+        name: name,
+        slug: slug,
         description: this.querySelector('#descriptionInput').value.trim(),
         seoTitle: this.querySelector('#seoTitleInput').value.trim(),
         seoDescription: this.querySelector('#seoDescriptionInput').value.trim(),
@@ -1019,7 +1074,10 @@ saveItem() {
     };
 
     if (isCategory) {
-        data.title = this.querySelector('#titleInput').value.trim();
+        const titleInput = this.querySelector('#titleInput');
+        if (titleInput) {
+            data.title = titleInput.value.trim();
+        }
     }
     
     // Get selected posts for BOTH categories and tags
@@ -1028,9 +1086,17 @@ saveItem() {
     data.selectedPosts = selectedPosts;
     data.postCount = selectedPosts.length;
 
-    if (this.state.editingItem) {
+    if (this.state.editingItem && this.state.editingItem._id) {
         data._id = this.state.editingItem._id;
     }
+
+    console.log('Saving item:', {
+        type: isCategory ? 'category' : 'tag',
+        name: data.name,
+        slug: data.slug,
+        hasId: !!data._id,
+        postsCount: data.selectedPosts.length
+    });
 
     this.emitEvent('save-item', {
         type: isCategory ? 'category' : 'tag',
@@ -1090,12 +1156,18 @@ saveItem() {
     }
 
     generateSlug(text) {
-        return text.toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '');
-    }
+    if (!text) return '';
+    
+    const slug = text.toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-')          // Replace spaces with hyphens
+        .replace(/-+/g, '-')           // Replace multiple hyphens with single
+        .replace(/^-|-$/g, '');        // Remove leading/trailing hyphens
+    
+    console.log('Generated slug:', slug, 'from text:', text);
+    return slug;
+}
 
     formatDate(dateString) {
         if (!dateString) return '';
