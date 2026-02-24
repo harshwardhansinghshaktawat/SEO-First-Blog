@@ -1468,35 +1468,52 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _populateEditor(data) {
-        if (!data) return;
-        
-        Object.keys(this._meta).forEach(k => { 
-            if (data[k] !== undefined) this._meta[k] = data[k]; 
-        });
-        
-        this.querySelectorAll('[data-m]').forEach(el => {
-            const k = el.dataset.m;
-            if (el.type === 'checkbox') el.checked = !!this._meta[k];
-            else el.value = this._meta[k] || '';
-        });
-        
-        this._currentMarkdown = data.content || '';
-        
-        if (data.authorImage) {
-            const prev = this.querySelector('#authorPrev');
-            if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
+    if (!data) return;
+    
+    // Map CMS field names to code field names
+    const fieldMap = {
+        'Author Image': 'authorImage',
+        'Featured Image': 'featuredImage',
+        // Add any other mismatched fields here
+    };
+    
+    // Normalize the data object
+    const normalizedData = { ...data };
+    Object.keys(fieldMap).forEach(cmsKey => {
+        if (data[cmsKey] !== undefined) {
+            normalizedData[fieldMap[cmsKey]] = data[cmsKey];
         }
-        if (data.featuredImage) {
-            const prev = this.querySelector('#featuredPrev');
-            if (prev) { prev.src = data.featuredImage; prev.style.display = 'block'; }
-        }
-        if (data.seoOgImage) {
-            const prev = this.querySelector('#ogPrev');
-            if (prev) { prev.src = data.seoOgImage; prev.style.display = 'block'; }
-        }
-        
-        this._renderRelatedPosts();
+    });
+    
+    // Rest of the code stays the same
+    Object.keys(this._meta).forEach(k => { 
+        if (normalizedData[k] !== undefined) this._meta[k] = normalizedData[k]; 
+    });
+    
+    this.querySelectorAll('[data-m]').forEach(el => {
+        const k = el.dataset.m;
+        if (el.type === 'checkbox') el.checked = !!this._meta[k];
+        else el.value = this._meta[k] || '';
+    });
+    
+    this._currentMarkdown = normalizedData.content || '';
+    
+    // Use normalized data for images
+    if (this._meta.authorImage) {
+        const prev = this.querySelector('#authorPrev');
+        if (prev) { prev.src = this._meta.authorImage; prev.style.display = 'block'; }
     }
+    if (this._meta.featuredImage) {
+        const prev = this.querySelector('#featuredPrev');
+        if (prev) { prev.src = this._meta.featuredImage; prev.style.display = 'block'; }
+    }
+    if (this._meta.seoOgImage) {
+        const prev = this.querySelector('#ogPrev');
+        if (prev) { prev.src = this._meta.seoOgImage; prev.style.display = 'block'; }
+    }
+    
+    this._renderRelatedPosts();
+}
 
     _save(status) {
         const md = this._cleanMarkdown(this._currentMarkdown || '');
