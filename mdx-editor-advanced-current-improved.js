@@ -640,9 +640,9 @@ mdx-blog-editor .mdx-md-panel { display: none; flex: 1; min-height: 0; backgroun
 mdx-blog-editor .mdx-md-panel.active { display: flex; flex-direction: column; }
 mdx-blog-editor .mdx-md-area { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; padding: 22px; border: none; outline: none; resize: none; background: #1e1e2e; color: #cdd6f4; }
 
-mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
-mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active { display: block; }
-mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner { padding: 20px; }
+mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel, mdx-blog-editor .mdx-related-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active, mdx-blog-editor .mdx-related-panel.active { display: block; }
+mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner, mdx-blog-editor .mdx-related-inner { padding: 20px; }
 
 mdx-blog-editor .mdx-msec { background: var(--paper); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 14px; overflow: hidden; }
 mdx-blog-editor .mdx-msec-title { padding: 10px 14px; background: var(--paper2); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--ink3); }
@@ -669,9 +669,15 @@ mdx-blog-editor .mdx-fimg-zone p { font-size: 12px; color: var(--ink3); }
 mdx-blog-editor .mdx-fimg-zone input[type=file] { display: none; }
 mdx-blog-editor .mdx-fimg-prev { max-width: 100%; border-radius: 5px; margin-top: 7px; }
 
+mdx-blog-editor .mdx-related-search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
 mdx-blog-editor .mdx-related-search {
-    width: 100%;
-    padding: 8px 10px;
+    flex: 1;
+    padding: 8px 12px;
     border: 1.5px solid var(--border);
     border-radius: 5px;
     font-family: 'DM Sans', sans-serif;
@@ -685,57 +691,74 @@ mdx-blog-editor .mdx-related-search:focus {
     border-color: var(--accent);
 }
 
-mdx-blog-editor .mdx-related-results {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    margin-top: 8px;
+mdx-blog-editor .mdx-related-list {
     background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
 }
 
-mdx-blog-editor .mdx-related-results::-webkit-scrollbar { width: 5px; }
-mdx-blog-editor .mdx-related-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-mdx-blog-editor .mdx-related-item {
-    padding: 8px 12px;
-    cursor: pointer;
+mdx-blog-editor .mdx-related-post {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    cursor: pointer;
     transition: background .15s;
 }
 
-mdx-blog-editor .mdx-related-item:hover {
-    background: var(--paper2);
-}
-
-mdx-blog-editor .mdx-related-item:last-child {
+mdx-blog-editor .mdx-related-post:last-child {
     border-bottom: none;
 }
 
-mdx-blog-editor .mdx-related-selected {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 10px;
-}
-
-mdx-blog-editor .mdx-related-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
+mdx-blog-editor .mdx-related-post:hover {
     background: var(--paper2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
 }
 
-mdx-blog-editor .mdx-related-remove {
-    cursor: pointer;
-    color: var(--red);
-    font-weight: 700;
+mdx-blog-editor .mdx-related-post.selected {
+    background: #e6f4ff;
+    border-color: var(--blue);
+}
+
+mdx-blog-editor .mdx-related-check {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+mdx-blog-editor .mdx-related-post.selected .mdx-related-check {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-related-info {
+    flex: 1;
+}
+
+mdx-blog-editor .mdx-related-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+}
+
+mdx-blog-editor .mdx-related-slug {
+    font-size: 11px;
+    color: var(--ink3);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+mdx-blog-editor .mdx-related-count {
+    font-size: 13px;
+    color: var(--ink3);
+    margin-bottom: 10px;
 }
 
 mdx-blog-editor .mdx-toasts { position: fixed; top: 14px; right: 14px; z-index: 9999; display: flex; flex-direction: column; gap: 7px; }
@@ -792,6 +815,7 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <button class="mdx-tab" data-tab="preview">${this._icon('eye')} Preview</button>
         <button class="mdx-tab" data-tab="markdown">${this._icon('code')} Markdown</button>
         <button class="mdx-tab" data-tab="meta">${this._icon('gear')} Settings</button>
+        <button class="mdx-tab" data-tab="related">${this._icon('link')} Related Posts</button>
         <button class="mdx-tab" data-tab="seo">${this._icon('seo')} SEO</button>
     </div>
 
@@ -819,6 +843,10 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
 
             <div class="mdx-meta-panel" id="metaPanel">
                 <div class="mdx-meta-inner">${this._metaHTML()}</div>
+            </div>
+
+            <div class="mdx-related-panel" id="relatedPanel">
+                <div class="mdx-related-inner">${this._relatedHTML()}</div>
             </div>
 
             <div class="mdx-seo-panel" id="seoPanel">
@@ -895,17 +923,6 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     </div>
 </div>
 <div class="mdx-msec">
-    <div class="mdx-msec-title">Related Posts</div>
-    <div style="padding: 14px;">
-        <input type="text" 
-               class="mdx-related-search" 
-               id="relatedSearch" 
-               placeholder="Search posts to add as related...">
-        <div class="mdx-related-results" id="relatedResults" style="display:none;"></div>
-        <div class="mdx-related-selected" id="relatedSelected"></div>
-    </div>
-</div>
-<div class="mdx-msec">
     <div class="mdx-msec-title">Author Image</div>
     <div class="mdx-fimg-zone" id="authorZone">
         <input type="file" id="authorFile" accept="image/*">${this._icon('image')}
@@ -919,6 +936,22 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         <input type="file" id="featuredFile" accept="image/*">${this._icon('image')}
         <p>Click to upload featured image</p>
         <img class="mdx-fimg-prev" id="featuredPrev" style="display:none">
+    </div>
+</div>`; }
+
+    _relatedHTML() { return `
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Related Posts</div>
+    <div style="padding: 14px;">
+        <div class="mdx-related-search-bar">
+            <input type="text" 
+                   class="mdx-related-search" 
+                   id="relatedSearchInput" 
+                   placeholder="Search posts by title...">
+            <button class="mdx-btn mdx-btn-light mdx-btn-sm" id="clearRelatedSearch">${this._icon('back')} Clear</button>
+        </div>
+        <div class="mdx-related-count" id="relatedCount">0 posts selected</div>
+        <div class="mdx-related-list" id="relatedPostsList"></div>
     </div>
 </div>`; }
 
@@ -955,15 +988,11 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
             });
         });
         
-        let isManualSlugEdit = false;
-        const slugInput = this.querySelector('#m-slug');
         const blogTitleInput = this.querySelector('#blogTitleInput');
         
         blogTitleInput.addEventListener('input', (e) => {
             this._meta.blogTitle = e.target.value;
-            if (!isManualSlugEdit) {
-                this._autoSlug(e.target.value);
-            }
+            this._autoSlug(e.target.value);
             this._runSEOAnalysis();
         });
 
@@ -975,102 +1004,86 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _wireRelatedPosts() {
-        const searchInput = this.querySelector('#relatedSearch');
-        const resultsDiv = this.querySelector('#relatedResults');
-        const selectedDiv = this.querySelector('#relatedSelected');
+        const searchInput = this.querySelector('#relatedSearchInput');
+        const clearBtn = this.querySelector('#clearRelatedSearch');
         
-        let searchTimeout;
-        searchInput.addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            const query = e.target.value.trim();
-            
-            if (query.length < 2) {
-                resultsDiv.style.display = 'none';
-                return;
-            }
-            
-            searchTimeout = setTimeout(() => {
-                this._emit('search-posts', { query });
-            }, 300);
-        });
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this._renderRelatedPostsList(e.target.value);
+                }, 300);
+            });
+        }
         
-        this._renderRelatedPosts();
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (searchInput) searchInput.value = '';
+                this._renderRelatedPostsList('');
+            });
+        }
     }
 
-    _onSearchResults(data) {
-        const resultsDiv = this.querySelector('#relatedResults');
-        const posts = data.posts || [];
-        
-        if (!posts.length) {
-            resultsDiv.style.display = 'none';
-            return;
-        }
+    _renderRelatedPostsList(searchQuery = '') {
+        const listEl = this.querySelector('#relatedPostsList');
+        const countEl = this.querySelector('#relatedCount');
+        if (!listEl) return;
         
         const currentPostId = this._editPost?._id;
         const selectedIds = this._meta.relatedPosts || [];
         
-        const filteredPosts = posts.filter(p => p._id !== currentPostId && !selectedIds.includes(p._id));
+        let filteredPosts = this._posts.filter(p => p._id !== currentPostId);
+        
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filteredPosts = filteredPosts.filter(p => 
+                (p.blogTitle || p.title || '').toLowerCase().includes(query) ||
+                (p.slug || '').toLowerCase().includes(query)
+            );
+        }
+        
+        if (countEl) {
+            countEl.textContent = `${selectedIds.length} post${selectedIds.length !== 1 ? 's' : ''} selected`;
+        }
         
         if (!filteredPosts.length) {
-            resultsDiv.style.display = 'none';
+            listEl.innerHTML = '<div class="mdx-state-box"><p>No posts found</p></div>';
             return;
         }
         
-        resultsDiv.innerHTML = filteredPosts.map(post => `
-            <div class="mdx-related-item" data-id="${post._id}" data-title="${post.blogTitle || post.title}">
-                ${post.blogTitle || post.title}
-            </div>
-        `).join('');
+        listEl.innerHTML = filteredPosts.map(post => {
+            const isSelected = selectedIds.includes(post._id);
+            return `
+                <div class="mdx-related-post ${isSelected ? 'selected' : ''}" data-id="${post._id}">
+                    <div class="mdx-related-check">${isSelected ? '✓' : ''}</div>
+                    <div class="mdx-related-info">
+                        <div class="mdx-related-title">${post.blogTitle || post.title || '(Untitled)'}</div>
+                        <div class="mdx-related-slug">${post.slug || ''}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
         
-        resultsDiv.style.display = 'block';
-        
-        resultsDiv.querySelectorAll('.mdx-related-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const postId = item.dataset.id;
-                const postTitle = item.dataset.title;
-                
+        listEl.querySelectorAll('.mdx-related-post').forEach(el => {
+            el.addEventListener('click', () => {
+                const postId = el.dataset.id;
                 if (!this._meta.relatedPosts) this._meta.relatedPosts = [];
-                if (!this._meta.relatedPosts.includes(postId)) {
+                
+                const index = this._meta.relatedPosts.indexOf(postId);
+                if (index > -1) {
+                    this._meta.relatedPosts.splice(index, 1);
+                } else {
                     this._meta.relatedPosts.push(postId);
-                    this._renderRelatedPosts();
                 }
                 
-                resultsDiv.style.display = 'none';
-                this.querySelector('#relatedSearch').value = '';
+                this._renderRelatedPostsList(this.querySelector('#relatedSearchInput')?.value || '');
             });
         });
     }
 
-    _renderRelatedPosts() {
-        const selectedDiv = this.querySelector('#relatedSelected');
-        if (!selectedDiv) return;
-        
-        const relatedIds = this._meta.relatedPosts || [];
-        
-        if (!relatedIds.length) {
-            selectedDiv.innerHTML = '';
-            return;
-        }
-        
-        const relatedPosts = relatedIds.map(id => {
-            const post = this._posts.find(p => p._id === id);
-            return post ? { id, title: post.blogTitle || post.title } : { id, title: 'Unknown Post' };
-        });
-        
-        selectedDiv.innerHTML = relatedPosts.map(post => `
-            <div class="mdx-related-tag">
-                ${post.title}
-                <span class="mdx-related-remove" data-id="${post.id}">×</span>
-            </div>
-        `).join('');
-        
-        selectedDiv.querySelectorAll('.mdx-related-remove').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const postId = btn.dataset.id;
-                this._meta.relatedPosts = this._meta.relatedPosts.filter(id => id !== postId);
-                this._renderRelatedPosts();
-            });
-        });
+    _onSearchResults(data) {
+        // Not used anymore - search handled locally
     }
 
     _wireImgZone(zoneId, fileId, prevId, metaKey) {
@@ -1397,10 +1410,12 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this.querySelector('#prevPanel').classList.toggle('active', tab === 'preview');
         this.querySelector('#mdPanel').classList.toggle('active', tab === 'markdown');
         this.querySelector('#metaPanel').classList.toggle('active', tab === 'meta');
+        this.querySelector('#relatedPanel').classList.toggle('active', tab === 'related');
         this.querySelector('#seoPanel').classList.toggle('active', tab === 'seo');
 
         if (tab === 'preview') this._buildPreview();
         if (tab === 'markdown') this.querySelector('#mdArea').value = this._currentMarkdown || '';
+        if (tab === 'related') this._renderRelatedPostsList('');
     }
 
     _buildPreview() {
@@ -1462,40 +1477,51 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         this._seoScore = 0;
         this._readabilityScore = 0;
         this._updateScoreDisplay();
-        
-        const relatedSelected = this.querySelector('#relatedSelected');
-        if (relatedSelected) relatedSelected.innerHTML = '';
     }
 
     _populateEditor(data) {
         if (!data) return;
         
         Object.keys(this._meta).forEach(k => { 
-            if (data[k] !== undefined) this._meta[k] = data[k]; 
+            if (data[k] !== undefined) {
+                this._meta[k] = data[k];
+            }
         });
         
         this.querySelectorAll('[data-m]').forEach(el => {
             const k = el.dataset.m;
-            if (el.type === 'checkbox') el.checked = !!this._meta[k];
-            else el.value = this._meta[k] || '';
+            if (k in this._meta) {
+                if (el.type === 'checkbox') {
+                    el.checked = !!this._meta[k];
+                } else {
+                    el.value = this._meta[k] || '';
+                }
+            }
         });
         
         this._currentMarkdown = data.content || '';
         
-        if (data.authorImage) {
+        if (this._meta.authorImage) {
             const prev = this.querySelector('#authorPrev');
-            if (prev) { prev.src = data.authorImage; prev.style.display = 'block'; }
+            if (prev) { 
+                prev.src = this._meta.authorImage; 
+                prev.style.display = 'block'; 
+            }
         }
-        if (data.featuredImage) {
+        if (this._meta.featuredImage) {
             const prev = this.querySelector('#featuredPrev');
-            if (prev) { prev.src = data.featuredImage; prev.style.display = 'block'; }
+            if (prev) { 
+                prev.src = this._meta.featuredImage; 
+                prev.style.display = 'block'; 
+            }
         }
-        if (data.seoOgImage) {
+        if (this._meta.seoOgImage) {
             const prev = this.querySelector('#ogPrev');
-            if (prev) { prev.src = data.seoOgImage; prev.style.display = 'block'; }
+            if (prev) { 
+                prev.src = this._meta.seoOgImage; 
+                prev.style.display = 'block'; 
+            }
         }
-        
-        this._renderRelatedPosts();
     }
 
     _save(status) {
@@ -1534,6 +1560,11 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
         }
         if (data.metaKey) {
             this._meta[data.metaKey] = this._wixUrl(data.url);
+            const prev = this.querySelector(`#${data.metaKey === 'authorImage' ? 'authorPrev' : data.metaKey === 'featuredImage' ? 'featuredPrev' : 'ogPrev'}`);
+            if (prev) {
+                prev.src = this._meta[data.metaKey];
+                prev.style.display = 'block';
+            }
             this._toast('success', 'Image uploaded!');
         }
     }
