@@ -1,4 +1,4 @@
-// CUSTOM ELEMENT - Tag Browser (REDESIGNED with Sidebar)
+// CUSTOM ELEMENT - Tag Browser (FIXED Pagination)
 class TagBrowser extends HTMLElement {
     constructor() {
         super();
@@ -73,9 +73,15 @@ class TagBrowser extends HTMLElement {
                 this.state.posts = data.posts || [];
                 this.state.totalPosts = data.total || 0;
                 this.state.currentPage = data.currentPage || 1;
-                this.state.postsPerPage = data.postsPerPage || 12;
+                this.state.postsPerPage = data.postsPerPage || 12; // CRITICAL: Must update postsPerPage
                 
-                console.log('Custom Element - State updated:', this.state);
+                console.log('Custom Element - State updated:', {
+                    postsCount: this.state.posts.length,
+                    totalPosts: this.state.totalPosts,
+                    currentPage: this.state.currentPage,
+                    postsPerPage: this.state.postsPerPage,
+                    totalPages: Math.ceil(this.state.totalPosts / this.state.postsPerPage)
+                });
                 
                 if (this.isConnected) {
                     this.render();
@@ -490,6 +496,8 @@ class TagBrowser extends HTMLElement {
 
         console.log('Rendering - Current tag:', this.state.currentTag ? this.state.currentTag.name : 'ALL POSTS');
         console.log('Posts to display:', this.state.posts.length);
+        console.log('Total posts:', this.state.totalPosts);
+        console.log('Posts per page:', this.state.postsPerPage);
 
         // Render sidebar
         sidebar.innerHTML = this.renderSidebar();
@@ -513,6 +521,8 @@ class TagBrowser extends HTMLElement {
         `;
 
         this.attachEventListeners();
+        
+        // CRITICAL: Always call renderPagination after rendering content
         this.renderPagination();
     }
 
@@ -603,13 +613,17 @@ class TagBrowser extends HTMLElement {
 
     renderPagination() {
         const paginationEl = this.querySelector('#pagination');
-        if (!paginationEl) return;
+        if (!paginationEl) {
+            console.log('Pagination element not found in DOM');
+            return;
+        }
 
         const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
         
-        console.log('Rendering pagination - Total:', this.state.totalPosts, 'Per page:', this.state.postsPerPage, 'Pages:', totalPages);
+        console.log('renderPagination called - Total posts:', this.state.totalPosts, 'Posts per page:', this.state.postsPerPage, 'Total pages:', totalPages, 'Current page:', this.state.currentPage);
         
         if (totalPages <= 1) {
+            console.log('Only 1 page or less, hiding pagination');
             paginationEl.innerHTML = '';
             return;
         }
@@ -617,13 +631,18 @@ class TagBrowser extends HTMLElement {
         const currentPage = this.state.currentPage;
         const pages = [];
 
+        // Always show first page
         pages.push(1);
 
+        // Show pages around current
         for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
             if (!pages.includes(i)) pages.push(i);
         }
 
+        // Always show last page
         if (!pages.includes(totalPages)) pages.push(totalPages);
+
+        console.log('Rendering pagination with pages:', pages);
 
         paginationEl.innerHTML = `
             <div class="pagination">
@@ -655,15 +674,20 @@ class TagBrowser extends HTMLElement {
             </div>
         `;
 
+        // Attach click handlers
         paginationEl.querySelectorAll('.pagination-btn[data-page]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const page = parseInt(btn.getAttribute('data-page'));
+                console.log('Pagination button clicked, page:', page);
                 this.changePage(page);
             });
         });
+
+        console.log('Pagination rendered successfully');
     }
 
     changePage(page) {
+        console.log('changePage called with page:', page);
         this.emitEvent('page-change', { page });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
