@@ -1,16 +1,14 @@
-// CUSTOM ELEMENT - Category Browser (FIXED - Following Graph Pattern)
+// CUSTOM ELEMENT - Category Browser (REDESIGNED)
 class CategoryBrowser extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            mode: 'single',
-            category: null,
             categories: [],
+            currentCategory: null,
             posts: [],
             currentPage: 1,
             postsPerPage: 12,
-            totalPosts: 0,
-            isLoading: true
+            totalPosts: 0
         };
         
         const initialStyleProps = this.getAttribute('style-props');
@@ -18,7 +16,7 @@ class CategoryBrowser extends HTMLElement {
     }
 
     static get observedAttributes() {
-        return ['mode', 'category-data', 'categories-data', 'posts-data', 'style-props'];
+        return ['display-data', 'style-props'];
     }
 
     getDefaultStyleProps() {
@@ -66,44 +64,21 @@ class CategoryBrowser extends HTMLElement {
         if (!newValue || oldValue === newValue) return;
 
         try {
-            if (name === 'mode') {
-                this.state.mode = newValue;
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-                
-            } else if (name === 'category-data') {
-                this.state.category = JSON.parse(newValue);
-                this.state.mode = 'single';
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-                
-            } else if (name === 'categories-data') {
-                this.state.categories = JSON.parse(newValue);
-                this.state.mode = 'all';
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-                
-            } else if (name === 'posts-data') {
+            if (name === 'display-data') {
                 const data = JSON.parse(newValue);
-                console.log('Custom Element - Received posts-data:', data);
+                console.log('Custom Element - Received display-data:', data);
                 
-                // Update all state at once
+                this.state.categories = data.categories || [];
+                this.state.currentCategory = data.currentCategory || null;
                 this.state.posts = data.posts || [];
-                this.state.totalPosts = data.total || this.state.posts.length;
+                this.state.totalPosts = data.total || 0;
                 this.state.currentPage = data.currentPage || 1;
                 this.state.postsPerPage = data.postsPerPage || 12;
                 
-                console.log('Custom Element - State updated:', {
-                    postsCount: this.state.posts.length,
-                    totalPosts: this.state.totalPosts,
-                    currentPage: this.state.currentPage,
-                    postsPerPage: this.state.postsPerPage,
-                    totalPages: Math.ceil(this.state.totalPosts / this.state.postsPerPage)
-                });
+                console.log('Custom Element - State updated:', this.state);
                 
-                // CRITICAL: Immediately update if connected (like the graph does)
                 if (this.isConnected) {
-                    this.updatePostsDisplay();
+                    this.render();
                 }
                 
             } else if (name === 'style-props') {
@@ -129,52 +104,7 @@ class CategoryBrowser extends HTMLElement {
         `;
         
         this.initialRenderDone = true;
-        
-        if (!this.state.isLoading) {
-            this.render();
-        }
-    }
-
-    // NEW: Separate method to update posts display (like graph's updateChart)
-    updatePostsDisplay() {
-        console.log('updatePostsDisplay called');
-        
-        const container = this.querySelector('#postsContainer');
-        if (!container) {
-            console.log('postsContainer not found, full render needed');
-            // If container doesn't exist, do full render
-            if (this.state.mode === 'single' && this.state.category) {
-                this.render();
-            }
-            return;
-        }
-
-        if (!this.state.posts || this.state.posts.length === 0) {
-            container.innerHTML = this.getEmptyState('No posts found in this category');
-            this.querySelector('#pagination').innerHTML = '';
-            return;
-        }
-
-        // Update posts grid
-        container.innerHTML = `
-            <div class="posts-section-header">
-                <h2>Articles</h2>
-            </div>
-            <div class="posts-grid">
-                ${this.state.posts.map(post => this.renderPostCard(post)).join('')}
-            </div>
-        `;
-
-        // Re-attach event listeners to post cards
-        this.querySelectorAll('.post-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToPost(slug);
-            });
-        });
-
-        // Update pagination
-        this.renderPagination();
+        this.render();
     }
 
     getStyles() {
@@ -210,208 +140,78 @@ class CategoryBrowser extends HTMLElement {
                 padding: 60px 20px;
             }
 
-            /* Single Category Header */
-            .single-header {
+            /* Page Header */
+            .page-header {
                 text-align: center;
-                margin-bottom: 60px;
-                padding: 60px 40px;
+                margin-bottom: 50px;
+            }
+
+            .page-title {
+                font-size: clamp(36px, 5vw, 48px);
+                font-weight: 900;
+                color: ${titleColor};
+                margin: 0 0 16px 0;
+                letter-spacing: -0.5px;
+            }
+
+            .page-subtitle {
+                font-size: 18px;
+                color: ${subtitleColor};
+                margin: 0;
+            }
+
+            /* Category Tags Navigation */
+            .categories-nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                justify-content: center;
+                margin-bottom: 50px;
+                padding: 30px 20px;
                 background: linear-gradient(135deg, ${cardBg} 0%, ${cardBgGradient} 100%);
                 border: 1px solid ${cardBorder};
                 border-radius: 16px;
             }
 
-            .category-icon {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 24px;
-                background: ${iconBg};
-                border: 2px solid ${iconBorder};
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .category-icon svg {
-                width: 40px;
-                height: 40px;
-                fill: ${iconColor};
-            }
-
-            .category-title {
-                font-size: clamp(36px, 5vw, 56px);
-                font-weight: 900;
-                color: ${titleColor};
-                margin: 0 0 20px 0;
-                letter-spacing: -0.5px;
-            }
-
-            .category-description {
-                font-size: 18px;
-                line-height: 1.7;
-                color: ${subtitleColor};
-                max-width: 800px;
-                margin: 0 auto 30px;
-            }
-
-            .category-meta {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 24px;
-                flex-wrap: wrap;
-            }
-
-            .meta-badge {
-                background: ${cardBgGradient};
-                border: 1px solid ${cardBorder};
+            .category-tag {
                 padding: 10px 20px;
+                background: ${categoryBadgeBg};
+                color: ${categoryBadgeText};
+                border: 2px solid transparent;
                 border-radius: 20px;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
                 font-size: 14px;
-                color: ${metaColor};
-            }
-
-            .meta-badge svg {
-                width: 18px;
-                height: 18px;
-                fill: ${iconColor};
-            }
-
-            /* All Categories Grid */
-            .all-categories-header {
-                text-align: center;
-                margin-bottom: 60px;
-            }
-
-            .all-categories-header h1 {
-                font-size: clamp(36px, 5vw, 48px);
-                font-weight: 900;
-                color: ${titleColor};
-                margin: 0 0 16px 0;
-            }
-
-            .all-categories-header p {
-                font-size: 18px;
-                color: ${subtitleColor};
-                margin: 0;
-            }
-
-            .categories-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-                gap: 24px;
-                margin-bottom: 60px;
-            }
-
-            .category-card {
-                background: linear-gradient(135deg, ${cardBg} 0%, ${cardBgGradient} 100%);
-                border: 1px solid ${cardBorder};
-                border-radius: 12px;
-                padding: 32px;
+                font-weight: 600;
                 cursor: pointer;
                 transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
 
-            .category-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, ${accentColor} 0%, ${accentColorSecondary} 100%);
-                transform: scaleX(0);
-                transition: transform 0.3s ease;
-            }
-
-            .category-card:hover {
-                transform: translateY(-8px);
-                box-shadow: 0 12px 24px ${iconBg};
-                border-color: ${cardBorderHover};
-            }
-
-            .category-card:hover::before {
-                transform: scaleX(1);
-            }
-
-            .category-card-icon {
-                width: 56px;
-                height: 56px;
+            .category-tag:hover {
                 background: ${iconBg};
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 20px;
+                border-color: ${iconBorder};
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px ${iconBg};
             }
 
-            .category-card-icon svg {
-                width: 28px;
-                height: 28px;
-                fill: ${iconColor};
-            }
-
-            .category-card-title {
-                font-size: 24px;
+            .category-tag.active {
+                background: ${accentColor};
+                color: #000000;
+                border-color: ${accentColor};
                 font-weight: 700;
-                color: ${cardTitleColor};
-                margin: 0 0 12px 0;
             }
 
-            .category-card-description {
-                font-size: 14px;
-                line-height: 1.6;
-                color: ${cardDescColor};
-                margin-bottom: 20px;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
+            .category-tag.all-posts {
+                background: ${iconBg};
+                border-color: ${iconBorder};
             }
 
-            .category-card-footer {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding-top: 16px;
-                border-top: 1px solid ${cardBorder};
-            }
-
-            .category-card-count {
-                font-size: 13px;
-                color: ${metaColor};
-            }
-
-            .category-card-arrow {
-                width: 24px;
-                height: 24px;
-                fill: ${iconColor};
-                transition: transform 0.3s ease;
-            }
-
-            .category-card:hover .category-card-arrow {
-                transform: translateX(4px);
+            .category-tag.all-posts.active {
+                background: ${accentColor};
+                color: #000000;
             }
 
             /* Posts Grid */
-            .posts-section-header {
-                margin-bottom: 40px;
-                padding-bottom: 16px;
-                border-bottom: 2px solid ${cardBorder};
-            }
-
-            .posts-section-header h2 {
-                font-size: 28px;
-                font-weight: 700;
-                color: ${cardTitleColor};
-                margin: 0;
-            }
-
             .posts-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -600,44 +400,17 @@ class CategoryBrowser extends HTMLElement {
                 color: ${emptyTextColor};
             }
 
-            /* Loading */
-            @keyframes shimmer {
-                0% { background-position: -1000px 0; }
-                100% { background-position: 1000px 0; }
-            }
-
-            .skeleton {
-                background: ${cardBg};
-                background-image: linear-gradient(
-                    to right,
-                    ${cardBg} 0%,
-                    ${cardBgGradient} 20%,
-                    ${cardBg} 40%,
-                    ${cardBg} 100%
-                );
-                background-repeat: no-repeat;
-                background-size: 1000px 100%;
-                animation: shimmer 1.5s infinite linear;
-                border-radius: 8px;
-            }
-
             @media (max-width: 768px) {
                 .category-browser {
                     padding: 40px 16px;
                 }
 
-                .single-header {
-                    padding: 40px 24px;
+                .categories-nav {
+                    padding: 20px 15px;
                 }
 
-                .categories-grid,
                 .posts-grid {
                     grid-template-columns: 1fr;
-                }
-
-                .category-meta {
-                    flex-direction: column;
-                    gap: 12px;
                 }
 
                 .pagination {
@@ -658,86 +431,59 @@ class CategoryBrowser extends HTMLElement {
         const content = this.querySelector('#content');
         if (!content) return;
 
-        if (this.state.mode === 'single') {
-            this.renderSingleCategory(content);
-        } else {
-            this.renderAllCategories(content);
-        }
-    }
+        console.log('Rendering - Current category:', this.state.currentCategory ? this.state.currentCategory.name : 'ALL POSTS');
+        console.log('Posts to display:', this.state.posts.length);
 
-    renderSingleCategory(content) {
-        if (!this.state.category) {
-            content.innerHTML = this.getEmptyState('Category not found');
-            return;
-        }
-
-        const cat = this.state.category;
+        const pageTitle = this.state.currentCategory 
+            ? (this.state.currentCategory.title || this.state.currentCategory.name)
+            : 'All Blog Posts';
+        
+        const pageSubtitle = this.state.currentCategory 
+            ? (this.state.currentCategory.description || `Explore articles in ${this.state.currentCategory.name}`)
+            : 'Discover insights, tutorials, and stories from our blog';
 
         content.innerHTML = `
-            <div class="single-header">
-                <div class="category-icon">
-                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-                    </svg>
-                </div>
-                <h1 class="category-title">${this.escapeHtml(cat.title || cat.name)}</h1>
-                ${cat.description ? `<p class="category-description">${this.escapeHtml(cat.description)}</p>` : ''}
-                <div class="category-meta">
-                    <span class="meta-badge">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                        </svg>
-                        ${this.state.totalPosts || cat.postCount || 0} Posts
-                    </span>
-                </div>
+            <div class="page-header">
+                <h1 class="page-title">${this.escapeHtml(pageTitle)}</h1>
+                <p class="page-subtitle">${this.escapeHtml(pageSubtitle)}</p>
             </div>
-            <div id="postsContainer"></div>
+
+            ${this.renderCategoryNav()}
+
+            ${this.state.posts.length > 0 ? this.renderPosts() : this.getEmptyState('No posts found')}
         `;
 
-        // Render posts if we have them
-        if (this.state.posts && this.state.posts.length > 0) {
-            this.updatePostsDisplay();
-        }
+        this.attachEventListeners();
+        this.renderPagination();
     }
 
-    renderAllCategories(content) {
+    renderCategoryNav() {
         if (!this.state.categories || this.state.categories.length === 0) {
-            content.innerHTML = this.getEmptyState('No categories found');
-            return;
+            return '';
         }
 
-        content.innerHTML = `
-            <div class="all-categories-header">
-                <h1>Browse Categories</h1>
-                <p>Explore articles by category</p>
-            </div>
-            <div class="categories-grid">
+        const currentSlug = this.state.currentCategory ? this.state.currentCategory.slug : null;
+
+        return `
+            <div class="categories-nav">
+                <div class="category-tag all-posts ${!currentSlug ? 'active' : ''}" data-slug="">
+                    📚 All Posts
+                </div>
                 ${this.state.categories.map(cat => `
-                    <div class="category-card" data-slug="${cat.slug}">
-                        <div class="category-card-icon">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-                            </svg>
-                        </div>
-                        <h2 class="category-card-title">${this.escapeHtml(cat.title || cat.name)}</h2>
-                        <p class="category-card-description">${this.escapeHtml(cat.description || 'Explore articles in this category')}</p>
-                        <div class="category-card-footer">
-                            <span class="category-card-count">${cat.postCount || 0} posts</span>
-                            <svg class="category-card-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
-                            </svg>
-                        </div>
+                    <div class="category-tag ${currentSlug === cat.slug ? 'active' : ''}" data-slug="${cat.slug}">
+                        ${this.escapeHtml(cat.title || cat.name)}
                     </div>
                 `).join('')}
             </div>
         `;
+    }
 
-        this.querySelectorAll('.category-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToCategory(slug);
-            });
-        });
+    renderPosts() {
+        return `
+            <div class="posts-grid">
+                ${this.state.posts.map(post => this.renderPostCard(post)).join('')}
+            </div>
+        `;
     }
 
     renderPostCard(post) {
@@ -777,16 +523,31 @@ class CategoryBrowser extends HTMLElement {
         `;
     }
 
+    attachEventListeners() {
+        // Category tag clicks
+        this.querySelectorAll('.category-tag').forEach(tag => {
+            tag.addEventListener('click', () => {
+                const slug = tag.getAttribute('data-slug');
+                this.navigateToCategory(slug);
+            });
+        });
+
+        // Post card clicks
+        this.querySelectorAll('.post-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this.navigateToPost(slug);
+            });
+        });
+    }
+
     renderPagination() {
         const paginationEl = this.querySelector('#pagination');
-        if (!paginationEl) {
-            console.log('pagination element not found');
-            return;
-        }
+        if (!paginationEl) return;
 
         const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
         
-        console.log('Rendering pagination - Total posts:', this.state.totalPosts, 'Posts per page:', this.state.postsPerPage, 'Total pages:', totalPages, 'Current page:', this.state.currentPage);
+        console.log('Rendering pagination - Total:', this.state.totalPosts, 'Per page:', this.state.postsPerPage, 'Pages:', totalPages);
         
         if (totalPages <= 1) {
             paginationEl.innerHTML = '';
@@ -843,7 +604,6 @@ class CategoryBrowser extends HTMLElement {
     }
 
     changePage(page) {
-        this.state.currentPage = page;
         this.emitEvent('page-change', { page });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -855,12 +615,13 @@ class CategoryBrowser extends HTMLElement {
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
                 </svg>
                 <h3>${message}</h3>
-                <p>Try exploring other categories</p>
+                <p>Try browsing other categories</p>
             </div>
         `;
     }
 
     navigateToCategory(slug) {
+        const url = slug ? `/blog-category/${slug}` : '/blog-category';
         this.emitEvent('navigate-to-category', { slug });
     }
 
