@@ -486,7 +486,6 @@ class BlogPostsWidget extends HTMLElement {
 
     changePage(page) {
         this.emitEvent('page-change', { page });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     getEmptyState(message) {
