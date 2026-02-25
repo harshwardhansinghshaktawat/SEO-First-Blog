@@ -1,50 +1,96 @@
-// CUSTOM ELEMENT - Tag Browser (FIXED - Same as Category Browser)
+// CUSTOM ELEMENT - Tag Browser (REDESIGNED with Sidebar)
 class TagBrowser extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            mode: 'single',
-            tag: null,
             tags: [],
+            currentTag: null,
             posts: [],
             currentPage: 1,
             postsPerPage: 12,
-            totalPosts: 0,
-            isLoading: true
+            totalPosts: 0
         };
+        
+        const initialStyleProps = this.getAttribute('style-props');
+        this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
     }
 
     static get observedAttributes() {
-        return ['mode', 'tag-data', 'tags-data', 'posts-data'];
+        return ['display-data', 'style-props'];
+    }
+
+    getDefaultStyleProps() {
+        return {
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            bgColor: '#0f0f0f',
+            titleColor: '#64FFDA',
+            subtitleColor: '#b0b0b0',
+            cardBg: '#1a1a1a',
+            cardBgGradient: '#2d2d2d',
+            cardBorder: '#3d3d3d',
+            cardBorderHover: '#64FFDA',
+            cardTitleColor: '#ffffff',
+            cardDescColor: '#9ca3af',
+            iconBg: 'rgba(100, 255, 218, 0.1)',
+            iconBorder: '#64FFDA',
+            iconColor: '#64FFDA',
+            postCardBg: '#1a1a1a',
+            postCardBorder: '#2d2d2d',
+            postCardBorderHover: '#64FFDA',
+            postTitleColor: '#ffffff',
+            postExcerptColor: '#9ca3af',
+            categoryBadgeBg: 'rgba(100, 255, 218, 0.1)',
+            categoryBadgeText: '#64FFDA',
+            metaColor: '#6b7280',
+            authorNameColor: '#ffffff',
+            dateColor: '#9ca3af',
+            paginationBg: '#1a1a1a',
+            paginationBorder: '#3d3d3d',
+            paginationText: '#9ca3af',
+            paginationHoverBg: '#2d2d2d',
+            paginationHoverBorder: '#64FFDA',
+            paginationHoverText: '#64FFDA',
+            paginationActiveBg: '#64FFDA',
+            paginationActiveText: '#000000',
+            emptyIconColor: '#3d3d3d',
+            emptyTitleColor: '#ffffff',
+            emptyTextColor: '#6b7280',
+            accentColor: '#64FFDA',
+            accentColorSecondary: '#4dd9ba'
+        };
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
         if (!newValue || oldValue === newValue) return;
 
         try {
-            if (name === 'mode') {
-                this.state.mode = newValue;
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-            } else if (name === 'tag-data') {
-                this.state.tag = JSON.parse(newValue);
-                this.state.mode = 'single';
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-            } else if (name === 'tags-data') {
-                this.state.tags = JSON.parse(newValue);
-                this.state.mode = 'all';
-                this.state.isLoading = false;
-                if (this.isConnected) this.render();
-            } else if (name === 'posts-data') {
+            if (name === 'display-data') {
                 const data = JSON.parse(newValue);
+                console.log('Custom Element - Received display-data:', data);
+                
+                this.state.tags = data.tags || [];
+                this.state.currentTag = data.currentTag || null;
                 this.state.posts = data.posts || [];
-                this.state.totalPosts = data.total || this.state.posts.length;
+                this.state.totalPosts = data.total || 0;
                 this.state.currentPage = data.currentPage || 1;
-                if (this.isConnected) this.renderPosts();
+                this.state.postsPerPage = data.postsPerPage || 12;
+                
+                console.log('Custom Element - State updated:', this.state);
+                
+                if (this.isConnected) {
+                    this.render();
+                }
+                
+            } else if (name === 'style-props') {
+                const newStyleProps = JSON.parse(newValue);
+                this.styleProps = { ...this.styleProps, ...newStyleProps };
+                
+                if (this.initialRenderDone) {
+                    this.updateStyles();
+                }
             }
         } catch (e) {
-            console.error('Error parsing attribute:', e);
+            console.error('Error in attributeChangedCallback:', name, e);
         }
     }
 
@@ -52,246 +98,162 @@ class TagBrowser extends HTMLElement {
         this.innerHTML = `
             <style>${this.getStyles()}</style>
             <div class="tag-browser">
-                <div id="content"></div>
-                <div id="pagination"></div>
+                <div class="content-wrapper">
+                    <aside class="sidebar" id="sidebar"></aside>
+                    <main class="main-content">
+                        <div id="content"></div>
+                        <div id="pagination"></div>
+                    </main>
+                </div>
             </div>
         `;
         
-        if (!this.state.isLoading) {
-            this.render();
-        }
+        this.initialRenderDone = true;
+        this.render();
     }
 
     getStyles() {
+        const {
+            fontFamily, bgColor, titleColor, subtitleColor,
+            cardBg, cardBgGradient, cardBorder, cardBorderHover,
+            cardTitleColor, cardDescColor,
+            iconBg, iconBorder, iconColor,
+            postCardBg, postCardBorder, postCardBorderHover,
+            postTitleColor, postExcerptColor,
+            categoryBadgeBg, categoryBadgeText,
+            metaColor, authorNameColor, dateColor,
+            paginationBg, paginationBorder, paginationText,
+            paginationHoverBg, paginationHoverBorder, paginationHoverText,
+            paginationActiveBg, paginationActiveText,
+            emptyIconColor, emptyTitleColor, emptyTextColor,
+            accentColor, accentColorSecondary
+        } = this.styleProps;
+
         return `
             tag-browser {
                 display: block;
                 width: 100%;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                background: #0f0f0f;
+                font-family: ${fontFamily};
+                background: ${bgColor};
                 color: #ffffff;
                 min-height: 100vh;
             }
 
             .tag-browser {
-                max-width: 1400px;
+                max-width: 1600px;
                 margin: 0 auto;
                 padding: 60px 20px;
             }
 
-            .single-header {
-                text-align: center;
-                margin-bottom: 60px;
-                padding: 60px 40px;
-                background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-                border: 1px solid #3d3d3d;
+            .content-wrapper {
+                display: grid;
+                grid-template-columns: 300px 1fr;
+                gap: 40px;
+            }
+
+            /* Sidebar */
+            .sidebar {
+                position: sticky;
+                top: 80px;
+                height: fit-content;
+                max-height: calc(100vh - 120px);
+                overflow-y: auto;
+                padding: 30px;
+                background: linear-gradient(135deg, ${cardBg} 0%, ${cardBgGradient} 100%);
+                border: 1px solid ${cardBorder};
                 border-radius: 16px;
             }
 
-            .tag-icon {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 24px;
-                background: rgba(100, 255, 218, 0.1);
-                border: 2px solid #64FFDA;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+            .sidebar::-webkit-scrollbar {
+                width: 6px;
             }
 
-            .tag-icon svg {
-                width: 40px;
-                height: 40px;
-                fill: #64FFDA;
+            .sidebar::-webkit-scrollbar-track {
+                background: ${cardBg};
+                border-radius: 3px;
             }
 
-            .tag-icon img {
-                width: 100%;
-                height: 100%;
-                border-radius: 50%;
-                object-fit: cover;
+            .sidebar::-webkit-scrollbar-thumb {
+                background: ${iconColor};
+                border-radius: 3px;
             }
 
-            .tag-title {
-                font-size: clamp(36px, 5vw, 56px);
-                font-weight: 900;
-                color: #64FFDA;
+            .sidebar-title {
+                font-size: 20px;
+                font-weight: 700;
+                color: ${titleColor};
                 margin: 0 0 20px 0;
+                padding-bottom: 15px;
+                border-bottom: 2px solid ${cardBorder};
+            }
+
+            .tag-cloud {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .tag-pill {
+                padding: 8px 16px;
+                background: ${categoryBadgeBg};
+                color: ${categoryBadgeText};
+                border: 2px solid transparent;
+                border-radius: 20px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                white-space: nowrap;
+            }
+
+            .tag-pill:hover {
+                background: ${iconBg};
+                border-color: ${iconBorder};
+                transform: translateY(-2px);
+            }
+
+            .tag-pill.active {
+                background: ${accentColor};
+                color: #000000;
+                border-color: ${accentColor};
+                font-weight: 700;
+            }
+
+            .tag-pill.all-tags {
+                background: ${iconBg};
+                border-color: ${iconBorder};
+            }
+
+            .tag-pill.all-tags.active {
+                background: ${accentColor};
+                color: #000000;
+            }
+
+            /* Main Content */
+            .main-content {
+                min-width: 0;
+            }
+
+            .page-header {
+                text-align: center;
+                margin-bottom: 50px;
+            }
+
+            .page-title {
+                font-size: clamp(36px, 5vw, 48px);
+                font-weight: 900;
+                color: ${titleColor};
+                margin: 0 0 16px 0;
                 letter-spacing: -0.5px;
             }
 
-            .tag-description {
+            .page-subtitle {
                 font-size: 18px;
-                line-height: 1.7;
-                color: #b0b0b0;
-                max-width: 800px;
-                margin: 0 auto 30px;
-            }
-
-            .tag-meta {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 24px;
-                flex-wrap: wrap;
-            }
-
-            .meta-badge {
-                background: #2d2d2d;
-                border: 1px solid #3d3d3d;
-                padding: 10px 20px;
-                border-radius: 20px;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-                color: #9ca3af;
-            }
-
-            .meta-badge svg {
-                width: 18px;
-                height: 18px;
-                fill: #64FFDA;
-            }
-
-            .all-tags-header {
-                text-align: center;
-                margin-bottom: 60px;
-            }
-
-            .all-tags-header h1 {
-                font-size: clamp(36px, 5vw, 48px);
-                font-weight: 900;
-                color: #64FFDA;
-                margin: 0 0 16px 0;
-            }
-
-            .all-tags-header p {
-                font-size: 18px;
-                color: #b0b0b0;
+                color: ${subtitleColor};
                 margin: 0;
             }
 
-            .tags-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-                gap: 24px;
-                margin-bottom: 60px;
-            }
-
-            .tag-card {
-                background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-                border: 1px solid #3d3d3d;
-                border-radius: 12px;
-                padding: 32px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
-            }
-
-            .tag-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, #64FFDA 0%, #4dd9ba 100%);
-                transform: scaleX(0);
-                transition: transform 0.3s ease;
-            }
-
-            .tag-card:hover {
-                transform: translateY(-8px);
-                box-shadow: 0 12px 24px rgba(100, 255, 218, 0.2);
-                border-color: #64FFDA;
-            }
-
-            .tag-card:hover::before {
-                transform: scaleX(1);
-            }
-
-            .tag-card-icon {
-                width: 56px;
-                height: 56px;
-                background: rgba(100, 255, 218, 0.1);
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 20px;
-            }
-
-            .tag-card-icon svg {
-                width: 28px;
-                height: 28px;
-                fill: #64FFDA;
-            }
-
-            .tag-card-icon img {
-                width: 100%;
-                height: 100%;
-                border-radius: 12px;
-                object-fit: cover;
-            }
-
-            .tag-card-title {
-                font-size: 24px;
-                font-weight: 700;
-                color: #ffffff;
-                margin: 0 0 12px 0;
-            }
-
-            .tag-card-description {
-                font-size: 14px;
-                line-height: 1.6;
-                color: #9ca3af;
-                margin-bottom: 20px;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }
-
-            .tag-card-footer {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding-top: 16px;
-                border-top: 1px solid #3d3d3d;
-            }
-
-            .tag-card-count {
-                font-size: 13px;
-                color: #6b7280;
-            }
-
-            .tag-card-arrow {
-                width: 24px;
-                height: 24px;
-                fill: #64FFDA;
-                transition: transform 0.3s ease;
-            }
-
-            .tag-card:hover .tag-card-arrow {
-                transform: translateX(4px);
-            }
-
-            .posts-section-header {
-                margin-bottom: 40px;
-                padding-bottom: 16px;
-                border-bottom: 2px solid #3d3d3d;
-            }
-
-            .posts-section-header h2 {
-                font-size: 28px;
-                font-weight: 700;
-                color: #ffffff;
-                margin: 0;
-            }
-
+            /* Posts Grid */
             .posts-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -300,10 +262,10 @@ class TagBrowser extends HTMLElement {
             }
 
             .post-card {
-                background: #1a1a1a;
+                background: ${postCardBg};
                 border-radius: 12px;
                 overflow: hidden;
-                border: 1px solid #2d2d2d;
+                border: 1px solid ${postCardBorder};
                 transition: all 0.3s ease;
                 cursor: pointer;
                 display: flex;
@@ -313,14 +275,14 @@ class TagBrowser extends HTMLElement {
             .post-card:hover {
                 transform: translateY(-8px);
                 box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6);
-                border-color: #64FFDA;
+                border-color: ${postCardBorderHover};
             }
 
             .post-image {
                 width: 100%;
                 height: 220px;
                 object-fit: cover;
-                background: #0f0f0f;
+                background: ${bgColor};
             }
 
             .post-content {
@@ -332,8 +294,8 @@ class TagBrowser extends HTMLElement {
 
             .post-category-badge {
                 display: inline-block;
-                background: rgba(100, 255, 218, 0.1);
-                color: #64FFDA;
+                background: ${categoryBadgeBg};
+                color: ${categoryBadgeText};
                 padding: 4px 12px;
                 border-radius: 12px;
                 font-size: 12px;
@@ -345,7 +307,7 @@ class TagBrowser extends HTMLElement {
             .post-title {
                 font-size: 22px;
                 font-weight: 700;
-                color: #ffffff;
+                color: ${postTitleColor};
                 margin: 0 0 12px 0;
                 line-height: 1.4;
                 display: -webkit-box;
@@ -357,7 +319,7 @@ class TagBrowser extends HTMLElement {
             .post-excerpt {
                 font-size: 15px;
                 line-height: 1.6;
-                color: #9ca3af;
+                color: ${postExcerptColor};
                 margin-bottom: 20px;
                 display: -webkit-box;
                 -webkit-line-clamp: 3;
@@ -371,9 +333,9 @@ class TagBrowser extends HTMLElement {
                 justify-content: space-between;
                 align-items: center;
                 font-size: 13px;
-                color: #6b7280;
+                color: ${metaColor};
                 padding-top: 16px;
-                border-top: 1px solid #2d2d2d;
+                border-top: 1px solid ${postCardBorder};
             }
 
             .post-author {
@@ -387,15 +349,21 @@ class TagBrowser extends HTMLElement {
                 height: 28px;
                 border-radius: 50%;
                 object-fit: cover;
-                border: 1px solid #64FFDA;
+                border: 1px solid ${iconColor};
+            }
+
+            .post-author span {
+                color: ${authorNameColor};
             }
 
             .post-date {
                 display: flex;
                 align-items: center;
                 gap: 6px;
+                color: ${dateColor};
             }
 
+            /* Pagination */
             .pagination {
                 display: flex;
                 justify-content: center;
@@ -406,10 +374,10 @@ class TagBrowser extends HTMLElement {
 
             .pagination-btn {
                 padding: 10px 16px;
-                background: #1a1a1a;
-                border: 1px solid #3d3d3d;
+                background: ${paginationBg};
+                border: 1px solid ${paginationBorder};
                 border-radius: 8px;
-                color: #9ca3af;
+                color: ${paginationText};
                 font-size: 14px;
                 font-weight: 600;
                 cursor: pointer;
@@ -420,9 +388,9 @@ class TagBrowser extends HTMLElement {
             }
 
             .pagination-btn:hover:not(:disabled) {
-                background: #2d2d2d;
-                border-color: #64FFDA;
-                color: #64FFDA;
+                background: ${paginationHoverBg};
+                border-color: ${paginationHoverBorder};
+                color: ${paginationHoverText};
             }
 
             .pagination-btn:disabled {
@@ -437,58 +405,68 @@ class TagBrowser extends HTMLElement {
             }
 
             .pagination-btn.active {
-                background: #64FFDA;
-                border-color: #64FFDA;
-                color: #000000;
+                background: ${paginationActiveBg};
+                border-color: ${paginationActiveBg};
+                color: ${paginationActiveText};
             }
 
             .pagination-info {
                 padding: 0 16px;
-                color: #9ca3af;
+                color: ${paginationText};
                 font-size: 14px;
             }
 
+            /* Empty State */
             .empty-state {
                 text-align: center;
                 padding: 80px 20px;
-                color: #6b7280;
+                color: ${metaColor};
             }
 
             .empty-state svg {
                 width: 64px;
                 height: 64px;
-                fill: #3d3d3d;
+                fill: ${emptyIconColor};
                 margin-bottom: 20px;
             }
 
             .empty-state h3 {
                 font-size: 24px;
-                color: #ffffff;
+                color: ${emptyTitleColor};
                 margin: 0 0 12px 0;
             }
 
             .empty-state p {
                 font-size: 16px;
                 margin: 0;
+                color: ${emptyTextColor};
             }
 
-            @media (max-width: 768px) {
+            @media (max-width: 1200px) {
+                .content-wrapper {
+                    grid-template-columns: 250px 1fr;
+                    gap: 30px;
+                }
+            }
+
+            @media (max-width: 968px) {
                 .tag-browser {
                     padding: 40px 16px;
                 }
 
-                .single-header {
-                    padding: 40px 24px;
-                }
-
-                .tags-grid,
-                .posts-grid {
+                .content-wrapper {
                     grid-template-columns: 1fr;
                 }
 
-                .tag-meta {
-                    flex-direction: column;
-                    gap: 12px;
+                .sidebar {
+                    position: relative;
+                    top: 0;
+                    max-height: none;
+                    margin-bottom: 30px;
+                }
+
+                .posts-grid {
+                    grid-template-columns: 1fr;
                 }
 
                 .pagination {
@@ -498,125 +476,74 @@ class TagBrowser extends HTMLElement {
         `;
     }
 
+    updateStyles() {
+        const styleElement = this.querySelector('style');
+        if (styleElement) {
+            styleElement.textContent = this.getStyles();
+        }
+    }
+
     render() {
         const content = this.querySelector('#content');
-        if (!content) return;
+        const sidebar = this.querySelector('#sidebar');
+        if (!content || !sidebar) return;
 
-        if (this.state.mode === 'single') {
-            this.renderSingleTag(content);
-        } else {
-            this.renderAllTags(content);
-        }
-    }
+        console.log('Rendering - Current tag:', this.state.currentTag ? this.state.currentTag.name : 'ALL POSTS');
+        console.log('Posts to display:', this.state.posts.length);
 
-    renderSingleTag(content) {
-        if (!this.state.tag) {
-            content.innerHTML = this.getEmptyState('Tag not found');
-            return;
-        }
+        // Render sidebar
+        sidebar.innerHTML = this.renderSidebar();
 
-        const tag = this.state.tag;
-        const imageUrl = this.convertWixImageUrl(tag.image);
+        // Render main content
+        const pageTitle = this.state.currentTag 
+            ? `#${this.state.currentTag.name}`
+            : 'All Blog Posts';
+        
+        const pageSubtitle = this.state.currentTag 
+            ? (this.state.currentTag.description || `Explore articles tagged with ${this.state.currentTag.name}`)
+            : 'Browse all posts by tags';
 
         content.innerHTML = `
-            <div class="single-header">
-                <div class="tag-icon">
-                    ${imageUrl 
-                        ? `<img src="${imageUrl}" alt="${this.escapeHtml(tag.name)}">`
-                        : `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
-                        </svg>`
-                    }
-                </div>
-                <h1 class="tag-title">#${this.escapeHtml(tag.name)}</h1>
-                ${tag.description ? `<p class="tag-description">${this.escapeHtml(tag.description)}</p>` : ''}
-                <div class="tag-meta">
-                    <span class="meta-badge">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                        </svg>
-                        ${this.state.totalPosts || tag.postCount || 0} Posts
-                    </span>
-                </div>
+            <div class="page-header">
+                <h1 class="page-title">${this.escapeHtml(pageTitle)}</h1>
+                <p class="page-subtitle">${this.escapeHtml(pageSubtitle)}</p>
             </div>
-            <div id="postsContainer"></div>
+
+            ${this.state.posts.length > 0 ? this.renderPosts() : this.getEmptyState('No posts found')}
         `;
 
-        this.renderPosts();
+        this.attachEventListeners();
+        this.renderPagination();
     }
 
-    renderAllTags(content) {
+    renderSidebar() {
         if (!this.state.tags || this.state.tags.length === 0) {
-            content.innerHTML = this.getEmptyState('No tags found');
-            return;
+            return '<p style="color: #6b7280; font-size: 14px;">No tags available</p>';
         }
 
-        content.innerHTML = `
-            <div class="all-tags-header">
-                <h1>Browse Tags</h1>
-                <p>Explore articles by tag</p>
-            </div>
-            <div class="tags-grid">
-                ${this.state.tags.map(tag => {
-                    const imageUrl = this.convertWixImageUrl(tag.image);
-                    return `
-                        <div class="tag-card" data-slug="${tag.slug}">
-                            <div class="tag-card-icon">
-                                ${imageUrl 
-                                    ? `<img src="${imageUrl}" alt="${this.escapeHtml(tag.name)}">`
-                                    : `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
-                                    </svg>`
-                                }
-                            </div>
-                            <h2 class="tag-card-title">#${this.escapeHtml(tag.name)}</h2>
-                            <p class="tag-card-description">${this.escapeHtml(tag.description || 'Explore articles with this tag')}</p>
-                            <div class="tag-card-footer">
-                                <span class="tag-card-count">${tag.postCount || 0} posts</span>
-                                <svg class="tag-card-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
-                                </svg>
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+        const currentSlug = this.state.currentTag ? this.state.currentTag.slug : null;
+
+        return `
+            <h3 class="sidebar-title">🏷️ Browse Tags</h3>
+            <div class="tag-cloud">
+                <div class="tag-pill all-tags ${!currentSlug ? 'active' : ''}" data-slug="">
+                    All Posts
+                </div>
+                ${this.state.tags.map(tag => `
+                    <div class="tag-pill ${currentSlug === tag.slug ? 'active' : ''}" data-slug="${tag.slug}">
+                        #${this.escapeHtml(tag.name)}
+                    </div>
+                `).join('')}
             </div>
         `;
-
-        this.querySelectorAll('.tag-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToTag(slug);
-            });
-        });
     }
 
     renderPosts() {
-        const container = this.querySelector('#postsContainer');
-        if (!container) return;
-
-        if (!this.state.posts || this.state.posts.length === 0) {
-            container.innerHTML = this.getEmptyState('No posts found with this tag');
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="posts-section-header">
-                <h2>Articles</h2>
-            </div>
+        return `
             <div class="posts-grid">
                 ${this.state.posts.map(post => this.renderPostCard(post)).join('')}
             </div>
         `;
-
-        this.querySelectorAll('.post-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToPost(slug);
-            });
-        });
-
-        this.renderPagination();
     }
 
     renderPostCard(post) {
@@ -656,11 +583,31 @@ class TagBrowser extends HTMLElement {
         `;
     }
 
+    attachEventListeners() {
+        // Tag pill clicks
+        this.querySelectorAll('.tag-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                const slug = pill.getAttribute('data-slug');
+                this.navigateToTag(slug);
+            });
+        });
+
+        // Post card clicks
+        this.querySelectorAll('.post-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this.navigateToPost(slug);
+            });
+        });
+    }
+
     renderPagination() {
         const paginationEl = this.querySelector('#pagination');
         if (!paginationEl) return;
 
         const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
+        
+        console.log('Rendering pagination - Total:', this.state.totalPosts, 'Per page:', this.state.postsPerPage, 'Pages:', totalPages);
         
         if (totalPages <= 1) {
             paginationEl.innerHTML = '';
@@ -717,7 +664,6 @@ class TagBrowser extends HTMLElement {
     }
 
     changePage(page) {
-        this.state.currentPage = page;
         this.emitEvent('page-change', { page });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -729,12 +675,13 @@ class TagBrowser extends HTMLElement {
                     <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
                 </svg>
                 <h3>${message}</h3>
-                <p>Try exploring other tags</p>
+                <p>Try browsing other tags</p>
             </div>
         `;
     }
 
     navigateToTag(slug) {
+        const url = slug ? `/blog-tag/${slug}` : '/blog-tag';
         this.emitEvent('navigate-to-tag', { slug });
     }
 
