@@ -1,9 +1,9 @@
-// CUSTOM ELEMENT - Category Browser (FIXED Posts Per Page)
+// CUSTOM ELEMENT - Category Browser (FIXED - Following Graph Pattern)
 class CategoryBrowser extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            mode: 'single', // 'single' or 'all'
+            mode: 'single',
             category: null,
             categories: [],
             posts: [],
@@ -13,14 +13,8 @@ class CategoryBrowser extends HTMLElement {
             isLoading: true
         };
         
-        // Parse initial style props
         const initialStyleProps = this.getAttribute('style-props');
         this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
-        
-        // Set posts per page from style props if available
-        if (this.styleProps.postsPerPage) {
-            this.state.postsPerPage = this.styleProps.postsPerPage;
-        }
     }
 
     static get observedAttributes() {
@@ -64,8 +58,7 @@ class CategoryBrowser extends HTMLElement {
             emptyTitleColor: '#ffffff',
             emptyTextColor: '#6b7280',
             accentColor: '#64FFDA',
-            accentColorSecondary: '#4dd9ba',
-            postsPerPage: 12
+            accentColorSecondary: '#4dd9ba'
         };
     }
 
@@ -77,51 +70,52 @@ class CategoryBrowser extends HTMLElement {
                 this.state.mode = newValue;
                 this.state.isLoading = false;
                 if (this.isConnected) this.render();
+                
             } else if (name === 'category-data') {
                 this.state.category = JSON.parse(newValue);
                 this.state.mode = 'single';
                 this.state.isLoading = false;
                 if (this.isConnected) this.render();
+                
             } else if (name === 'categories-data') {
                 this.state.categories = JSON.parse(newValue);
                 this.state.mode = 'all';
                 this.state.isLoading = false;
                 if (this.isConnected) this.render();
+                
             } else if (name === 'posts-data') {
                 const data = JSON.parse(newValue);
-                console.log('Custom Element - posts-data changed:', data);
+                console.log('Custom Element - Received posts-data:', data);
                 
+                // Update all state at once
                 this.state.posts = data.posts || [];
                 this.state.totalPosts = data.total || this.state.posts.length;
                 this.state.currentPage = data.currentPage || 1;
+                this.state.postsPerPage = data.postsPerPage || 12;
                 
-                // Update posts per page from data if provided
-                if (data.postsPerPage) {
-                    const oldPostsPerPage = this.state.postsPerPage;
-                    this.state.postsPerPage = data.postsPerPage;
-                    console.log('Custom Element - postsPerPage changed from', oldPostsPerPage, 'to', this.state.postsPerPage);
-                }
+                console.log('Custom Element - State updated:', {
+                    postsCount: this.state.posts.length,
+                    totalPosts: this.state.totalPosts,
+                    currentPage: this.state.currentPage,
+                    postsPerPage: this.state.postsPerPage,
+                    totalPages: Math.ceil(this.state.totalPosts / this.state.postsPerPage)
+                });
                 
-                // Force re-render posts when data changes
+                // CRITICAL: Immediately update if connected (like the graph does)
                 if (this.isConnected) {
-                    this.renderPosts();
+                    this.updatePostsDisplay();
                 }
+                
             } else if (name === 'style-props') {
                 const newStyleProps = JSON.parse(newValue);
                 this.styleProps = { ...this.styleProps, ...newStyleProps };
-                
-                // Update posts per page if it changed in style props
-                if (newStyleProps.postsPerPage && newStyleProps.postsPerPage !== this.state.postsPerPage) {
-                    console.log('Custom Element - postsPerPage from style-props:', newStyleProps.postsPerPage);
-                    this.state.postsPerPage = newStyleProps.postsPerPage;
-                }
                 
                 if (this.initialRenderDone) {
                     this.updateStyles();
                 }
             }
         } catch (e) {
-            console.error('Error parsing attribute:', name, e);
+            console.error('Error in attributeChangedCallback:', name, e);
         }
     }
 
@@ -139,6 +133,48 @@ class CategoryBrowser extends HTMLElement {
         if (!this.state.isLoading) {
             this.render();
         }
+    }
+
+    // NEW: Separate method to update posts display (like graph's updateChart)
+    updatePostsDisplay() {
+        console.log('updatePostsDisplay called');
+        
+        const container = this.querySelector('#postsContainer');
+        if (!container) {
+            console.log('postsContainer not found, full render needed');
+            // If container doesn't exist, do full render
+            if (this.state.mode === 'single' && this.state.category) {
+                this.render();
+            }
+            return;
+        }
+
+        if (!this.state.posts || this.state.posts.length === 0) {
+            container.innerHTML = this.getEmptyState('No posts found in this category');
+            this.querySelector('#pagination').innerHTML = '';
+            return;
+        }
+
+        // Update posts grid
+        container.innerHTML = `
+            <div class="posts-section-header">
+                <h2>Articles</h2>
+            </div>
+            <div class="posts-grid">
+                ${this.state.posts.map(post => this.renderPostCard(post)).join('')}
+            </div>
+        `;
+
+        // Re-attach event listeners to post cards
+        this.querySelectorAll('.post-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this.navigateToPost(slug);
+            });
+        });
+
+        // Update pagination
+        this.renderPagination();
     }
 
     getStyles() {
@@ -660,7 +696,7 @@ class CategoryBrowser extends HTMLElement {
 
         // Render posts if we have them
         if (this.state.posts && this.state.posts.length > 0) {
-            this.renderPosts();
+            this.updatePostsDisplay();
         }
     }
 
@@ -702,41 +738,6 @@ class CategoryBrowser extends HTMLElement {
                 this.navigateToCategory(slug);
             });
         });
-    }
-
-    renderPosts() {
-        const container = this.querySelector('#postsContainer');
-        if (!container) {
-            console.log('postsContainer not found, waiting...');
-            return;
-        }
-
-        console.log('Rendering posts - Count:', this.state.posts.length, 'Posts per page:', this.state.postsPerPage);
-
-        if (!this.state.posts || this.state.posts.length === 0) {
-            container.innerHTML = this.getEmptyState('No posts found in this category');
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="posts-section-header">
-                <h2>Articles</h2>
-            </div>
-            <div class="posts-grid">
-                ${this.state.posts.map(post => this.renderPostCard(post)).join('')}
-            </div>
-        `;
-
-        // Re-attach event listeners
-        this.querySelectorAll('.post-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToPost(slug);
-            });
-        });
-
-        // Render pagination
-        this.renderPagination();
     }
 
     renderPostCard(post) {
@@ -795,15 +796,12 @@ class CategoryBrowser extends HTMLElement {
         const currentPage = this.state.currentPage;
         const pages = [];
 
-        // Always show first page
         pages.push(1);
 
-        // Show pages around current
         for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
             if (!pages.includes(i)) pages.push(i);
         }
 
-        // Always show last page
         if (!pages.includes(totalPages)) pages.push(totalPages);
 
         paginationEl.innerHTML = `
@@ -836,7 +834,6 @@ class CategoryBrowser extends HTMLElement {
             </div>
         `;
 
-        // Re-attach pagination click handlers
         paginationEl.querySelectorAll('.pagination-btn[data-page]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const page = parseInt(btn.getAttribute('data-page'));
