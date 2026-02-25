@@ -1,4 +1,4 @@
-// CUSTOM ELEMENT - Category Browser (with Style Props Support)
+// CUSTOM ELEMENT - Category Browser (with Posts Per Page Support)
 class CategoryBrowser extends HTMLElement {
     constructor() {
         super();
@@ -16,6 +16,11 @@ class CategoryBrowser extends HTMLElement {
         // Parse initial style props
         const initialStyleProps = this.getAttribute('style-props');
         this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
+        
+        // Set posts per page from style props if available
+        if (this.styleProps.postsPerPage) {
+            this.state.postsPerPage = this.styleProps.postsPerPage;
+        }
     }
 
     static get observedAttributes() {
@@ -59,7 +64,8 @@ class CategoryBrowser extends HTMLElement {
             emptyTitleColor: '#ffffff',
             emptyTextColor: '#6b7280',
             accentColor: '#64FFDA',
-            accentColorSecondary: '#4dd9ba'
+            accentColorSecondary: '#4dd9ba',
+            postsPerPage: 12
         };
     }
 
@@ -86,10 +92,23 @@ class CategoryBrowser extends HTMLElement {
                 this.state.posts = data.posts || [];
                 this.state.totalPosts = data.total || this.state.posts.length;
                 this.state.currentPage = data.currentPage || 1;
+                
+                // Update posts per page from data if provided
+                if (data.postsPerPage) {
+                    this.state.postsPerPage = data.postsPerPage;
+                }
+                
                 if (this.isConnected) this.renderPosts();
             } else if (name === 'style-props') {
                 const newStyleProps = JSON.parse(newValue);
                 this.styleProps = { ...this.styleProps, ...newStyleProps };
+                
+                // Update posts per page if it changed
+                if (newStyleProps.postsPerPage && newStyleProps.postsPerPage !== this.state.postsPerPage) {
+                    this.state.postsPerPage = newStyleProps.postsPerPage;
+                    console.log('Posts per page updated in custom element:', this.state.postsPerPage);
+                }
+                
                 if (this.initialRenderDone) {
                     this.updateStyles();
                 }
@@ -745,6 +764,8 @@ class CategoryBrowser extends HTMLElement {
         if (!paginationEl) return;
 
         const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
+        
+        console.log('Rendering pagination - Total posts:', this.state.totalPosts, 'Posts per page:', this.state.postsPerPage, 'Total pages:', totalPages);
         
         if (totalPages <= 1) {
             paginationEl.innerHTML = '';
