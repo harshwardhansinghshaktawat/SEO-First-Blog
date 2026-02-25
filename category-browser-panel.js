@@ -1,4 +1,4 @@
-// CUSTOM ELEMENT - Category Browser (with Posts Per Page Support)
+// CUSTOM ELEMENT - Category Browser (FIXED Posts Per Page)
 class CategoryBrowser extends HTMLElement {
     constructor() {
         super();
@@ -89,24 +89,31 @@ class CategoryBrowser extends HTMLElement {
                 if (this.isConnected) this.render();
             } else if (name === 'posts-data') {
                 const data = JSON.parse(newValue);
+                console.log('Custom Element - posts-data changed:', data);
+                
                 this.state.posts = data.posts || [];
                 this.state.totalPosts = data.total || this.state.posts.length;
                 this.state.currentPage = data.currentPage || 1;
                 
                 // Update posts per page from data if provided
                 if (data.postsPerPage) {
+                    const oldPostsPerPage = this.state.postsPerPage;
                     this.state.postsPerPage = data.postsPerPage;
+                    console.log('Custom Element - postsPerPage changed from', oldPostsPerPage, 'to', this.state.postsPerPage);
                 }
                 
-                if (this.isConnected) this.renderPosts();
+                // Force re-render posts when data changes
+                if (this.isConnected) {
+                    this.renderPosts();
+                }
             } else if (name === 'style-props') {
                 const newStyleProps = JSON.parse(newValue);
                 this.styleProps = { ...this.styleProps, ...newStyleProps };
                 
-                // Update posts per page if it changed
+                // Update posts per page if it changed in style props
                 if (newStyleProps.postsPerPage && newStyleProps.postsPerPage !== this.state.postsPerPage) {
+                    console.log('Custom Element - postsPerPage from style-props:', newStyleProps.postsPerPage);
                     this.state.postsPerPage = newStyleProps.postsPerPage;
-                    console.log('Posts per page updated in custom element:', this.state.postsPerPage);
                 }
                 
                 if (this.initialRenderDone) {
@@ -114,7 +121,7 @@ class CategoryBrowser extends HTMLElement {
                 }
             }
         } catch (e) {
-            console.error('Error parsing attribute:', e);
+            console.error('Error parsing attribute:', name, e);
         }
     }
 
@@ -651,7 +658,10 @@ class CategoryBrowser extends HTMLElement {
             <div id="postsContainer"></div>
         `;
 
-        this.renderPosts();
+        // Render posts if we have them
+        if (this.state.posts && this.state.posts.length > 0) {
+            this.renderPosts();
+        }
     }
 
     renderAllCategories(content) {
@@ -696,7 +706,12 @@ class CategoryBrowser extends HTMLElement {
 
     renderPosts() {
         const container = this.querySelector('#postsContainer');
-        if (!container) return;
+        if (!container) {
+            console.log('postsContainer not found, waiting...');
+            return;
+        }
+
+        console.log('Rendering posts - Count:', this.state.posts.length, 'Posts per page:', this.state.postsPerPage);
 
         if (!this.state.posts || this.state.posts.length === 0) {
             container.innerHTML = this.getEmptyState('No posts found in this category');
@@ -712,6 +727,7 @@ class CategoryBrowser extends HTMLElement {
             </div>
         `;
 
+        // Re-attach event listeners
         this.querySelectorAll('.post-card').forEach(card => {
             card.addEventListener('click', () => {
                 const slug = card.getAttribute('data-slug');
@@ -719,6 +735,7 @@ class CategoryBrowser extends HTMLElement {
             });
         });
 
+        // Render pagination
         this.renderPagination();
     }
 
@@ -761,11 +778,14 @@ class CategoryBrowser extends HTMLElement {
 
     renderPagination() {
         const paginationEl = this.querySelector('#pagination');
-        if (!paginationEl) return;
+        if (!paginationEl) {
+            console.log('pagination element not found');
+            return;
+        }
 
         const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
         
-        console.log('Rendering pagination - Total posts:', this.state.totalPosts, 'Posts per page:', this.state.postsPerPage, 'Total pages:', totalPages);
+        console.log('Rendering pagination - Total posts:', this.state.totalPosts, 'Posts per page:', this.state.postsPerPage, 'Total pages:', totalPages, 'Current page:', this.state.currentPage);
         
         if (totalPages <= 1) {
             paginationEl.innerHTML = '';
@@ -816,6 +836,7 @@ class CategoryBrowser extends HTMLElement {
             </div>
         `;
 
+        // Re-attach pagination click handlers
         paginationEl.querySelectorAll('.pagination-btn[data-page]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const page = parseInt(btn.getAttribute('data-page'));
