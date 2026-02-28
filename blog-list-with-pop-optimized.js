@@ -470,27 +470,42 @@ class BlogListViewer extends HTMLElement {
             return 'https://via.placeholder.com/400x240?text=No+Image';
         }
 
-        // If already a full URL, optimize it if it's a Wix static URL
+        const {
+            width = 400,
+            height = 240,
+            quality = 85,
+            operation = 'fill'
+        } = options;
+
+        // Handle already optimized Wix URLs - extract and rebuild
         if (wixUrl.startsWith('https://static.wixstatic.com/media/')) {
-            // Extract file ID from existing URL
-            const match = wixUrl.match(/media\/([^\/~]+)/);
-            if (match && match[1]) {
-                const fileId = match[1];
-                const {
-                    width = 400,
-                    height = 240,
-                    quality = 85,
-                    operation = 'fill'
-                } = options;
+            try {
+                // Extract file ID and original extension
+                // Format: https://static.wixstatic.com/media/8874a0_xxxxx~mv2.webp
+                const urlParts = wixUrl.split('/media/')[1];
+                if (!urlParts) return wixUrl;
                 
-                // Build optimized URL
-                const params = `w_${width},h_${height},al_c,q_${quality},usm_0.66_1.00_0.01,enc_auto`;
-                return `https://static.wixstatic.com/media/${fileId}/v1/${operation}/${params}/${fileId}.webp`;
+                // Get the filename part (before any /v1/ path)
+                const filename = urlParts.split('/')[0];
+                
+                // Extract file ID (before ~)
+                const fileId = filename.split('~')[0];
+                
+                // Get original extension
+                const hasExtension = filename.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+                const originalExt = hasExtension ? hasExtension[1] : 'png';
+                
+                // Build optimized URL - Wix format requires original filename at end
+                const params = `w_${width},h_${height},al_c,q_${quality},usm_0.66_1.00_0.01,enc_avif,quality_auto`;
+                return `https://static.wixstatic.com/media/${filename}/v1/${operation}/${params}/${filename}`;
+                
+            } catch (e) {
+                console.error('Error optimizing Wix URL:', wixUrl, e);
+                return wixUrl;
             }
-            return wixUrl;
         }
 
-        // If it's already http/https but not Wix, return as-is
+        // If it's other http/https, return as-is
         if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
             return wixUrl;
         }
@@ -499,22 +514,29 @@ class BlogListViewer extends HTMLElement {
         if (wixUrl.startsWith('wix:image://')) {
             try {
                 const parts = wixUrl.split('/');
-                const fileId = parts[3]?.split('#')[0];
+                let fileId = parts[3]?.split('#')[0];
                 
-                if (fileId) {
-                    // Default options
-                    const {
-                        width = 400,
-                        height = 240,
-                        quality = 85,
-                        operation = 'fill'
-                    } = options;
-                    
-                    // Build optimized URL with Wix Media parameters
-                    // enc_auto lets Wix choose best format (WebP, AVIF)
-                    const params = `w_${width},h_${height},al_c,q_${quality},usm_0.66_1.00_0.01,enc_auto`;
-                    return `https://static.wixstatic.com/media/${fileId}/v1/${operation}/${params}/${fileId}.webp`;
+                if (!fileId) return 'https://via.placeholder.com/400x240?text=No+Image';
+                
+                // Extract original filename if it exists in the wix:image URL
+                const filenamePart = parts[4] || fileId;
+                
+                // Determine extension
+                const hasExtension = filenamePart.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+                const ext = hasExtension ? hasExtension[1] : 'png';
+                
+                // Build filename with ~mv2 suffix if not present
+                let filename = fileId;
+                if (!filename.includes('~mv2')) {
+                    filename = `${fileId}~mv2.${ext}`;
+                } else if (!filename.includes('.')) {
+                    filename = `${filename}.${ext}`;
                 }
+                
+                // Build optimized URL
+                const params = `w_${width},h_${height},al_c,q_${quality},usm_0.66_1.00_0.01,enc_avif,quality_auto`;
+                return `https://static.wixstatic.com/media/${filename}/v1/${operation}/${params}/${filename}`;
+                
             } catch (e) {
                 console.error('Error parsing Wix image URL:', wixUrl, e);
             }
