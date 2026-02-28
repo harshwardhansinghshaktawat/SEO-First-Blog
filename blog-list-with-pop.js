@@ -453,22 +453,38 @@ class BlogListViewer extends HTMLElement {
         }
     }
 
-    _convertWixImageUrl(wixUrl) {
+    _convertWixImageUrl(wixUrl, options = {}) {
         if (!wixUrl || typeof wixUrl !== 'string') {
             return 'https://via.placeholder.com/400x240?text=No+Image';
         }
 
+        // If already a full URL, return as-is
         if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
             return wixUrl;
         }
 
+        // Parse wix:image:// format
         if (wixUrl.startsWith('wix:image://')) {
             try {
                 const parts = wixUrl.split('/');
                 const fileId = parts[3]?.split('#')[0];
                 
                 if (fileId) {
-                    return `https://static.wixstatic.com/media/${fileId}`;
+                    // Default options
+                    const {
+                        width = 400,
+                        height = 240,
+                        quality = 85,
+                        operation = 'fill',
+                        fetchPriority = 'auto'
+                    } = options;
+                    
+                    // Build optimized URL with Wix Media parameters
+                    // Format: /v1/fill/w_{width},h_{height},al_c,q_{quality},usm_0.66_1.00_0.01/
+                    const params = `w_${width},h_${height},al_c,q_${quality},usm_0.66_1.00_0.01`;
+                    const optimizedUrl = `https://static.wixstatic.com/media/${fileId}/v1/${operation}/${params}/${fileId}.webp`;
+                    
+                    return optimizedUrl;
                 }
             } catch (e) {
                 console.error('Error parsing Wix image URL:', wixUrl, e);
@@ -496,9 +512,25 @@ class BlogListViewer extends HTMLElement {
             return;
         }
 
-        grid.innerHTML = this._posts.map(post => {
-            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
-            const authorImageUrl = this._convertWixImageUrl(post.authorImage);
+        grid.innerHTML = this._posts.map((post, index) => {
+            // Optimize images with proper dimensions
+            // First 3 images get high priority and better quality for LCP
+            const isAboveFold = index < 3;
+            const featuredImageUrl = this._convertWixImageUrl(post.featuredImage, {
+                width: 800,
+                height: 480,
+                quality: isAboveFold ? 90 : 85,
+                operation: 'fill',
+                fetchPriority: isAboveFold ? 'high' : 'auto'
+            });
+            
+            // Author images are small, optimize accordingly
+            const authorImageUrl = this._convertWixImageUrl(post.authorImage, {
+                width: 80,
+                height: 80,
+                quality: 80,
+                operation: 'fill'
+            });
             
             return `
                 <article class="blog-card">
@@ -507,7 +539,8 @@ class BlogListViewer extends HTMLElement {
                             src="${featuredImageUrl}" 
                             alt="${this._escapeHtml(post.title)}"
                             class="card-image"
-                            loading="lazy"
+                            loading="${isAboveFold ? 'eager' : 'lazy'}"
+                            fetchpriority="${isAboveFold ? 'high' : 'auto'}"
                             onerror="this.src='https://via.placeholder.com/400x240?text=No+Image'"
                         />
                         ${post.isFeatured ? '<span class="featured-badge">⭐ Featured</span>' : ''}
