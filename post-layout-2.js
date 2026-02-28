@@ -1,4 +1,4 @@
-// VARIANT 1: MAGAZINE GRID LAYOUT
+// VARIANT 1: MAGAZINE GRID LAYOUT - COMPLETE
 // Features: Large featured image header, right sidebar TOC, multi-column content grid, magazine-style typography
 
 class MagazineGridBlogViewer extends HTMLElement {
@@ -350,12 +350,26 @@ class MagazineGridBlogViewer extends HTMLElement {
                 margin: 40px 0 16px;
             }
             
+            magazine-grid-blog-viewer .article-content h5 {
+                font-size: clamp(18px, 2vw, 22px);
+                font-weight: 700;
+                color: ${h5Color};
+                margin: 30px 0 14px;
+            }
+            
+            magazine-grid-blog-viewer .article-content h6 {
+                font-size: clamp(16px, 1.8vw, 20px);
+                font-weight: 700;
+                color: ${h6Color};
+                margin: 30px 0 14px;
+            }
+            
             magazine-grid-blog-viewer .article-content p {
                 margin-bottom: 28px;
                 line-height: 1.8;
             }
             
-            magazine-grid-blog-viewer .article-content p:first-letter {
+            magazine-grid-blog-viewer .article-content p:first-of-type::first-letter {
                 font-size: 3.5em;
                 line-height: 0.8;
                 float: left;
@@ -369,7 +383,7 @@ class MagazineGridBlogViewer extends HTMLElement {
                 text-decoration: none;
                 border-bottom: 2px solid ${linkColor};
                 transition: opacity 0.2s;
-                font-weight: 600;
+                padding-bottom: 2px;
             }
             
             magazine-grid-blog-viewer .article-content a:hover {
@@ -381,15 +395,35 @@ class MagazineGridBlogViewer extends HTMLElement {
                 color: ${strongColor};
             }
             
+            magazine-grid-blog-viewer .article-content em {
+                font-style: italic;
+            }
+            
+            magazine-grid-blog-viewer .article-content del {
+                text-decoration: line-through;
+                opacity: 0.7;
+            }
+            
+            magazine-grid-blog-viewer .article-content ul,
+            magazine-grid-blog-viewer .article-content ol {
+                margin-bottom: 28px;
+                padding-left: 30px;
+            }
+            
+            magazine-grid-blog-viewer .article-content li {
+                margin-bottom: 12px;
+                line-height: 1.8;
+            }
+            
             magazine-grid-blog-viewer .article-content blockquote {
                 margin: 40px 0;
                 padding: 30px 40px;
                 background: ${blockquoteBg};
                 border-left: 6px solid ${blockquoteBorder};
+                border-radius: 0 12px 12px 0;
                 font-size: 22px;
                 font-style: italic;
                 color: ${blockquoteText};
-                border-radius: 0 12px 12px 0;
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             }
             
@@ -421,20 +455,9 @@ class MagazineGridBlogViewer extends HTMLElement {
                 max-width: 100%;
                 height: auto;
                 border-radius: 12px;
-                margin: 40px 0;
+                margin: 40px auto;
                 display: block;
                 box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            }
-            
-            magazine-grid-blog-viewer .article-content ul,
-            magazine-grid-blog-viewer .article-content ol {
-                margin-bottom: 28px;
-                padding-left: 30px;
-            }
-            
-            magazine-grid-blog-viewer .article-content li {
-                margin-bottom: 14px;
-                line-height: 1.8;
             }
             
             magazine-grid-blog-viewer .article-content hr {
@@ -462,6 +485,7 @@ class MagazineGridBlogViewer extends HTMLElement {
                 padding: 16px 20px;
                 text-align: left;
                 border-bottom: 1px solid ${tableBorder};
+                color: ${tableText};
             }
             
             magazine-grid-blog-viewer .article-content table th {
@@ -471,8 +495,36 @@ class MagazineGridBlogViewer extends HTMLElement {
                 border-bottom: 2px solid ${tableHeaderText};
             }
             
+            magazine-grid-blog-viewer .article-content table tbody tr {
+                background: ${tableRowBg};
+            }
+            
             magazine-grid-blog-viewer .article-content table tbody tr:nth-child(even) {
                 background: ${tableRowAltBg};
+            }
+            
+            magazine-grid-blog-viewer .article-content table tbody tr:hover {
+                background: ${tableBorder};
+            }
+            
+            /* Video Embeds */
+            magazine-grid-blog-viewer .video-embed {
+                position: relative;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+                margin: 40px 0;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            }
+            
+            magazine-grid-blog-viewer .video-embed iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: 0;
             }
             
             /* Sidebar */
@@ -485,7 +537,7 @@ class MagazineGridBlogViewer extends HTMLElement {
                 top: 20px;
             }
             
-            /* Table of Contents - Compact */
+            /* Table of Contents */
             magazine-grid-blog-viewer .table-of-contents {
                 background: ${tocBg};
                 border: 2px solid ${tocBorder};
@@ -530,6 +582,21 @@ class MagazineGridBlogViewer extends HTMLElement {
                 color: ${tocActive};
                 background: rgba(100, 255, 218, 0.1);
                 border-left-color: ${tocActive};
+            }
+            
+            magazine-grid-blog-viewer .toc-list .toc-level-1 {
+                font-size: 16px;
+                font-weight: 600;
+            }
+            
+            magazine-grid-blog-viewer .toc-list .toc-level-2 {
+                font-size: 15px;
+                padding-left: 12px;
+            }
+            
+            magazine-grid-blog-viewer .toc-list .toc-level-3 {
+                font-size: 14px;
+                padding-left: 24px;
             }
             
             /* Share Widget */
@@ -711,9 +778,9 @@ class MagazineGridBlogViewer extends HTMLElement {
             
             magazine-grid-blog-viewer .related-post-card {
                 background: ${relatedCardBg};
+                border: 2px solid ${relatedCardBorder};
                 border-radius: 16px;
                 overflow: hidden;
-                border: 2px solid ${relatedCardBorder};
                 transition: all 0.3s;
                 cursor: pointer;
             }
@@ -762,40 +829,6 @@ class MagazineGridBlogViewer extends HTMLElement {
                 margin-bottom: 16px;
             }
             
-            /* Video Embeds */
-            magazine-grid-blog-viewer .video-embed {
-                position: relative;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-                margin: 40px 0;
-                border-radius: 12px;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            }
-            
-            magazine-grid-blog-viewer .video-embed iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: 0;
-            }
-            
-            /* Loading States */
-            @keyframes shimmer {
-                0% { background-position: -1000px 0; }
-                100% { background-position: 1000px 0; }
-            }
-            
-            magazine-grid-blog-viewer .skeleton-bg {
-                background: ${tableRowBg};
-                background-image: linear-gradient(to right, ${tableRowBg} 0%, ${tableRowAltBg} 20%, ${tableRowBg} 40%, ${tableRowBg} 100%);
-                background-repeat: no-repeat;
-                background-size: 1000px 100%;
-                animation: shimmer 1.5s infinite;
-            }
-            
             /* Responsive */
             @media (max-width: 1200px) {
                 magazine-grid-blog-viewer .content-grid {
@@ -838,6 +871,10 @@ class MagazineGridBlogViewer extends HTMLElement {
                     font-size: 17px;
                 }
                 
+                magazine-grid-blog-viewer .article-content p:first-of-type::first-letter {
+                    font-size: 2.5em;
+                }
+                
                 magazine-grid-blog-viewer .sticky-sidebar {
                     grid-template-columns: 1fr;
                 }
@@ -868,8 +905,7 @@ class MagazineGridBlogViewer extends HTMLElement {
     }
 
     showLoading() {
-        // Add loading skeletons
-        this.contentElement.innerHTML = '<div class="skeleton-bg" style="height: 200px; border-radius: 12px;"></div>';
+        this.contentElement.innerHTML = '<div style="text-align: center; padding: 60px 20px; color: ' + this.styleProps.metaText + ';"><p>Loading post...</p></div>';
     }
 
     renderPost() {
@@ -976,19 +1012,21 @@ class MagazineGridBlogViewer extends HTMLElement {
         
         let htmlContent;
         try {
+            const preprocessed = this._preprocessMarkdown(markdown);
             if (window.marked && window.marked.parse) {
                 window.marked.use({ breaks: true, gfm: true, headerIds: true, mangle: false });
-                htmlContent = window.marked.parse(markdown);
+                htmlContent = window.marked.parse(preprocessed);
             } else {
-                htmlContent = this._simpleMarkdownParse(markdown);
+                htmlContent = this._simpleMarkdownParse(preprocessed);
             }
         } catch (error) {
             console.error('Parse error:', error);
-            htmlContent = this._simpleMarkdownParse(markdown);
+            htmlContent = this._simpleMarkdownParse(this._preprocessMarkdown(markdown));
         }
         
         htmlContent = this._convertImagesInHTML(htmlContent);
         htmlContent = this._processVideoEmbeds(htmlContent);
+        htmlContent = this._processHTMLEmbeds(htmlContent);
         htmlContent = this._wrapTablesForMobile(htmlContent);
         
         const result = this._generateTableOfContents(htmlContent);
@@ -1003,49 +1041,415 @@ class MagazineGridBlogViewer extends HTMLElement {
         }
     }
 
-    // Include all helper methods from original (simplified for brevity)
-    _simpleMarkdownParse(md) { return md; }
-    _convertWixImageUrl(url) { return url || 'https://via.placeholder.com/800x400'; }
-    _convertImagesInHTML(html) { return html; }
-    _processVideoEmbeds(html) { return html; }
-    _wrapTablesForMobile(html) { return html; }
-    _generateTableOfContents(html) { return { toc: '<div class="table-of-contents"><div class="toc-title">Contents</div></div>', content: html }; }
-    _addSmoothScrollToTOC() {}
-    _setupShareButtons() {}
+    _preprocessMarkdown(markdown) {
+        return this._preprocessMarkdownImages(markdown);
+    }
+
+    _preprocessMarkdownImages(markdown) {
+        const imagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+        return markdown.replace(imagePattern, (match, alt, url) => {
+            return `<img src="${url}" alt="${alt}" loading="lazy" />`;
+        });
+    }
+
+    _simpleMarkdownParse(markdown) {
+        let html = markdown;
+        
+        const codeBlocks = [];
+        html = html.replace(/```([a-z]*)\n([\s\S]*?)```/gim, (match, lang, code) => {
+            const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`;
+            codeBlocks.push(`<pre><code class="language-${lang}">${this._escapeHtml(code.trim())}</code></pre>`);
+            return placeholder;
+        });
+
+        const inlineCodes = [];
+        html = html.replace(/`([^`]+)`/gim, (match, code) => {
+            const placeholder = `___INLINE_CODE_${inlineCodes.length}___`;
+            inlineCodes.push(`<code>${this._escapeHtml(code)}</code>`);
+            return placeholder;
+        });
+
+        const protectedImages = [];
+        html = html.replace(/<img[^>]+>/g, (match) => {
+            const placeholder = `___PROTECTED_IMAGE_${protectedImages.length}___`;
+            protectedImages.push(match);
+            return placeholder;
+        });
+
+        html = this._parseMarkdownTables(html);
+
+        html = html.replace(/^######\s+(.*)$/gim, '<h6>$1</h6>');
+        html = html.replace(/^#####\s+(.*)$/gim, '<h5>$1</h5>');
+        html = html.replace(/^####\s+(.*)$/gim, '<h4>$1</h4>');
+        html = html.replace(/^###\s+(.*)$/gim, '<h3>$1</h3>');
+        html = html.replace(/^##\s+(.*)$/gim, '<h2>$1</h2>');
+        html = html.replace(/^#\s+(.*)$/gim, '<h1>$1</h1>');
+
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2">$1</a>');
+        html = html.replace(/~~(.+?)~~/gim, '<del>$1</del>');
+        html = html.replace(/\*\*\*([^\*]+)\*\*\*/gim, '<strong><em>$1</em></strong>');
+        html = html.replace(/\*\*([^\*]+)\*\*/gim, '<strong>$1</strong>');
+        html = html.replace(/\*([^\*]+)\*/gim, '<em>$1</em>');
+        html = html.replace(/^---$/gim, '<hr>');
+        html = html.replace(/^\*\*\*$/gim, '<hr>');
+
+        protectedImages.forEach((img, index) => {
+            html = html.replace(`___PROTECTED_IMAGE_${index}___`, img);
+        });
+
+        inlineCodes.forEach((code, index) => {
+            html = html.replace(`___INLINE_CODE_${index}___`, code);
+        });
+
+        codeBlocks.forEach((code, index) => {
+            html = html.replace(`___CODE_BLOCK_${index}___`, code);
+        });
+
+        html = html.replace(/\n\n+/g, '</p><p>');
+        html = html.replace(/\n/g, '<br>');
+        html = '<p>' + html + '</p>';
+        
+        html = html.replace(/<p><\/p>/g, '');
+        html = html.replace(/<p>\s*<\/p>/g, '');
+        html = html.replace(/<p>(<h[1-6]>)/g, '$1');
+        html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<table>)/g, '$1');
+        html = html.replace(/(<\/table>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<div class="video-embed">)/g, '$1');
+        html = html.replace(/(<\/div>)<\/p>/g, '$1');
+        html = html.replace(/<p>(<pre>)/g, '$1');
+        html = html.replace(/(<\/pre>)<\/p>/g, '$1');
+        
+        return html;
+    }
+
+    _parseMarkdownTables(markdown) {
+        const lines = markdown.split('\n');
+        let result = [];
+        let inTable = false;
+        let tableRows = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line.includes('|')) {
+                const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+                const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+                const isSeparator = /^[\s\|:-]+$/.test(nextLine);
+                
+                if (!inTable && isSeparator && cells.length > 0) {
+                    inTable = true;
+                    const headerCells = cells.map(cell => `<th>${cell}</th>`).join('');
+                    tableRows.push(`<thead><tr>${headerCells}</tr></thead><tbody>`);
+                    i++;
+                } else if (inTable && cells.length > 0) {
+                    const dataCells = cells.map(cell => `<td>${cell}</td>`).join('');
+                    tableRows.push(`<tr>${dataCells}</tr>`);
+                } else if (!inTable) {
+                    result.push(line);
+                }
+            } else {
+                if (inTable && tableRows.length > 0) {
+                    tableRows.push('</tbody>');
+                    result.push(`<table>${tableRows.join('')}</table>`);
+                    tableRows = [];
+                    inTable = false;
+                }
+                result.push(line);
+            }
+        }
+        
+        if (inTable && tableRows.length > 0) {
+            tableRows.push('</tbody>');
+            result.push(`<table>${tableRows.join('')}</table>`);
+        }
+        
+        return result.join('\n');
+    }
+
+    _convertWixImageUrl(wixUrl) {
+        if (!wixUrl || typeof wixUrl !== 'string') return 'https://static.wixstatic.com/media/default-image.jpg';
+        if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) return wixUrl;
+
+        if (wixUrl.startsWith('wix:image://')) {
+            try {
+                const parts = wixUrl.split('/');
+                const fileId = parts[3]?.split('#')[0];
+                if (fileId) return `https://static.wixstatic.com/media/${fileId}`;
+            } catch (e) {
+                console.error('Error parsing Wix image URL:', wixUrl, e);
+            }
+        }
+        return 'https://static.wixstatic.com/media/default-image.jpg';
+    }
+
+    _convertImagesInHTML(html) {
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        
+        const images = template.content.querySelectorAll('img');
+        images.forEach(img => {
+            const src = img.getAttribute('src');
+            if (src) {
+                const convertedSrc = this._convertWixImageUrl(src);
+                img.setAttribute('src', convertedSrc);
+                img.setAttribute('loading', 'lazy');
+                img.setAttribute('decoding', 'async');
+                img.setAttribute('onerror', "this.src='https://static.wixstatic.com/media/default-image.jpg'");
+            }
+        });
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(template.content);
+        return tempDiv.innerHTML;
+    }
+
+    _processVideoEmbeds(html) {
+        html = html.replace(/\[youtube:([a-zA-Z0-9_-]+)\]/g, (match, videoId) => {
+            return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen title="YouTube video"></iframe></div>`;
+        });
+
+        html = html.replace(/\[vimeo:(\d+)\]/g, (match, videoId) => {
+            return `<div class="video-embed"><iframe src="https://player.vimeo.com/video/${videoId}" allowfullscreen title="Vimeo video"></iframe></div>`;
+        });
+
+        return html;
+    }
+
+    _processHTMLEmbeds(html) {
+        html = html.replace(/\[html\]([\s\S]*?)\[\/html\]/g, (match, htmlCode) => {
+            return htmlCode;
+        });
+
+        return html;
+    }
+
+    _wrapTablesForMobile(html) {
+        return html.replace(/<table>/g, '<div class="table-wrapper"><table>').replace(/<\/table>/g, '</table></div>');
+    }
+
+    _generateTableOfContents(htmlContent) {
+        const template = document.createElement('template');
+        template.innerHTML = htmlContent;
+        
+        const headings = template.content.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        if (headings.length === 0) return { toc: '', content: htmlContent };
+        
+        const tocItems = [];
+        headings.forEach((heading, index) => {
+            const level = parseInt(heading.tagName.substring(1));
+            const text = heading.textContent;
+            const id = `heading-${index}`;
+            heading.id = id;
+            tocItems.push({ level, text, id });
+        });
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(template.content);
+        const updatedContent = tempDiv.innerHTML;
+        
+        let tocHtml = `<div class="table-of-contents"><div class="toc-title"><span>📑</span>Table of Contents</div><ul class="toc-list">`;
+        tocItems.forEach(item => {
+            tocHtml += `<li class="toc-level-${item.level}"><a href="#${item.id}" data-heading-id="${item.id}">${this._escapeHtml(item.text)}</a></li>`;
+        });
+        tocHtml += `</ul></div>`;
+        
+        return { toc: tocHtml, content: updatedContent };
+    }
+
+    _addSmoothScrollToTOC() {
+        const tocLinks = this.tocElement.querySelectorAll('a[href^="#"]');
+        tocLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href').substring(1);
+                const targetElement = this.contentElement.querySelector(`#${targetId}`);
+                
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    tocLinks.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                }
+            });
+        });
+    }
+
     _renderTags(tags) {
         const tagArray = tags.split(',').map(t => t.trim());
         this.tagsSection.innerHTML = `
             <div class="tags-title">Tagged With</div>
             <div class="tags-container">
-                ${tagArray.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                ${tagArray.map(tag => `<span class="tag">${this._escapeHtml(tag)}</span>`).join('')}
             </div>
         `;
         this.tagsSection.style.display = 'block';
     }
-    renderRelatedPosts() {}
+
+    renderRelatedPosts() {
+        if (!this.state.relatedPosts || this.state.relatedPosts.length === 0) return;
+        
+        const posts = this.state.relatedPosts;
+        this.relatedPostsSection.innerHTML = `
+            <h2 class="related-posts-title">Related Articles</h2>
+            <div class="related-posts-grid">
+                ${posts.map(post => {
+                    const relatedImageUrl = this._convertWixImageUrl(post.featuredImage);
+                    const displayTitle = post.blogTitle || post.title || 'Untitled';
+                    return `
+                        <article class="related-post-card" data-slug="${post.slug}">
+                            <img 
+                                src="${relatedImageUrl}" 
+                                alt="${this._escapeHtml(displayTitle)}"
+                                class="related-post-image"
+                                loading="lazy"
+                            />
+                            <div class="related-post-content">
+                                ${post.category ? `<span class="related-post-category">${this._escapeHtml(post.category)}</span>` : ''}
+                                <h3 class="related-post-title">${this._escapeHtml(displayTitle)}</h3>
+                                <p class="related-post-excerpt">${this._escapeHtml(post.excerpt || '')}</p>
+                            </div>
+                        </article>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        this.relatedPostsSection.style.display = 'block';
+
+        this.querySelectorAll('.related-post-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this._navigateToPost(slug);
+            });
+        });
+    }
+
     updateViewCount() {
         const el = this.querySelector('#viewCountNumber');
         if (el) el.textContent = this._formatNumber(this.state.viewCount);
     }
-    updateSEOMarkup() {}
-    _formatDate(d) { return d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''; }
-    _formatNumber(n) {
-        if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-        if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-        return n.toString();
+
+    updateSEOMarkup() {
+        if (!this.state.postData || !this.initialRenderDone) return;
+
+        const post = this.state.postData;
+        let seoHTML = '';
+
+        if (post.content) {
+            let contentHTML = this._simpleMarkdownParse(post.content);
+            contentHTML = this._convertImagesInHTML(contentHTML);
+            contentHTML = this._processVideoEmbeds(contentHTML);
+            contentHTML = this._processHTMLEmbeds(contentHTML);
+            seoHTML += `<div class="blog-content">${contentHTML}</div>`;
+        }
+
+        seoHTML += `<div class="post-footer">`;
+        seoHTML += `<strong>${this._escapeHtml(post.author || 'Anonymous')}</strong>`;
+        seoHTML += `<span>${this._formatDate(post.publishedDate)}</span>`;
+        seoHTML += `<span>${post.readTime || '5'} min read</span>`;
+        seoHTML += `</div>`;
+
+        if (post.tags) {
+            const tags = post.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+            if (tags.length > 0) {
+                seoHTML += `<div class="tags-section">`;
+                seoHTML += `<strong>Tags:</strong> `;
+                seoHTML += tags.map(tag => `<span>${this._escapeHtml(tag)}</span>`).join(', ');
+                seoHTML += `</div>`;
+            }
+        }
+
+        if (this.state.relatedPosts && this.state.relatedPosts.length > 0) {
+            seoHTML += `<div class="related-posts"><h2>Related Articles</h2><ul>`;
+            this.state.relatedPosts.forEach(relatedPost => {
+                const displayTitle = relatedPost.blogTitle || relatedPost.title || 'Untitled';
+                seoHTML += `<li><a href="/blog-post/${relatedPost.slug}">${this._escapeHtml(displayTitle)}</a></li>`;
+            });
+            seoHTML += `</ul></div>`;
+        }
+
+        this.dispatchEvent(new CustomEvent('seo-markup-ready', {
+            detail: { markup: seoHTML }, bubbles: true, composed: true
+        }));
     }
+
+    _setupShareButtons() {
+        const shareButtons = this.querySelectorAll('[data-share]');
+        shareButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const type = btn.getAttribute('data-share');
+                this._handleShare(type);
+            });
+        });
+    }
+
+    _handleShare(type) {
+        const url = window.location.href;
+        const title = this.state.postData?.blogTitle || this.state.postData?.title || '';
+
+        const shareUrls = {
+            twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
+            facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+            linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
+        };
+
+        if (type === 'copy') {
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Link copied to clipboard!');
+            }).catch(() => {
+                const textArea = document.createElement('textarea');
+                textArea.value = url;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Link copied to clipboard!');
+            });
+        } else if (shareUrls[type]) {
+            window.open(shareUrls[type], '_blank', 'width=600,height=400');
+        }
+    }
+
+    _navigateToPost(slug) {
+        this.dispatchEvent(new CustomEvent('navigate-to-post', {
+            detail: { slug }, bubbles: true, composed: true
+        }));
+    }
+
+    _formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    _formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        return num.toString();
+    }
+
     _escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
     loadMarkedJS() {
-        if (window.marked) return;
+        if (window.marked) {
+            this.markedLoaded = true;
+            return;
+        }
+        
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js';
         script.async = true;
-        script.onload = () => { if (this.state.postData && this.initialRenderDone) this.renderPost(); };
+        script.onload = () => { 
+            this.markedLoaded = true;
+            if (this.state.postData && this.initialRenderDone) this.renderPost();
+        };
         document.head.appendChild(script);
     }
 
