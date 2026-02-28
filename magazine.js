@@ -393,11 +393,12 @@ class MagazinePage extends HTMLElement {
 
             /* Sidebar Layout */
             .content-with-sidebar {
-                display: grid;
-                grid-template-columns: 1fr 350px;
-                gap: 40px;
-                margin-bottom: 60px;
-            }
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 40px;
+    margin-bottom: 60px;
+    align-items: start;
+}
 
             .main-content {
                 min-width: 0;
