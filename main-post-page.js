@@ -235,6 +235,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
             enhanced-blog-post-viewer .toc-sidebar { width: 280px; flex-shrink: 0; position: sticky; top: 20px; align-self: flex-start; max-height: calc(100vh - 40px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
             enhanced-blog-post-viewer .table-of-contents { background: ${tocBg}; border: 2px solid ${tocBorder}; border-radius: 12px; padding: 28px 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); }
             enhanced-blog-post-viewer .toc-title { font-size: 22px; font-weight: 700; color: ${tocTitle}; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+            enhanced-blog-post-viewer .toc-icon { width: 20px; height: 20px; fill: ${tocTitle}; flex-shrink: 0; }
             enhanced-blog-post-viewer .toc-list { list-style: none; padding: 0; margin: 0; }
             enhanced-blog-post-viewer .toc-list li { margin-bottom: 4px; }
             enhanced-blog-post-viewer .toc-list a { color: ${tocText}; text-decoration: none; display: block; padding: 10px 12px; transition: color 0.2s, background-color 0.2s; border-left: 3px solid transparent; border-radius: 6px; font-size: 15px; }
@@ -287,6 +288,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
             enhanced-blog-post-viewer .author-label { font-size: 12px; color: ${metaText}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
             enhanced-blog-post-viewer .author-name { font-weight: 700; color: ${paragraphColor}; font-size: 18px; }
             enhanced-blog-post-viewer .author-meta { font-size: 14px; color: ${metaText}; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+            enhanced-blog-post-viewer .meta-icon { width: 14px; height: 14px; fill: ${metaText}; vertical-align: middle; margin-right: 4px; flex-shrink: 0; }
             enhanced-blog-post-viewer .meta-separator { color: ${tableBorder}; }
 
             enhanced-blog-post-viewer .view-count-badge {
@@ -303,10 +305,11 @@ class EnhancedBlogPostViewer extends HTMLElement {
                 transition: all 0.3s ease;
             }
 
-            enhanced-blog-post-viewer .view-count-badge svg {
-                width: 16px;
-                height: 16px;
-                fill: currentColor;
+            enhanced-blog-post-viewer .view-count-icon {
+                width: 14px;
+                height: 14px;
+                fill: ${viewCountText};
+                flex-shrink: 0;
             }
 
             enhanced-blog-post-viewer .view-count-badge:hover {
@@ -323,11 +326,11 @@ class EnhancedBlogPostViewer extends HTMLElement {
 
             enhanced-blog-post-viewer .tags-section { max-width: 900px; margin: 60px auto; padding-top: 40px; border-top: 2px solid ${tableBorder}; }
             enhanced-blog-post-viewer .tags-title { font-size: 16px; font-weight: 600; color: ${metaText}; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-            enhanced-blog-post-viewer .tags-title svg { width: 18px; height: 18px; fill: currentColor; }
+            enhanced-blog-post-viewer .tags-title-icon { width: 16px; height: 16px; fill: ${metaText}; flex-shrink: 0; }
             enhanced-blog-post-viewer .tags-container { display: flex; gap: 10px; flex-wrap: wrap; }
             enhanced-blog-post-viewer .tag { background: ${tagBg}; color: ${tagText}; padding: 8px 16px; border-radius: 20px; font-size: 14px; border: 1px solid ${tagBorder}; transition: all 0.3s ease; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
             enhanced-blog-post-viewer .tag:hover { background: ${tagBorder}; border-color: ${tagText}; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); }
-            enhanced-blog-post-viewer .tag svg { width: 14px; height: 14px; fill: currentColor; }
+            enhanced-blog-post-viewer .tag-icon { width: 12px; height: 12px; fill: ${tagText}; flex-shrink: 0; }
 
             enhanced-blog-post-viewer .related-posts-section { max-width: 1200px; margin: 80px auto 0; padding-top: 60px; border-top: 2px solid ${tableBorder}; }
             enhanced-blog-post-viewer .related-posts-title { font-size: 32px; font-weight: 700; color: ${h2Color}; margin-bottom: 40px; text-align: center; }
@@ -340,7 +343,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
             enhanced-blog-post-viewer .related-post-title { font-size: 20px; font-weight: 700; color: ${relatedTitle}; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
             enhanced-blog-post-viewer .related-post-excerpt { font-size: 14px; color: ${relatedExcerpt}; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 16px; }
             enhanced-blog-post-viewer .related-post-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: ${relatedMeta}; }
-            enhanced-blog-post-viewer .related-post-meta svg { width: 14px; height: 14px; fill: currentColor; margin-right: 4px; vertical-align: middle; }
+            enhanced-blog-post-viewer .related-meta-icon { width: 14px; height: 14px; fill: ${relatedMeta}; margin-right: 4px; vertical-align: middle; flex-shrink: 0; }
 
             @media (max-width: 1200px) { enhanced-blog-post-viewer #blog-content-wrapper { flex-direction: column; } enhanced-blog-post-viewer .toc-sidebar { position: relative; top: 0; width: 100%; max-width: 100%; margin-bottom: 40px; max-height: 400px; } enhanced-blog-post-viewer .main-content { max-width: 100%; } }
             @media (max-width: 768px) { enhanced-blog-post-viewer .blog-post-container { padding: 30px 16px; } enhanced-blog-post-viewer .post-footer { flex-direction: column; align-items: flex-start; } enhanced-blog-post-viewer .share-section { align-items: flex-start; width: 100%; } enhanced-blog-post-viewer .blog-content { font-size: 16px; } enhanced-blog-post-viewer .related-posts-grid { grid-template-columns: 1fr; } enhanced-blog-post-viewer .table-of-contents { padding: 20px; } }
@@ -424,21 +427,21 @@ class EnhancedBlogPostViewer extends HTMLElement {
                     <div class="author-name">${this._escapeHtml(post.author || 'Anonymous')}</div>
                     <div class="author-meta">
                         <span>
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 14px; height: 14px; fill: currentColor; vertical-align: middle; margin-right: 4px;">
+                            <svg class="meta-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8 4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/>
                             </svg>
                             ${this._formatDate(post.publishedDate)}
                         </span>
                         <span class="meta-separator" aria-hidden="true">•</span>
                         <span>
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 14px; height: 14px; fill: currentColor; vertical-align: middle; margin-right: 4px;">
+                            <svg class="meta-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
                             </svg>
                             ${post.readTime || '5'} min read
                         </span>
                         <span class="meta-separator" aria-hidden="true">•</span>
                         <span class="view-count-badge" id="viewCountBadge">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <svg class="view-count-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                             </svg>
                             <span id="viewCountNumber">${this._formatNumber(viewCount)}</span>
@@ -701,7 +704,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
 
         this.tagsSection.innerHTML = `
             <div class="tags-title">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg class="tags-title-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
                 </svg>
                 Tags
@@ -709,7 +712,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
             <div class="tags-container">
                 ${tagDetails.map(tag => `
                     <a href="#" class="tag" data-slug="${tag.slug}">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <svg class="tag-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/>
                         </svg>
                         ${this._escapeHtml(tag.name)}
@@ -761,13 +764,13 @@ class EnhancedBlogPostViewer extends HTMLElement {
                                 <p class="related-post-excerpt">${this._escapeHtml(post.excerpt || '')}</p>
                                 <div class="related-post-meta">
                                     <span class="related-post-date">
-                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <svg class="related-meta-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8 4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/>
                                         </svg>
                                         ${this._formatDate(post.publishedDate)}
                                     </span>
                                     <span class="related-post-readtime">
-                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <svg class="related-meta-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
                                         </svg>
                                         ${post.readTime || '5'} min
@@ -910,7 +913,7 @@ class EnhancedBlogPostViewer extends HTMLElement {
         
         let tocHtml = `<div class="table-of-contents">
             <div class="toc-title">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg class="toc-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M3 9h14V7H3v2zm0 4h14v-2H3v2zm0 4h14v-2H3v2zm16 0h2v-2h-2v2zm0-10v2h2V7h-2zm0 6h2v-2h-2v2z"/>
                 </svg>
                 Table of Contents
