@@ -20,6 +20,11 @@ class PersonalBlogTemplate extends HTMLElement {
                 this.styleProps = JSON.parse(newValue || '{}');
             } else if (name === 'blog-data') {
                 this.blogData = JSON.parse(newValue || '{}');
+                console.log('=== BLOG-DATA ATTRIBUTE CHANGED ===');
+                console.log('Category 1 posts:', this.blogData.category1?.posts?.length || 0);
+                console.log('Category 2 posts:', this.blogData.category2?.posts?.length || 0);
+                console.log('Category 3 posts:', this.blogData.category3?.posts?.length || 0);
+                console.log('All posts:', this.blogData.allPosts?.length || 0);
             }
             
             this.render();
@@ -517,7 +522,20 @@ class PersonalBlogTemplate extends HTMLElement {
     }
 
     renderCategorySection(category, title, index) {
-        if (!category || !category.posts || category.posts.length === 0) return '';
+        console.log(`=== RENDER CATEGORY ${index} ===`);
+        console.log('Category data:', category);
+        console.log('Category ID:', category?.id);
+        console.log('Category name:', category?.name);
+        console.log('Posts count:', category?.posts?.length || 0);
+        if (category?.posts && category.posts.length > 0) {
+            console.log('First post title:', category.posts[0].title);
+        }
+        console.log('=== END CATEGORY ===');
+        
+        if (!category || !category.posts || category.posts.length === 0) {
+            console.log(`Category ${index} - No posts to render`);
+            return '';
+        }
 
         return `
             <div class="posts-grid">
