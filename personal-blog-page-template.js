@@ -1,101 +1,167 @@
+// CUSTOM ELEMENT - Personal Blog Template
 class PersonalBlogTemplate extends HTMLElement {
     constructor() {
         super();
-        this.settings = {};
-        this.styleProps = {};
-        this.blogData = {};
+        this.state = {
+            featuredPost: null,
+            recentPosts: [],
+            category1: { id: null, name: '', posts: [] },
+            category2: { id: null, name: '', posts: [] },
+            category3: { id: null, name: '', posts: [] },
+            allPosts: [],
+            currentPage: 1,
+            postsPerPage: 9,
+            totalPosts: 0
+        };
+        
+        this.settings = {
+            heroTitle: 'Welcome to My Blog',
+            heroSubtitle: 'Sharing stories, insights, and experiences',
+            recentTitle: 'Recent Posts',
+            category1Title: 'Featured Category',
+            category2Title: 'Popular Category',
+            category3Title: 'Trending Category',
+            allPostsTitle: 'All Posts'
+        };
+        
+        const initialStyleProps = this.getAttribute('style-props');
+        this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
     }
 
     static get observedAttributes() {
-        return ['settings', 'style-props', 'blog-data'];
+        return ['blog-data', 'settings', 'style-props'];
+    }
+
+    getDefaultStyleProps() {
+        return {
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            bgColor: '#ffffff',
+            primaryColor: '#6366f1',
+            primaryHover: '#4f46e5',
+            accentColor: '#f9fafb',
+            heroTitleColor: '#1e293b',
+            heroSubtitleColor: '#475569',
+            heroBg: '#ffffff',
+            heroBorder: '#e5e7eb',
+            featuredBg: '#ffffff',
+            featuredBorder: '#e5e7eb',
+            featuredTitleColor: '#1e293b',
+            featuredExcerptColor: '#475569',
+            featuredOverlay: '#666666',
+            cardBg: '#ffffff',
+            cardBorder: '#e5e7eb',
+            cardBorderHover: '#6366f1',
+            cardTitleColor: '#1e293b',
+            cardExcerptColor: '#475569',
+            cardMetaColor: '#64748b',
+            categoryBadgeBg: '#ede9fe',
+            categoryBadgeText: '#6366f1',
+            categoryBadgeHoverBg: '#6366f1',
+            categoryBadgeHoverText: '#ffffff',
+            sectionTitleColor: '#1e293b',
+            sectionBorder: '#e5e7eb',
+            authorColor: '#1e293b',
+            dateColor: '#64748b',
+            readTimeColor: '#64748b',
+            paginationBg: '#ffffff',
+            paginationBorder: '#e5e7eb',
+            paginationText: '#475569',
+            paginationActiveBg: '#6366f1',
+            paginationActiveText: '#ffffff',
+            paginationHoverBg: '#f9fafb',
+            buttonBg: '#6366f1',
+            buttonText: '#ffffff',
+            buttonHoverBg: '#4f46e5',
+            sidebarBg: '#f9fafb',
+            sidebarBorder: '#e5e7eb',
+            sidebarTextColor: '#475569'
+        };
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-        if (oldValue === newValue) return;
-        
+        if (!newValue || oldValue === newValue) return;
+
         try {
-            if (name === 'settings') {
-                this.settings = JSON.parse(newValue || '{}');
+            if (name === 'blog-data') {
+                const data = JSON.parse(newValue);
+                this.state.featuredPost = data.featuredPost || null;
+                this.state.recentPosts = data.recentPosts || [];
+                this.state.category1 = data.category1 || { id: null, name: '', posts: [] };
+                this.state.category2 = data.category2 || { id: null, name: '', posts: [] };
+                this.state.category3 = data.category3 || { id: null, name: '', posts: [] };
+                this.state.allPosts = data.allPosts || [];
+                this.state.totalPosts = data.totalPosts || 0;
+                this.state.currentPage = data.currentPage || 1;
+                this.state.postsPerPage = data.postsPerPage || 9;
+                
+                if (this.isConnected) this.render();
+                
+            } else if (name === 'settings') {
+                this.settings = { ...this.settings, ...JSON.parse(newValue) };
+                if (this.initialRenderDone) this.render();
+                
             } else if (name === 'style-props') {
-                this.styleProps = JSON.parse(newValue || '{}');
-            } else if (name === 'blog-data') {
-                this.blogData = JSON.parse(newValue || '{}');
-                console.log('=== BLOG-DATA ATTRIBUTE CHANGED ===');
-                console.log('Category 1 posts:', this.blogData.category1?.posts?.length || 0);
-                console.log('Category 2 posts:', this.blogData.category2?.posts?.length || 0);
-                console.log('Category 3 posts:', this.blogData.category3?.posts?.length || 0);
-                console.log('All posts:', this.blogData.allPosts?.length || 0);
+                this.styleProps = { ...this.styleProps, ...JSON.parse(newValue) };
+                if (this.initialRenderDone) this.updateStyles();
             }
-            
-            this.render();
-        } catch (error) {
-            console.error('Error parsing attribute:', name, error);
+        } catch (e) {
+            console.error('Error in attributeChangedCallback:', name, e);
         }
     }
 
     connectedCallback() {
+        this.innerHTML = `
+            <style>${this.getStyles()}</style>
+            <div class="blog-template">
+                <div id="hero"></div>
+                <div id="featured"></div>
+                <div id="recent"></div>
+                <div id="category1"></div>
+                <div id="category2"></div>
+                <div id="category3"></div>
+                <div id="allposts"></div>
+                <div id="pagination"></div>
+            </div>
+        `;
+        
+        this.initialRenderDone = true;
         this.render();
     }
 
-    render() {
-        const s = this.settings;
-        const st = this.styleProps;
-        const data = this.blogData;
-
-        this.innerHTML = `
-            <style>
-            ${this.getStyles()}
-            </style>
-            <div class="blog-container">
-                ${this.renderHero()}
-                ${this.renderFeaturedPost()}
-                ${this.renderRecentPosts()}
-                ${this.renderCategorySection(data.category1, s.category1Title || 'Featured Category', 1)}
-                ${this.renderCategorySection(data.category2, s.category2Title || 'Popular Category', 2)}
-                ${this.renderCategorySection(data.category3, s.category3Title || 'Trending Category', 3)}
-                ${this.renderAllPostsSection()}
-            </div>
-        `;
-
-        this.attachEventListeners();
-    }
-
     getStyles() {
-        const st = this.styleProps;
-        
+        const s = this.styleProps;
         return `
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
+            personal-blog-template {
+                display: block;
+                width: 100%;
+                font-family: ${s.fontFamily};
+                background: ${s.bgColor};
+                color: #1e293b;
             }
 
-            .blog-container {
-                font-family: ${st.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'};
-                background: ${st.bgColor || '#ffffff'};
-                color: ${st.cardTitleColor || '#1e293b'};
-                line-height: 1.6;
+            .blog-template {
+                width: 100%;
             }
 
             /* Hero Section */
             .hero-section {
                 text-align: center;
                 padding: 80px 24px;
-                background: ${st.heroBg || '#ffffff'};
-                border-bottom: 1px solid ${st.heroBorder || '#e5e7eb'};
+                background: ${s.heroBg};
+                border-bottom: 1px solid ${s.heroBorder};
             }
 
             .hero-title {
                 font-size: clamp(36px, 5vw, 56px);
                 font-weight: 800;
-                color: ${st.heroTitleColor || '#1e293b'};
+                color: ${s.heroTitleColor};
                 margin-bottom: 16px;
                 letter-spacing: -0.02em;
             }
 
             .hero-subtitle {
                 font-size: clamp(16px, 2.5vw, 20px);
-                color: ${st.heroSubtitleColor || '#475569'};
+                color: ${s.heroSubtitleColor};
                 max-width: 600px;
                 margin: 0 auto;
             }
@@ -109,8 +175,8 @@ class PersonalBlogTemplate extends HTMLElement {
 
             .featured-post {
                 position: relative;
-                background: ${st.featuredBg || '#ffffff'};
-                border: 1px solid ${st.featuredBorder || '#e5e7eb'};
+                background: ${s.featuredBg};
+                border: 1px solid ${s.featuredBorder};
                 border-radius: 16px;
                 overflow: hidden;
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -121,7 +187,7 @@ class PersonalBlogTemplate extends HTMLElement {
             .featured-post:hover {
                 transform: translateY(-4px);
                 box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-                border-color: ${st.primaryColor || '#6366f1'};
+                border-color: ${s.primaryColor};
             }
 
             .featured-image-wrapper {
@@ -147,7 +213,7 @@ class PersonalBlogTemplate extends HTMLElement {
                 bottom: 0;
                 left: 0;
                 right: 0;
-                background: linear-gradient(to top, ${st.featuredOverlay || 'rgba(0, 0, 0, 0.6)'}, transparent);
+                background: linear-gradient(to top, ${s.featuredOverlay}CC, transparent);
                 padding: 48px 32px 32px;
             }
 
@@ -158,7 +224,7 @@ class PersonalBlogTemplate extends HTMLElement {
             .featured-title {
                 font-size: clamp(24px, 3vw, 36px);
                 font-weight: 700;
-                color: ${st.featuredTitleColor || '#1e293b'};
+                color: ${s.featuredTitleColor};
                 margin-bottom: 16px;
                 line-height: 1.3;
             }
@@ -169,7 +235,7 @@ class PersonalBlogTemplate extends HTMLElement {
 
             .featured-excerpt {
                 font-size: 16px;
-                color: ${st.featuredExcerptColor || '#475569'};
+                color: ${s.featuredExcerptColor};
                 line-height: 1.7;
                 margin-bottom: 24px;
             }
@@ -185,17 +251,17 @@ class PersonalBlogTemplate extends HTMLElement {
                 align-items: center;
                 margin-bottom: 32px;
                 padding-bottom: 16px;
-                border-bottom: 2px solid ${st.sectionBorder || '#e5e7eb'};
+                border-bottom: 2px solid ${s.sectionBorder};
             }
 
             .section-title {
                 font-size: clamp(24px, 3vw, 32px);
                 font-weight: 700;
-                color: ${st.sectionTitleColor || '#1e293b'};
+                color: ${s.sectionTitleColor};
             }
 
             .view-all-link {
-                color: ${st.primaryColor || '#6366f1'};
+                color: ${s.primaryColor};
                 text-decoration: none;
                 font-weight: 600;
                 font-size: 14px;
@@ -203,7 +269,7 @@ class PersonalBlogTemplate extends HTMLElement {
             }
 
             .view-all-link:hover {
-                color: ${st.primaryHover || '#4f46e5'};
+                color: ${s.primaryHover};
             }
 
             /* Posts Grid */
@@ -218,8 +284,8 @@ class PersonalBlogTemplate extends HTMLElement {
 
             /* Post Card */
             .post-card {
-                background: ${st.cardBg || '#ffffff'};
-                border: 1px solid ${st.cardBorder || '#e5e7eb'};
+                background: ${s.cardBg};
+                border: 1px solid ${s.cardBorder};
                 border-radius: 12px;
                 overflow: hidden;
                 transition: all 0.3s ease;
@@ -231,7 +297,7 @@ class PersonalBlogTemplate extends HTMLElement {
             .post-card:hover {
                 transform: translateY(-4px);
                 box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12);
-                border-color: ${st.cardBorderHover || '#6366f1'};
+                border-color: ${s.cardBorderHover};
             }
 
             .post-image {
@@ -247,7 +313,7 @@ class PersonalBlogTemplate extends HTMLElement {
 
             .post-image-wrapper {
                 overflow: hidden;
-                background: ${st.accentColor || '#f9fafb'};
+                background: ${s.accentColor};
             }
 
             .post-content {
@@ -257,29 +323,10 @@ class PersonalBlogTemplate extends HTMLElement {
                 flex-direction: column;
             }
 
-            .post-category {
-                display: inline-block;
-                background: ${st.categoryBadgeBg || '#ede9fe'};
-                color: ${st.categoryBadgeText || '#6366f1'};
-                padding: 4px 12px;
-                border-radius: 12px;
-                font-size: 12px;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                margin-bottom: 12px;
-                transition: all 0.2s ease;
-            }
-
-            .post-card:hover .post-category {
-                background: ${st.categoryBadgeHoverBg || '#6366f1'};
-                color: ${st.categoryBadgeHoverText || '#ffffff'};
-            }
-
             .post-title {
                 font-size: 20px;
                 font-weight: 700;
-                color: ${st.cardTitleColor || '#1e293b'};
+                color: ${s.cardTitleColor};
                 margin-bottom: 12px;
                 line-height: 1.4;
                 display: -webkit-box;
@@ -290,7 +337,7 @@ class PersonalBlogTemplate extends HTMLElement {
 
             .post-excerpt {
                 font-size: 15px;
-                color: ${st.cardExcerptColor || '#475569'};
+                color: ${s.cardExcerptColor};
                 line-height: 1.6;
                 margin-bottom: 16px;
                 display: -webkit-box;
@@ -305,16 +352,16 @@ class PersonalBlogTemplate extends HTMLElement {
                 align-items: center;
                 gap: 16px;
                 padding-top: 16px;
-                border-top: 1px solid ${st.cardBorder || '#e5e7eb'};
+                border-top: 1px solid ${s.cardBorder};
                 font-size: 13px;
-                color: ${st.cardMetaColor || '#64748b'};
+                color: ${s.cardMetaColor};
             }
 
             .post-author {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                color: ${st.authorColor || '#1e293b'};
+                color: ${s.authorColor};
                 font-weight: 500;
             }
 
@@ -323,15 +370,15 @@ class PersonalBlogTemplate extends HTMLElement {
                 height: 32px;
                 border-radius: 50%;
                 object-fit: cover;
-                border: 2px solid ${st.cardBorder || '#e5e7eb'};
+                border: 2px solid ${s.cardBorder};
             }
 
             .post-date {
-                color: ${st.dateColor || '#64748b'};
+                color: ${s.dateColor};
             }
 
             .post-read-time {
-                color: ${st.readTimeColor || '#64748b'};
+                color: ${s.readTimeColor};
             }
 
             /* Pagination */
@@ -353,9 +400,9 @@ class PersonalBlogTemplate extends HTMLElement {
                 min-width: 40px;
                 height: 40px;
                 padding: 0 16px;
-                background: ${st.paginationBg || '#ffffff'};
-                border: 1px solid ${st.paginationBorder || '#e5e7eb'};
-                color: ${st.paginationText || '#475569'};
+                background: ${s.paginationBg};
+                border: 1px solid ${s.paginationBorder};
+                color: ${s.paginationText};
                 border-radius: 8px;
                 cursor: pointer;
                 font-weight: 500;
@@ -364,14 +411,14 @@ class PersonalBlogTemplate extends HTMLElement {
             }
 
             .page-button:hover:not(:disabled) {
-                background: ${st.paginationHoverBg || '#f9fafb'};
-                border-color: ${st.primaryColor || '#6366f1'};
+                background: ${s.paginationHoverBg};
+                border-color: ${s.primaryColor};
             }
 
             .page-button.active {
-                background: ${st.paginationActiveBg || '#6366f1'};
-                color: ${st.paginationActiveText || '#ffffff'};
-                border-color: ${st.paginationActiveBg || '#6366f1'};
+                background: ${s.paginationActiveBg};
+                color: ${s.paginationActiveText};
+                border-color: ${s.paginationActiveBg};
             }
 
             .page-button:disabled {
@@ -381,12 +428,12 @@ class PersonalBlogTemplate extends HTMLElement {
 
             .page-ellipsis {
                 padding: 0 8px;
-                color: ${st.paginationText || '#475569'};
+                color: ${s.paginationText};
             }
 
             /* Premium Banner */
             .premium-banner {
-                background: linear-gradient(135deg, ${st.primaryColor || '#6366f1'} 0%, ${st.primaryHover || '#4f46e5'} 100%);
+                background: linear-gradient(135deg, ${s.primaryColor} 0%, ${s.primaryHover} 100%);
                 color: white;
                 padding: 24px;
                 border-radius: 12px;
@@ -411,7 +458,7 @@ class PersonalBlogTemplate extends HTMLElement {
             .empty-state {
                 text-align: center;
                 padding: 64px 24px;
-                color: ${st.cardExcerptColor || '#475569'};
+                color: ${s.cardExcerptColor};
             }
 
             .empty-state-icon {
@@ -455,25 +502,50 @@ class PersonalBlogTemplate extends HTMLElement {
         `;
     }
 
+    updateStyles() {
+        const styleElement = this.querySelector('style');
+        if (styleElement) {
+            styleElement.textContent = this.getStyles();
+        }
+    }
+
+    render() {
+        this.renderHero();
+        this.renderFeatured();
+        this.renderRecent();
+        this.renderCategory(this.state.category1, 'category1', this.settings.category1Title);
+        this.renderCategory(this.state.category2, 'category2', this.settings.category2Title);
+        this.renderCategory(this.state.category3, 'category3', this.settings.category3Title);
+        this.renderAllPosts();
+        this.renderPagination();
+        this.attachEventListeners();
+    }
+
     renderHero() {
-        const s = this.settings;
-        
-        return `
+        const hero = this.querySelector('#hero');
+        if (!hero) return;
+
+        hero.innerHTML = `
             <div class="hero-section">
-                <h1 class="hero-title">${this.escapeHtml(s.heroTitle || 'Welcome to My Blog')}</h1>
-                <p class="hero-subtitle">${this.escapeHtml(s.heroSubtitle || 'Sharing stories, insights, and experiences')}</p>
+                <h1 class="hero-title">${this.escapeHtml(this.settings.heroTitle)}</h1>
+                <p class="hero-subtitle">${this.escapeHtml(this.settings.heroSubtitle)}</p>
             </div>
         `;
     }
 
-    renderFeaturedPost() {
-        const data = this.blogData;
-        if (!data.featuredPost) return '';
+    renderFeatured() {
+        const featured = this.querySelector('#featured');
+        if (!featured) return;
 
-        const post = data.featuredPost;
+        if (!this.state.featuredPost) {
+            featured.innerHTML = '';
+            return;
+        }
+
+        const post = this.state.featuredPost;
         const hasImage = post.coverImage || post.featuredImage;
 
-        return `
+        featured.innerHTML = `
             <div class="featured-section">
                 <div class="featured-post" data-slug="${post.slug || post._id}">
                     ${hasImage ? `
@@ -503,41 +575,37 @@ class PersonalBlogTemplate extends HTMLElement {
         `;
     }
 
-    renderRecentPosts() {
-        const s = this.settings;
-        const data = this.blogData;
-        
-        if (!data.recentPosts || data.recentPosts.length === 0) return '';
+    renderRecent() {
+        const recent = this.querySelector('#recent');
+        if (!recent) return;
 
-        return `
+        if (!this.state.recentPosts || this.state.recentPosts.length === 0) {
+            recent.innerHTML = '';
+            return;
+        }
+
+        recent.innerHTML = `
             <div class="posts-grid">
                 <div style="grid-column: 1 / -1;">
                     <div class="section-header">
-                        <h2 class="section-title">${this.escapeHtml(s.recentTitle || 'Recent Posts')}</h2>
+                        <h2 class="section-title">${this.escapeHtml(this.settings.recentTitle)}</h2>
                     </div>
                 </div>
-                ${data.recentPosts.map(post => this.renderPostCard(post)).join('')}
+                ${this.state.recentPosts.map(post => this.renderPostCard(post)).join('')}
             </div>
         `;
     }
 
-    renderCategorySection(category, title, index) {
-        console.log(`=== RENDER CATEGORY ${index} ===`);
-        console.log('Category data:', category);
-        console.log('Category ID:', category?.id);
-        console.log('Category name:', category?.name);
-        console.log('Posts count:', category?.posts?.length || 0);
-        if (category?.posts && category.posts.length > 0) {
-            console.log('First post title:', category.posts[0].title);
-        }
-        console.log('=== END CATEGORY ===');
-        
+    renderCategory(category, elementId, title) {
+        const element = this.querySelector(`#${elementId}`);
+        if (!element) return;
+
         if (!category || !category.posts || category.posts.length === 0) {
-            console.log(`Category ${index} - No posts to render`);
-            return '';
+            element.innerHTML = '';
+            return;
         }
 
-        return `
+        element.innerHTML = `
             <div class="posts-grid">
                 <div style="grid-column: 1 / -1;">
                     <div class="section-header">
@@ -550,31 +618,30 @@ class PersonalBlogTemplate extends HTMLElement {
         `;
     }
 
-    renderAllPostsSection() {
-        const s = this.settings;
-        const data = this.blogData;
-        
-        if (!data.allPosts || data.allPosts.length === 0) {
-            return `
+    renderAllPosts() {
+        const allposts = this.querySelector('#allposts');
+        if (!allposts) return;
+
+        if (!this.state.allPosts || this.state.allPosts.length === 0) {
+            allposts.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">📝</div>
                     <h3>No posts yet</h3>
                     <p>Check back soon for new content!</p>
                 </div>
             `;
+            return;
         }
 
-        return `
+        allposts.innerHTML = `
             <div class="posts-grid">
                 <div style="grid-column: 1 / -1;">
                     <div class="section-header">
-                        <h2 class="section-title">${this.escapeHtml(s.allPostsTitle || 'All Posts')}</h2>
+                        <h2 class="section-title">${this.escapeHtml(this.settings.allPostsTitle)}</h2>
                     </div>
                 </div>
-                ${data.allPosts.map(post => this.renderPostCard(post)).join('')}
+                ${this.state.allPosts.map(post => this.renderPostCard(post)).join('')}
             </div>
-            ${this.renderPagination()}
-            ${data.planLimit ? this.renderPremiumBanner() : ''}
         `;
     }
 
@@ -634,109 +701,61 @@ class PersonalBlogTemplate extends HTMLElement {
     }
 
     renderPagination() {
-        const data = this.blogData;
-        const currentPage = data.currentPage || 1;
-        const postsPerPage = data.postsPerPage || 9;
-        const totalPages = Math.ceil(data.totalPosts / postsPerPage);
+        const paginationEl = this.querySelector('#pagination');
+        if (!paginationEl) return;
 
-        if (totalPages <= 1) return '';
-
-        let pages = [];
+        const totalPages = Math.ceil(this.state.totalPosts / this.state.postsPerPage);
         
-        // Always show first page
+        if (totalPages <= 1) {
+            paginationEl.innerHTML = '';
+            return;
+        }
+
+        const currentPage = this.state.currentPage;
+        const pages = [];
+
         pages.push(1);
-        
-        // Show pages around current page
+
         for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-            if (!pages.includes(i)) {
-                if (i > pages[pages.length - 1] + 1) pages.push('...');
-                pages.push(i);
-            }
-        }
-        
-        // Always show last page
-        if (totalPages > 1) {
-            if (totalPages > pages[pages.length - 1] + 1) pages.push('...');
-            if (!pages.includes(totalPages)) pages.push(totalPages);
+            if (!pages.includes(i)) pages.push(i);
         }
 
-        return `
+        if (!pages.includes(totalPages)) pages.push(totalPages);
+
+        paginationEl.innerHTML = `
             <div class="pagination-wrapper">
                 <div class="pagination">
-                    <button 
-                        class="page-button" 
-                        data-page="${currentPage - 1}"
-                        ${currentPage === 1 ? 'disabled' : ''}
-                    >
-                        ← Prev
-                    </button>
-                    
-                    ${pages.map(page => {
-                        if (page === '...') {
-                            return '<span class="page-ellipsis">...</span>';
-                        }
-                        return `
-                            <button 
-                                class="page-button ${page === currentPage ? 'active' : ''}" 
-                                data-page="${page}"
-                            >
-                                ${page}
-                            </button>
-                        `;
+                    <button class="page-button" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">← Prev</button>
+                    ${pages.map((page, index) => {
+                        const prevPage = pages[index - 1];
+                        const gap = prevPage && page - prevPage > 1 ? '<span class="page-ellipsis">...</span>' : '';
+                        return `${gap}<button class="page-button ${page === currentPage ? 'active' : ''}" data-page="${page}">${page}</button>`;
                     }).join('')}
-                    
-                    <button 
-                        class="page-button" 
-                        data-page="${currentPage + 1}"
-                        ${currentPage === totalPages ? 'disabled' : ''}
-                    >
-                        Next →
-                    </button>
+                    <button class="page-button" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">Next →</button>
                 </div>
             </div>
         `;
-    }
 
-    renderPremiumBanner() {
-        const data = this.blogData;
-        
-        return `
-            <div class="premium-banner">
-                <h3>🚀 Unlock Unlimited Posts</h3>
-                <p>Upgrade to Premium to view all ${data.totalPosts}+ posts. Currently showing ${data.maxPosts} posts.</p>
-            </div>
-        `;
+        paginationEl.querySelectorAll('.page-button[data-page]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const page = parseInt(btn.getAttribute('data-page'));
+                this.changePage(page);
+            });
+        });
     }
 
     attachEventListeners() {
-        // Post card clicks
         this.querySelectorAll('.post-card, .featured-post').forEach(card => {
-            card.addEventListener('click', (e) => {
-                const slug = e.currentTarget.dataset.slug;
-                if (slug) {
-                    this.dispatchEvent(new CustomEvent('navigate-to-post', {
-                        detail: { slug },
-                        bubbles: true,
-                        composed: true
-                    }));
-                }
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this.emitEvent('navigate-to-post', { slug });
             });
         });
+    }
 
-        // Pagination clicks
-        this.querySelectorAll('.page-button:not(:disabled)').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const page = parseInt(e.currentTarget.dataset.page);
-                if (page && page > 0) {
-                    this.dispatchEvent(new CustomEvent('page-change', {
-                        detail: { page },
-                        bubbles: true,
-                        composed: true
-                    }));
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            });
-        });
+    changePage(page) {
+        this.emitEvent('page-change', { page });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     convertWixImageUrl(wixUrl) {
@@ -775,9 +794,18 @@ class PersonalBlogTemplate extends HTMLElement {
     }
 
     escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    emitEvent(name, detail) {
+        this.dispatchEvent(new CustomEvent(name, {
+            detail,
+            bubbles: true,
+            composed: true
+        }));
     }
 }
 
