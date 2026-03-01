@@ -8,12 +8,17 @@ class BlogPageElement extends HTMLElement {
             recentPosts: [],
             categoryPosts: [],
             trendingPosts: [],
+            allPosts: [],
+            currentPage: 1,
+            totalPages: 1,
+            postsPerPage: 9,
             headings: {
                 heroHeading: 'Latest Article',
                 featuredHeading: 'Featured Posts',
                 recentHeading: 'Recent Posts',
                 categoryHeading: 'Technology',
-                trendingHeading: 'Trending'
+                trendingHeading: 'Trending',
+                allPostsHeading: 'All Posts'
             }
         };
         
@@ -56,6 +61,10 @@ class BlogPageElement extends HTMLElement {
                 this.state.recentPosts = data.recentPosts || [];
                 this.state.categoryPosts = data.categoryPosts || [];
                 this.state.trendingPosts = data.trendingPosts || [];
+                this.state.allPosts = data.allPosts || [];
+                this.state.currentPage = data.currentPage || 1;
+                this.state.totalPages = data.totalPages || 1;
+                this.state.postsPerPage = data.postsPerPage || 9;
                 this.state.headings = data.headings || this.state.headings;
                 
                 if (this.isConnected) {
@@ -385,6 +394,29 @@ class BlogPageElement extends HTMLElement {
 
             .post-date {
                 font-size: 13px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            /* SVG Icons */
+            .icon {
+                width: 16px;
+                height: 16px;
+                flex-shrink: 0;
+            }
+
+            .icon-small {
+                width: 14px;
+                height: 14px;
+                flex-shrink: 0;
+            }
+
+            .meta-item .icon,
+            .post-author .icon,
+            .post-date .icon,
+            .compact-meta .icon-small {
+                opacity: 0.8;
             }
 
             /* Two Column Layout */
@@ -536,6 +568,77 @@ class BlogPageElement extends HTMLElement {
                 margin: 0;
             }
 
+            /* Pagination */
+            .pagination-section {
+                margin: 80px 0 60px;
+            }
+
+            .pagination-container {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+                margin-top: 40px;
+                flex-wrap: wrap;
+            }
+
+            .pagination-button {
+                min-width: 40px;
+                height: 40px;
+                padding: 0 12px;
+                border: 1px solid ${border};
+                background: ${cardBg};
+                color: ${textPrimary};
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                user-select: none;
+            }
+
+            .pagination-button:hover:not(.active):not(:disabled) {
+                background: ${secondaryBg};
+                border-color: ${mainAccent};
+                color: ${mainAccent};
+            }
+
+            .pagination-button.active {
+                background: ${mainAccent};
+                color: #ffffff;
+                border-color: ${mainAccent};
+            }
+
+            .pagination-button:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+
+            .pagination-button svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            .pagination-ellipsis {
+                min-width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: ${textSecondary};
+                font-weight: 500;
+            }
+
+            .pagination-info {
+                text-align: center;
+                margin-top: 16px;
+                font-size: 14px;
+                color: ${textSecondary};
+            }
+
             /* Responsive */
             @media (max-width: 1024px) {
                 .two-column-layout {
@@ -633,9 +736,11 @@ class BlogPageElement extends HTMLElement {
             </div>
         `;
 
+        // All Posts Section with Pagination
+        html += this.renderAllPostsSection();
+
         content.innerHTML = html;
         this.attachEventListeners();
-        this.observeLazyImages();
     }
 
     renderHeroSection() {
@@ -660,8 +765,24 @@ class BlogPageElement extends HTMLElement {
                         <h1 class="hero-title">${this.escapeHtml(displayTitle)}</h1>
                         <p class="hero-excerpt">${this.escapeHtml(post.excerpt || '')}</p>
                         <div class="hero-meta">
-                            ${post.author ? `<span class="meta-item">👤 ${this.escapeHtml(post.author)}</span>` : ''}
-                            ${post.publishedDate ? `<span class="meta-item">📅 ${this.formatDate(post.publishedDate)}</span>` : ''}
+                            ${post.author ? `
+                                <span class="meta-item">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    ${this.escapeHtml(post.author)}
+                                </span>` : ''}
+                            ${post.publishedDate ? `
+                                <span class="meta-item">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    ${this.formatDate(post.publishedDate)}
+                                </span>` : ''}
                         </div>
                     </div>
                 </article>
@@ -725,6 +846,117 @@ class BlogPageElement extends HTMLElement {
         `;
     }
 
+    renderAllPostsSection() {
+        if (!this.state.allPosts || this.state.allPosts.length === 0) {
+            return '';
+        }
+
+        return `
+            <section class="pagination-section">
+                <div class="section-header">
+                    <h2 class="section-title">${this.escapeHtml(this.state.headings.allPostsHeading)}</h2>
+                </div>
+                <div class="featured-grid">
+                    ${this.state.allPosts.map(post => this.renderPostCard(post, true)).join('')}
+                </div>
+                ${this.renderPagination()}
+            </section>
+        `;
+    }
+
+    renderPagination() {
+        const { currentPage, totalPages } = this.state;
+        
+        if (totalPages <= 1) {
+            return '';
+        }
+
+        let html = '<div class="pagination-container">';
+
+        // Previous button
+        html += `
+            <button class="pagination-button" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+        `;
+
+        // Page numbers with smart ellipsis
+        const pagesToShow = this.getPageNumbers(currentPage, totalPages);
+        
+        pagesToShow.forEach((page, index) => {
+            if (page === '...') {
+                html += '<span class="pagination-ellipsis">...</span>';
+            } else {
+                html += `
+                    <button 
+                        class="pagination-button ${page === currentPage ? 'active' : ''}" 
+                        data-page="${page}"
+                    >${page}</button>
+                `;
+            }
+        });
+
+        // Next button
+        html += `
+            <button class="pagination-button" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+        `;
+
+        html += '</div>';
+
+        // Pagination info
+        const start = (currentPage - 1) * this.state.postsPerPage + 1;
+        const end = Math.min(currentPage * this.state.postsPerPage, this.getTotalPostsCount());
+        const total = this.getTotalPostsCount();
+
+        html += `<div class="pagination-info">Showing ${start}-${end} of ${total} posts</div>`;
+
+        return html;
+    }
+
+    getPageNumbers(current, total) {
+        const delta = 2; // Number of pages to show on each side of current page
+        const range = [];
+        const rangeWithDots = [];
+
+        // Always show first page
+        range.push(1);
+
+        // Calculate range around current page
+        for (let i = current - delta; i <= current + delta; i++) {
+            if (i > 1 && i < total) {
+                range.push(i);
+            }
+        }
+
+        // Always show last page
+        if (total > 1) {
+            range.push(total);
+        }
+
+        // Add ellipsis where needed
+        let prev = 0;
+        for (const i of range) {
+            if (prev && i - prev > 1) {
+                rangeWithDots.push('...');
+            }
+            rangeWithDots.push(i);
+            prev = i;
+        }
+
+        return rangeWithDots;
+    }
+
+    getTotalPostsCount() {
+        // This should be provided from the widget
+        return this.state.totalPosts || (this.state.totalPages * this.state.postsPerPage);
+    }
+
     renderPostCard(post, lazy = true) {
         const imageUrl = this.convertWixImageUrl(post.featuredImage, 'card');
         const displayTitle = post.blogTitle || post.title || 'Untitled';
@@ -733,9 +965,9 @@ class BlogPageElement extends HTMLElement {
             <article class="post-card" data-slug="${post.slug}">
                 <div class="post-image-container">
                     <img 
-                        ${lazy ? `data-src="${imageUrl}" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='240'%3E%3C/svg%3E"` : `src="${imageUrl}"`}
+                        src="${imageUrl}"
                         alt="${this.escapeHtml(displayTitle)}"
-                        class="post-image ${lazy ? 'lazy' : ''}"
+                        class="post-image"
                         loading="${lazy ? 'lazy' : 'eager'}"
                         onerror="this.src='https://via.placeholder.com/400x240/e5e7eb/6b7280?text=No+Image'"
                     />
@@ -746,10 +978,22 @@ class BlogPageElement extends HTMLElement {
                     <p class="post-excerpt">${this.escapeHtml(post.excerpt || '')}</p>
                     <div class="post-footer">
                         <span class="post-author">
-                            ${post.author ? `👤 ${this.escapeHtml(post.author)}` : 'Anonymous'}
+                            ${post.author ? `
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                ${this.escapeHtml(post.author)}` : 'Anonymous'}
                         </span>
                         <span class="post-date">
-                            ${post.publishedDate ? this.formatDate(post.publishedDate) : ''}
+                            ${post.publishedDate ? `
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                ${this.formatDate(post.publishedDate)}` : ''}
                         </span>
                     </div>
                 </div>
@@ -765,10 +1009,9 @@ class BlogPageElement extends HTMLElement {
             <article class="compact-post-card" data-slug="${post.slug}">
                 <div class="compact-image-container">
                     <img 
-                        data-src="${imageUrl}"
-                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3C/svg%3E"
+                        src="${imageUrl}"
                         alt="${this.escapeHtml(displayTitle)}"
-                        class="compact-image lazy"
+                        class="compact-image"
                         loading="lazy"
                         onerror="this.src='https://via.placeholder.com/100/e5e7eb/6b7280?text=No+Image'"
                     />
@@ -776,34 +1019,18 @@ class BlogPageElement extends HTMLElement {
                 <div class="compact-content">
                     <h4 class="compact-title">${this.escapeHtml(displayTitle)}</h4>
                     <div class="compact-meta">
-                        ${post.publishedDate ? `<span>📅 ${this.formatDate(post.publishedDate)}</span>` : ''}
+                        ${post.publishedDate ? `
+                            <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            ${this.formatDate(post.publishedDate)}` : ''}
                     </div>
                 </div>
             </article>
         `;
-    }
-
-    observeLazyImages() {
-        if (this.intersectionObserver) {
-            const lazyImages = this.querySelectorAll('img.lazy');
-            lazyImages.forEach(img => this.intersectionObserver.observe(img));
-        } else {
-            // Fallback for browsers without IntersectionObserver
-            const lazyImages = this.querySelectorAll('img[data-src]');
-            lazyImages.forEach(img => {
-                img.src = img.dataset.src;
-                img.removeAttribute('data-src');
-            });
-        }
-    }
-
-    attachEventListeners() {
-        this.querySelectorAll('[data-slug]').forEach(card => {
-            card.addEventListener('click', () => {
-                const slug = card.getAttribute('data-slug');
-                this.navigateToPost(slug);
-            });
-        });
     }
 
     navigateToPost(slug) {
