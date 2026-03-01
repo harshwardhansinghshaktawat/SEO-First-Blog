@@ -957,6 +957,41 @@ class BlogPageElement extends HTMLElement {
         return this.state.totalPosts || (this.state.totalPages * this.state.postsPerPage);
     }
 
+    attachEventListeners() {
+        // Attach click listeners to all post cards
+        this.querySelectorAll('[data-slug]').forEach(card => {
+            card.addEventListener('click', () => {
+                const slug = card.getAttribute('data-slug');
+                this.navigateToPost(slug);
+            });
+        });
+
+        // Attach pagination button listeners
+        this.querySelectorAll('.pagination-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const page = parseInt(button.getAttribute('data-page'));
+                if (!isNaN(page) && !button.disabled) {
+                    this.changePage(page);
+                }
+            });
+        });
+    }
+
+    changePage(page) {
+        // Scroll to all posts section
+        const allPostsSection = this.querySelector('.pagination-section');
+        if (allPostsSection) {
+            allPostsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Dispatch event to widget
+        this.dispatchEvent(new CustomEvent('page-change', {
+            detail: { page },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
     renderPostCard(post, lazy = true) {
         const imageUrl = this.convertWixImageUrl(post.featuredImage, 'card');
         const displayTitle = post.blogTitle || post.title || 'Untitled';
@@ -1065,6 +1100,9 @@ class BlogPageElement extends HTMLElement {
     optimizeImageUrl(url, size) {
         if (!url) return '';
         
+        // If it's already a Wix static URL with parameters, return as is
+        if (url.includes('/v1/fill/')) return url;
+        
         // Define size parameters for different contexts
         const sizeParams = {
             hero: '/v1/fill/w_1200,h_600,al_c,q_85,usm_0.66_1.00_0.01',
@@ -1074,8 +1112,13 @@ class BlogPageElement extends HTMLElement {
 
         const params = sizeParams[size] || sizeParams.card;
         
-        // Only append if it's a Wix static URL
-        if (url.includes('static.wixstatic.com')) {
+        // Only append if it's a Wix static URL and doesn't already have parameters
+        if (url.includes('static.wixstatic.com/media/')) {
+            // Ensure URL ends with proper file extension
+            if (!url.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+                // Add default jpg extension if missing
+                return url + params + '/file.jpg';
+            }
             return url + params;
         }
         
