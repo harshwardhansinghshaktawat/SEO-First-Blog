@@ -2971,41 +2971,40 @@ mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91c
     }
 
     _save(status) {
-        const md = this._cleanMarkdown(this._currentMarkdown || '');
-        
-        const publishedDate = this._meta.publishedDate ? 
-            this._parseDateFromInput(this._meta.publishedDate) : null;
-        
-        const modifiedDate = this._meta.modifiedDate ? 
-            this._parseDateFromInput(this._meta.modifiedDate) : new Date();
-        
-readTime && this._meta.readTime > 0 ?
-            Number(this._meta.readTime) :
-            Math.max(1, Math.ceil(md.split(/\s+/).length / 200));
-        
-        const structuredData = JSON.stringify({
-            type: this._schemaType,
-            ...this._meta.structuredData,
-            schema: this._generateStructuredData()
-        });
-        
-        const newCategories = this._newCategoriesCreated;
-        const newTags = this._newTagsCreated;
-        
-        this._emit('save-post', {
-            ...this._meta,
-            content: md,
-            status,
-            publishedDate: publishedDate,
-            modifiedDate: modifiedDate,
-            readTime: readTime,
-            structuredData: structuredData,
-            _id: this._editPost?._id || null,
-            newCategories: newCategories,
-            newTags: newTags
-        });
-    }
-
+    const md = this._cleanMarkdown(this._currentMarkdown || '');
+    
+    const publishedDate = this._meta.publishedDate ? 
+        this._parseDateFromInput(this._meta.publishedDate) : null;
+    
+    const modifiedDate = this._meta.modifiedDate ? 
+        this._parseDateFromInput(this._meta.modifiedDate) : new Date();
+    
+    const readTime = this._meta.readTime && this._meta.readTime > 0 ?
+        Number(this._meta.readTime) :
+        Math.max(1, Math.ceil(md.split(/\s+/).length / 200));
+    
+    const structuredData = JSON.stringify({
+        type: this._schemaType,
+        ...this._meta.structuredData,
+        schema: this._generateStructuredData()
+    });
+    
+    const newCategories = this._newCategoriesCreated;
+    const newTags = this._newTagsCreated;
+    
+    this._emit('save-post', {
+        ...this._meta,
+        content: md,
+        status,
+        publishedDate: publishedDate,
+        modifiedDate: modifiedDate,
+        readTime: readTime,
+        structuredData: structuredData,
+        _id: this._editPost?._id || null,
+        newCategories: newCategories,
+        newTags: newTags
+    });
+}
     _onSaveResult(data) {
         if (data.success) {
             this._toast('success', data.message || 'Post saved!');
