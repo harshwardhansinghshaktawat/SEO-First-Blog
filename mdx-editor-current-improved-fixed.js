@@ -1,4 +1,3 @@
-// CUSTOM ELEMENT - Blog Editor with Auto-Create Categories/Tags (PART 1) - FIXED VERSION
 class MdxBlogEditor extends HTMLElement {
     constructor() {
         super();
