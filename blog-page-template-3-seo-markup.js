@@ -707,7 +707,6 @@ class AdvancedBlogHub extends HTMLElement {
                     alt="${this.escapeHtml(displayTitle)}"
                     class="post-image"
                     loading="lazy"
-                    onerror="this.src='https://via.placeholder.com/400x240/1a1a1a/64FFDA?text=No+Image'"
                 />
                 <div class="post-content">
                     <h3 class="post-title">${this.escapeHtml(displayTitle)}</h3>
