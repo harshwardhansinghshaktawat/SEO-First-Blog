@@ -20,13 +20,7 @@ class MdxBlogEditor extends HTMLElement {
         this._newCategoriesCreated = [];
         this._newTagsCreated = [];
         this._spellingErrors = [];
-        this._grammarIssues = [];
-        this._wordSuggestions = new Map();
-        this._compromiseLoaded = false;
-        this._typoLoaded = false;
-        this._typoInstance = null;
-        this._currentMarkdown = '';
-        this._analysisTimeout = null;
+        this._typoChecker = null;
     }
 
     _freshMeta() {
@@ -114,9 +108,11 @@ class MdxBlogEditor extends HTMLElement {
     attributeChangedCallback(name, oldVal, newVal) {
         if (!newVal || newVal === oldVal) return;
         
-        if (name === 'post-list' && !this._initialized) {
-            this._pendingPostList = newVal;
-            return;
+        if (name === 'post-list') {
+            if (!this._initialized) {
+                this._pendingPostList = newVal;
+                return;
+            }
         }
         
         if (!this._initialized) return;
@@ -143,6 +139,7 @@ class MdxBlogEditor extends HTMLElement {
         requestAnimationFrame(() => {
             this._inject();
             this._wire();
+            this._loadGrammarLibraries();
             this._initialized = true;
             
             if (this._pendingPostList) {
@@ -165,6 +162,27 @@ class MdxBlogEditor extends HTMLElement {
                 this._toastEditor.destroy();
                 this._toastEditor = null;
             } catch(e) {}
+        }
+    }
+
+    async _loadGrammarLibraries() {
+        if (!window.nlp) {
+            const script1 = document.createElement('script');
+            script1.src = 'https://cdn.jsdelivr.net/npm/compromise@14.9.0/builds/compromise.min.js';
+            document.head.appendChild(script1);
+        }
+
+        if (!window.Typo) {
+            const script2 = document.createElement('script');
+            script2.src = 'https://cdn.jsdelivr.net/npm/typo-js@1.2.1/typo.js';
+            script2.onload = () => {
+                try {
+                    this._typoChecker = new Typo('en_US', false, false, {
+                        dictionaryPath: 'https://cdn.jsdelivr.net/npm/typo-js@1.2.1/dictionaries'
+                    });
+                } catch(e) {}
+            };
+            document.head.appendChild(script2);
         }
     }
 
@@ -197,7 +215,6 @@ class MdxBlogEditor extends HTMLElement {
 
     _parseDateFromInput(inputValue) {
         if (!inputValue) return null;
-        
         try {
             const date = new Date(inputValue);
             return isNaN(date.getTime()) ? null : date;
@@ -228,8 +245,6 @@ class MdxBlogEditor extends HTMLElement {
             alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
             external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
             down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`,
-            spell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-            grammar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`
         };
         return I[k] || I.edit;
     }
@@ -257,46 +272,2169 @@ class MdxBlogEditor extends HTMLElement {
         this.innerHTML = '';
         this.appendChild(container);
 
-        this._loadExternalLibraries();
         this._loadToastEditor();
     }
 
-    async _loadExternalLibraries() {
-        if (!window.nlp) {
-            try {
-                const script1 = document.createElement('script');
-                script1.src = 'https://cdn.jsdelivr.net/npm/compromise@14.9.0/builds/compromise.min.js';
-                script1.onload = () => { this._compromiseLoaded = true; };
-                document.head.appendChild(script1);
-            } catch (error) {}
-        } else {
-            this._compromiseLoaded = true;
+    _styles() { 
+        return `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+mdx-blog-editor {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 720px;
+    font-family: 'DM Sans', sans-serif;
+    --ink: #111;
+    --ink2: #444;
+    --ink3: #888;
+    --paper: #fafaf8;
+    --paper2: #f2f1ee;
+    --paper3: #e8e6e1;
+    --border: #ddd9d2;
+    --accent: #d4380d;
+    --accent2: #fa8c16;
+    --green: #389e0d;
+    --blue: #1677ff;
+    --red: #cf1322;
+    --orange: #fa8c16;
+    --yellow: #faad14;
+    --r: 8px;
+    --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
+    --shadow: 0 8px 32px rgba(0,0,0,.14);
+    background: var(--paper);
+    color: var(--ink);
+}
+
+mdx-blog-editor .mdx-host {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 720px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+mdx-blog-editor .mdx-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    padding: 0 20px;
+    background: var(--ink);
+    color: #fff;
+    flex-shrink: 0;
+    gap: 10px;
+}
+mdx-blog-editor .mdx-brand {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -.5px;
+    white-space: nowrap;
+}
+mdx-blog-editor .mdx-brand span { color: var(--accent2); }
+mdx-blog-editor .mdx-top-acts { display: flex; gap: 8px; align-items: center; }
+
+mdx-blog-editor .mdx-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 15px;
+    border: none;
+    border-radius: var(--r);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+    white-space: nowrap;
+}
+mdx-blog-editor .mdx-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+mdx-blog-editor .mdx-btn-ghost  { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); }
+mdx-blog-editor .mdx-btn-ghost:hover  { background: rgba(255,255,255,.22); }
+mdx-blog-editor .mdx-btn-accent { background: var(--accent); color: #fff; }
+mdx-blog-editor .mdx-btn-accent:hover { opacity: .88; }
+mdx-blog-editor .mdx-btn-light  { background: var(--paper2); color: var(--ink2); border: 1px solid var(--border); }
+mdx-blog-editor .mdx-btn-light:hover  { background: var(--paper3); }
+mdx-blog-editor .mdx-btn-red    { background: #fff2f0; color: #a8071a; border: 1px solid #ffccc7; }
+mdx-blog-editor .mdx-btn-red:hover    { background: #ffccc7; }
+mdx-blog-editor .mdx-btn-sm { padding: 5px 10px; font-size: 12px; }
+
+mdx-blog-editor .mdx-list-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+mdx-blog-editor .mdx-list-view.hidden { display: none; }
+
+mdx-blog-editor .mdx-list-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+    background: var(--paper);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+mdx-blog-editor .mdx-list-heading { font-size: 16px; font-weight: 700; }
+mdx-blog-editor .mdx-list-count { font-size: 13px; color: var(--ink3); margin-left: 6px; }
+
+mdx-blog-editor .mdx-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px;
+    min-height: 0;
+}
+mdx-blog-editor .mdx-list-scroll::-webkit-scrollbar { width: 5px; }
+mdx-blog-editor .mdx-list-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+mdx-blog-editor .mdx-state-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 14px;
+    color: var(--ink3);
+    text-align: center;
+}
+mdx-blog-editor .mdx-state-box svg { width: 44px; height: 44px; opacity: .35; }
+mdx-blog-editor .mdx-state-box p { font-size: 15px; }
+
+@keyframes mdx-spin { to { transform: rotate(360deg); } }
+mdx-blog-editor .mdx-spin-anim { animation: mdx-spin .7s linear infinite; }
+
+mdx-blog-editor .mdx-posts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+mdx-blog-editor .mdx-posts-table th {
+    text-align: left;
+    padding: 9px 13px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--ink3);
+    border-bottom: 2px solid var(--border);
+    background: var(--paper2);
+}
+mdx-blog-editor .mdx-posts-table td {
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+mdx-blog-editor .mdx-posts-table tr:hover td { background: #fff9f7; }
+
+mdx-blog-editor .mdx-col-title { font-weight: 600; max-width: 300px; }
+mdx-blog-editor .mdx-post-title-txt {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+mdx-blog-editor .mdx-post-slug { font-size: 11px; color: var(--ink3); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+
+mdx-blog-editor .mdx-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+mdx-blog-editor .mdx-badge-pub   { background: #d1fae5; color: #065f46; }
+mdx-blog-editor .mdx-badge-draft { background: #fef3c7; color: #92400e; }
+
+mdx-blog-editor .mdx-row-actions { display: flex; gap: 6px; }
+
+mdx-blog-editor .mdx-editor-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+mdx-blog-editor .mdx-editor-view.hidden { display: none; }
+
+mdx-blog-editor .mdx-tab-bar {
+    display: flex;
+    align-items: center;
+    height: 45px;
+    padding: 0 14px;
+    background: var(--paper2);
+    border-bottom: 2px solid var(--border);
+    gap: 3px;
+    flex-shrink: 0;
+}
+mdx-blog-editor .mdx-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: var(--r) var(--r) 0 0;
+    background: transparent;
+    color: var(--ink3);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all .15s;
+}
+mdx-blog-editor .mdx-tab svg { width: 14px; height: 14px; }
+mdx-blog-editor .mdx-tab:hover { color: var(--ink); background: var(--paper3); }
+mdx-blog-editor .mdx-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--paper); font-weight: 600; }
+
+mdx-blog-editor .mdx-editor-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-editor-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+mdx-blog-editor .mdx-blog-title-bar {
+    padding: 16px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+mdx-blog-editor .mdx-blog-title-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ink);
+    background: transparent;
+    padding: 0;
+}
+
+mdx-blog-editor .mdx-blog-title-input::placeholder {
+    color: var(--ink3);
+    opacity: 0.5;
+}
+
+mdx-blog-editor .mdx-editor-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    background: #fff;
+}
+mdx-blog-editor .mdx-editor-panel.hidden { display: none; }
+
+mdx-blog-editor .mdx-toast-editor-wrapper {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-toast-editor-container {
+    height: 100%;
+}
+
+mdx-blog-editor .toastui-editor-contents p,
+mdx-blog-editor .toastui-editor-contents li,
+mdx-blog-editor .toastui-editor-contents td,
+mdx-blog-editor .toastui-editor-contents th {
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+}
+
+mdx-blog-editor .toastui-editor-contents h1 { font-size: 32px !important; }
+mdx-blog-editor .toastui-editor-contents h2 { font-size: 28px !important; }
+mdx-blog-editor .toastui-editor-contents h3 { font-size: 24px !important; }
+mdx-blog-editor .toastui-editor-contents h4 { font-size: 20px !important; }
+
+mdx-blog-editor .mdx-highlight-spelling {
+    background: rgba(255, 0, 0, 0.2);
+    border-bottom: 2px wavy red;
+    cursor: pointer;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-highlight-grammar {
+    background: rgba(255, 165, 0, 0.2);
+    border-bottom: 2px dotted orange;
+    cursor: pointer;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-highlight-readability {
+    background: rgba(138, 43, 226, 0.15);
+    border-bottom: 2px dashed purple;
+    cursor: pointer;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-issue-tooltip {
+    position: absolute;
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    max-width: 250px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: none;
+}
+
+mdx-blog-editor .mdx-sidebar {
+    width: 340px;
+    background: var(--paper);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+mdx-blog-editor .mdx-sidebar.hidden {
+    display: none;
+}
+
+mdx-blog-editor .mdx-sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+mdx-blog-editor .mdx-sidebar-scroll::-webkit-scrollbar { width: 5px; }
+mdx-blog-editor .mdx-sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+mdx-blog-editor .mdx-score-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+mdx-blog-editor .mdx-score-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--ink3);
+    margin-bottom: 12px;
+}
+
+mdx-blog-editor .mdx-score-circle {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 12px;
+    position: relative;
+}
+
+mdx-blog-editor .mdx-score-svg {
+    transform: rotate(-90deg);
+}
+
+mdx-blog-editor .mdx-score-bg {
+    fill: none;
+    stroke: var(--paper3);
+    stroke-width: 8;
+}
+
+mdx-blog-editor .mdx-score-fg {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.5s ease;
+}
+
+mdx-blog-editor .mdx-score-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+    font-weight: 700;
+}
+
+mdx-blog-editor .mdx-score-label {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: -8px;
+}
+
+mdx-blog-editor .mdx-analysis-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+mdx-blog-editor .mdx-analysis-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 1px;
+}
+
+mdx-blog-editor .mdx-analysis-good {
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+}
+
+mdx-blog-editor .mdx-analysis-good .mdx-analysis-icon {
+    background: var(--green);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-analysis-ok {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+}
+
+mdx-blog-editor .mdx-analysis-ok .mdx-analysis-icon {
+    background: var(--orange);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-analysis-bad {
+    background: #fff2f0;
+    border: 1px solid #ffccc7;
+}
+
+mdx-blog-editor .mdx-analysis-bad .mdx-analysis-icon {
+    background: var(--red);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-keyphrase-section {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+mdx-blog-editor .mdx-keyphrase-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink3);
+    margin-bottom: 6px;
+    display: block;
+}
+
+mdx-blog-editor .mdx-keyphrase-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+}
+
+mdx-blog-editor .mdx-keyphrase-input:focus {
+    border-color: var(--accent);
+}
+
+mdx-blog-editor .mdx-dropdown-wrapper {
+    position: relative;
+}
+
+mdx-blog-editor .mdx-dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+}
+
+mdx-blog-editor .mdx-dropdown-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background .15s;
+    border-bottom: 1px solid var(--paper2);
+}
+
+mdx-blog-editor .mdx-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+mdx-blog-editor .mdx-dropdown-item:hover {
+    background: var(--paper2);
+}
+
+mdx-blog-editor .mdx-dropdown-item.create-new {
+    color: var(--accent);
+    font-weight: 600;
+    background: #fff5f0;
+}
+
+mdx-blog-editor .mdx-dropdown-item.create-new:hover {
+    background: #ffe7d9;
+}
+
+mdx-blog-editor .mdx-prev-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; background: #fff; }
+mdx-blog-editor .mdx-prev-panel.active { display: block; }
+mdx-blog-editor .mdx-prev-inner { max-width: 820px; margin: 0 auto; padding: 32px 44px; font-size: 16px; line-height: 1.75; }
+mdx-blog-editor .mdx-prev-inner h1 { font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 900; margin-bottom: 14px; }
+mdx-blog-editor .mdx-prev-inner h2 { font-family: 'Playfair Display', serif; font-size: 26px; margin: 22px 0 10px; border-bottom: 2px solid var(--border); padding-bottom: 5px; }
+mdx-blog-editor .mdx-prev-inner h3 { font-size: 21px; font-weight: 700; margin: 18px 0 8px; }
+mdx-blog-editor .mdx-prev-inner h4 { font-size: 17px; font-weight: 600; margin: 14px 0 7px; }
+mdx-blog-editor .mdx-prev-inner h5 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 12px 0 6px; }
+mdx-blog-editor .mdx-prev-inner h6 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); margin: 10px 0 5px; }
+mdx-blog-editor .mdx-prev-inner p { margin-bottom: 10px; }
+mdx-blog-editor .mdx-prev-inner blockquote { border-left: 4px solid var(--accent2); padding-left: 14px; color: var(--ink2); font-style: italic; margin: 10px 0; }
+mdx-blog-editor .mdx-prev-inner pre { background: #1e1e2e; border-radius: var(--r); padding: 14px; overflow-x: auto; margin: 10px 0; }
+mdx-blog-editor .mdx-prev-inner code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #cdd6f4; }
+mdx-blog-editor .mdx-prev-inner p code { background: var(--paper2); padding: 2px 5px; border-radius: 3px; color: var(--accent); font-size: 12px; border: 1px solid var(--border); }
+mdx-blog-editor .mdx-prev-inner ul, mdx-blog-editor .mdx-prev-inner ol { padding-left: 22px; margin-bottom: 10px; }
+mdx-blog-editor .mdx-prev-inner li { margin-bottom: 3px; }
+mdx-blog-editor .mdx-prev-inner hr { border: none; border-top: 2px solid var(--border); margin: 22px 0; }
+mdx-blog-editor .mdx-prev-inner img { max-width: 100%; border-radius: var(--r); margin: 7px 0; }
+mdx-blog-editor .mdx-prev-inner table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+mdx-blog-editor .mdx-prev-inner th, mdx-blog-editor .mdx-prev-inner td { border: 1px solid var(--border); padding: 7px 11px; }
+mdx-blog-editor .mdx-prev-inner th { background: var(--paper2); font-weight: 600; }
+mdx-blog-editor .mdx-prev-inner a { color: var(--blue); text-decoration: underline; }
+
+mdx-blog-editor .mdx-prev-inner .video-embed {
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+    overflow: hidden;
+    max-width: 100%;
+    margin: 16px 0;
+    border-radius: var(--r);
+}
+
+mdx-blog-editor .mdx-prev-inner .video-embed iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+mdx-blog-editor .mdx-md-panel { display: none; flex: 1; min-height: 0; background: #1e1e2e; }
+mdx-blog-editor .mdx-md-panel.active { display: flex; flex-direction: column; }
+mdx-blog-editor .mdx-md-area { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; padding: 22px; border: none; outline: none; resize: none; background: #1e1e2e; color: #cdd6f4; }
+
+mdx-blog-editor .mdx-meta-panel, mdx-blog-editor .mdx-seo-panel, mdx-blog-editor .mdx-related-panel, mdx-blog-editor .mdx-schema-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+mdx-blog-editor .mdx-meta-panel.active, mdx-blog-editor .mdx-seo-panel.active, mdx-blog-editor .mdx-related-panel.active, mdx-blog-editor .mdx-schema-panel.active { display: block; }
+mdx-blog-editor .mdx-meta-inner, mdx-blog-editor .mdx-seo-inner, mdx-blog-editor .mdx-related-inner, mdx-blog-editor .mdx-schema-inner { padding: 20px; }
+
+mdx-blog-editor .mdx-msec { background: var(--paper); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 14px; overflow: hidden; }
+mdx-blog-editor .mdx-msec-title { padding: 10px 14px; background: var(--paper2); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--ink3); }
+mdx-blog-editor .mdx-mfields { padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+mdx-blog-editor .mdx-mfull { grid-column: 1 / -1; }
+mdx-blog-editor .mdx-mfield label { display: block; font-size: 11px; font-weight: 600; color: var(--ink3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+mdx-blog-editor .mdx-minp, mdx-blog-editor .mdx-msel, mdx-blog-editor .mdx-mtxt { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 5px; font-family: 'DM Sans', sans-serif; font-size: 14px; background: var(--paper); color: var(--ink); outline: none; transition: border-color .15s; }
+mdx-blog-editor .mdx-minp:focus, mdx-blog-editor .mdx-msel:focus, mdx-blog-editor .mdx-mtxt:focus { border-color: var(--accent); }
+mdx-blog-editor .mdx-minp:read-only { background: var(--paper2); cursor: not-allowed; }
+mdx-blog-editor .mdx-mtxt { resize: vertical; min-height: 70px; }
+mdx-blog-editor .mdx-tog-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-top: 1px solid var(--border); }
+mdx-blog-editor .mdx-tog-lbl { font-size: 14px; font-weight: 500; }
+mdx-blog-editor .mdx-tog { position: relative; width: 38px; height: 21px; }
+mdx-blog-editor .mdx-tog input { opacity: 0; width: 0; height: 0; }
+mdx-blog-editor .mdx-tog-slider { position: absolute; inset: 0; background: var(--paper3); border-radius: 21px; cursor: pointer; transition: background .2s; }
+mdx-blog-editor .mdx-tog-slider::before { content: ''; position: absolute; width: 15px; height: 15px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+mdx-blog-editor .mdx-tog input:checked + .mdx-tog-slider { background: var(--accent); }
+mdx-blog-editor .mdx-tog input:checked + .mdx-tog-slider::before { transform: translateX(17px); }
+
+mdx-blog-editor .mdx-fimg-zone { border: 2px dashed var(--border); border-radius: var(--r); padding: 18px; text-align: center; cursor: pointer; transition: all .2s; background: var(--paper2); margin: 14px; }
+mdx-blog-editor .mdx-fimg-zone:hover { border-color: var(--accent); background: #fff5f0; }
+mdx-blog-editor .mdx-fimg-zone svg { width: 26px; height: 26px; color: var(--ink3); margin-bottom: 5px; }
+mdx-blog-editor .mdx-fimg-zone p { font-size: 12px; color: var(--ink3); }
+mdx-blog-editor .mdx-fimg-zone input[type=file] { display: none; }
+mdx-blog-editor .mdx-fimg-prev { max-width: 100%; border-radius: 5px; margin-top: 7px; }
+
+mdx-blog-editor .mdx-related-search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+mdx-blog-editor .mdx-related-search {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+}
+
+mdx-blog-editor .mdx-related-search:focus {
+    border-color: var(--accent);
+}
+
+mdx-blog-editor .mdx-related-list {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+}
+
+mdx-blog-editor .mdx-related-post {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .15s;
+}
+
+mdx-blog-editor .mdx-related-post:last-child {
+    border-bottom: none;
+}
+
+mdx-blog-editor .mdx-related-post:hover {
+    background: var(--paper2);
+}
+
+mdx-blog-editor .mdx-related-post.selected {
+    background: #e6f4ff;
+    border-color: var(--blue);
+}
+
+mdx-blog-editor .mdx-related-check {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+mdx-blog-editor .mdx-related-post.selected .mdx-related-check {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-related-info {
+    flex: 1;
+}
+
+mdx-blog-editor .mdx-related-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+}
+
+mdx-blog-editor .mdx-related-slug {
+    font-size: 11px;
+    color: var(--ink3);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+mdx-blog-editor .mdx-related-count {
+    font-size: 13px;
+    color: var(--ink3);
+    margin-bottom: 10px;
+}
+
+mdx-blog-editor .mdx-schema-type-sel {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+mdx-blog-editor .mdx-schema-type-btn {
+    padding: 8px 16px;
+    border: 2px solid var(--border);
+    border-radius: var(--r);
+    background: #fff;
+    color: var(--ink2);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+}
+
+mdx-blog-editor .mdx-schema-type-btn:hover {
+    border-color: var(--accent);
+    background: var(--paper2);
+}
+
+mdx-blog-editor .mdx-schema-type-btn.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+}
+
+mdx-blog-editor .mdx-schema-authors {
+    margin-top: 10px;
+}
+
+mdx-blog-editor .mdx-schema-author {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+mdx-blog-editor .mdx-schema-author input {
+    flex: 1;
+}
+
+mdx-blog-editor .mdx-schema-author-remove {
+    padding: 6px 12px;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    border-radius: var(--r);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+mdx-blog-editor .mdx-schema-faq-items {
+    margin-top: 10px;
+}
+
+mdx-blog-editor .mdx-schema-faq-item {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+mdx-blog-editor .mdx-schema-faq-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+mdx-blog-editor .mdx-schema-faq-remove {
+    padding: 4px 10px;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    border-radius: var(--r);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+mdx-blog-editor .mdx-schema-list-item {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+mdx-blog-editor .mdx-schema-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+mdx-blog-editor .mdx-alert-box {
+    display: flex;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--r);
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+mdx-blog-editor .mdx-alert-warning {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    color: #614700;
+}
+
+mdx-blog-editor .mdx-alert-warning svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--yellow);
+    margin-top: 2px;
+}
+
+mdx-blog-editor .mdx-alert-info {
+    background: #e6f4ff;
+    border: 1px solid #91caff;
+    color: #003eb3;
+}
+
+mdx-blog-editor .mdx-alert-info svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--blue);
+    margin-top: 2px;
+}
+
+mdx-blog-editor .mdx-toasts { position: fixed; top: 14px; right: 14px; z-index: 9999; display: flex; flex-direction: column; gap: 7px; }
+mdx-blog-editor .mdx-toast { padding: 11px 16px; border-radius: var(--r); font-size: 13px; font-weight: 500; box-shadow: var(--shadow); animation: mdx-tIn .25s ease; max-width: 340px; font-family: 'DM Sans', sans-serif; }
+@keyframes mdx-tIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+mdx-blog-editor .mdx-toast-success { background: #f6ffed; border: 1px solid #b7eb8f; color: #135200; }
+mdx-blog-editor .mdx-toast-error   { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
+mdx-blog-editor .mdx-toast-info    { background: #e6f4ff; border: 1px solid #91caff; color: #003eb3; }
+
+@media (max-width: 1200px) {
+    mdx-blog-editor .mdx-sidebar {
+        width: 300px;
+    }
+}
+
+@media (max-width: 900px) {
+    mdx-blog-editor .mdx-sidebar {
+        display: none;
+    }
+    mdx-blog-editor .mdx-prev-inner { padding: 16px; }
+    mdx-blog-editor .mdx-mfields { grid-template-columns: 1fr; }
+}
+`; }
+
+    _shellHTML() { return `
+<div class="mdx-top-bar">
+    <div class="mdx-brand">MDX<span>Blocks</span></div>
+    <div class="mdx-top-acts" id="topActs"></div>
+</div>
+
+<div class="mdx-list-view" id="listView">
+    <div class="mdx-list-bar">
+        <div>
+            <span class="mdx-list-heading">Blog Posts</span>
+            <span class="mdx-list-count" id="listCount"></span>
+        </div>
+        <button class="mdx-btn mdx-btn-accent" id="newPostBtn">${this._icon('plus')} New Post</button>
+    </div>
+    <div class="mdx-list-scroll" id="listScroll">
+        <div class="mdx-state-box" id="listLoading">
+            <svg class="mdx-spin-anim" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-opacity=".2"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+            </svg>
+            <p>Loading posts…</p>
+        </div>
+        <div id="listContent" style="display:none"></div>
+    </div>
+</div>
+
+<div class="mdx-editor-view hidden" id="editorView">
+    <div class="mdx-tab-bar">
+        <button class="mdx-tab active" data-tab="editor">${this._icon('edit')} Editor</button>
+        <button class="mdx-tab" data-tab="preview">${this._icon('eye')} Preview</button>
+        <button class="mdx-tab" data-tab="markdown">${this._icon('code')} Markdown</button>
+        <button class="mdx-tab" data-tab="meta">${this._icon('gear')} Settings</button>
+        <button class="mdx-tab" data-tab="related">${this._icon('link')} Related</button>
+        <button class="mdx-tab" data-tab="schema">${this._icon('schema')} Schema</button>
+        <button class="mdx-tab" data-tab="seo">${this._icon('seo')} SEO</button>
+    </div>
+
+    <div class="mdx-editor-body">
+        <div class="mdx-editor-main">
+            <div class="mdx-blog-title-bar" id="blogTitleBar" style="display:none;">
+                <input type="text" 
+                       class="mdx-blog-title-input" 
+                       id="blogTitleInput" 
+                       placeholder="Add your blog title here..."
+                       data-m="blogTitle">
+            </div>
+
+            <div class="mdx-editor-panel" id="editorPanel">
+                <div class="mdx-toast-editor-wrapper" id="toastEditorWrapper"></div>
+            </div>
+
+            <div class="mdx-prev-panel" id="prevPanel">
+                <div class="mdx-prev-inner" id="prevInner"></div>
+            </div>
+
+            <div class="mdx-md-panel" id="mdPanel">
+                <textarea class="mdx-md-area" id="mdArea" readonly spellcheck="false"></textarea>
+            </div>
+
+            <div class="mdx-meta-panel" id="metaPanel">
+                <div class="mdx-meta-inner">${this._metaHTML()}</div>
+            </div>
+
+            <div class="mdx-related-panel" id="relatedPanel">
+                <div class="mdx-related-inner">${this._relatedHTML()}</div>
+            </div>
+
+            <div class="mdx-schema-panel" id="schemaPanel">
+                <div class="mdx-schema-inner">${this._schemaHTML()}</div>
+            </div>
+
+            <div class="mdx-seo-panel" id="seoPanel">
+                <div class="mdx-seo-inner">${this._seoHTML()}</div>
+            </div>
+        </div>
+
+        <div class="mdx-sidebar" id="seoSidebar">
+            <div class="mdx-sidebar-scroll">
+                <div class="mdx-keyphrase-section">
+                    <label class="mdx-keyphrase-label">Focus Keyphrase</label>
+                    <input type="text" 
+                           class="mdx-keyphrase-input" 
+                           id="focusKeyphrase"
+                           placeholder="Enter your focus keyword..."
+                           data-m="focusKeyphrase">
+                </div>
+
+                <div class="mdx-score-card">
+                    <div class="mdx-score-title">Grammar & Style</div>
+                    <div class="mdx-score-circle">
+                        <svg class="mdx-score-svg" width="120" height="120">
+                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
+                            <circle class="mdx-score-fg" id="grammarScoreCircle" cx="60" cy="60" r="52" 
+                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+                        </svg>
+                        <div class="mdx-score-text" id="grammarScoreText">0</div>
+                    </div>
+                    <div class="mdx-score-label" id="grammarScoreLabel">Analyzing...</div>
+                    <div id="grammarAnalysisItems"></div>
+                </div>
+
+                <div class="mdx-score-card">
+                    <div class="mdx-score-title">SEO Analysis</div>
+                    <div class="mdx-score-circle">
+                        <svg class="mdx-score-svg" width="120" height="120">
+                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
+                            <circle class="mdx-score-fg" id="seoScoreCircle" cx="60" cy="60" r="52" 
+                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+                        </svg>
+                        <div class="mdx-score-text" id="seoScoreText">0</div>
+                    </div>
+                    <div class="mdx-score-label" id="seoScoreLabel">Needs improvement</div>
+                    <div id="seoAnalysisItems"></div>
+                </div>
+
+                <div class="mdx-score-card">
+                    <div class="mdx-score-title">Readability Analysis</div>
+                    <div class="mdx-score-circle">
+                        <svg class="mdx-score-svg" width="120" height="120">
+                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
+                            <circle class="mdx-score-fg" id="readScoreCircle" cx="60" cy="60" r="52"
+                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+                        </svg>
+                        <div class="mdx-score-text" id="readScoreText">0</div>
+                    </div>
+                    <div class="mdx-score-label" id="readScoreLabel">Needs improvement</div>
+                    <div id="readAnalysisItems"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mdx-toasts" id="toastArea"></div>
+`; }
+
+    _metaHTML() { return `
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Post Details</div>
+    <div class="mdx-mfields">
+        <div class="mdx-mfield mdx-mfull"><label>Slug</label><input class="mdx-minp" id="m-slug" type="text" placeholder="post-url-slug" data-m="slug" readonly></div>
+        <div class="mdx-mfield mdx-mfull"><label>Excerpt</label><textarea class="mdx-mtxt" placeholder="Short description…" data-m="excerpt" rows="3"></textarea></div>
+        <div class="mdx-mfield"><label>Author</label><input class="mdx-minp" type="text" placeholder="Author name" data-m="author"></div>
+        <div class="mdx-mfield"><label>Author URL</label><input class="mdx-minp" type="url" placeholder="https://example.com/author" data-m="authorUrl"></div>
+        <div class="mdx-mfield mdx-mfull">
+            <label>Category</label>
+            <div class="mdx-dropdown-wrapper">
+                <input class="mdx-minp" type="text" id="categoryInput" placeholder="Type or select category" data-m="category" autocomplete="off">
+                <div class="mdx-dropdown-list" id="categoryDropdown" style="display:none;"></div>
+            </div>
+        </div>
+        <div class="mdx-mfield mdx-mfull">
+            <label>Tags (comma-separated)</label>
+            <div class="mdx-dropdown-wrapper">
+                <input class="mdx-minp" type="text" id="tagsInput" placeholder="Type tags separated by commas" data-m="tags" autocomplete="off">
+                <div class="mdx-dropdown-list" id="tagsDropdown" style="display:none;"></div>
+            </div>
+        </div>
+        <div class="mdx-mfield"><label>Status</label>
+            <select class="mdx-msel" data-m="status"><option value="draft">Draft</option><option value="published">Published</option></select>
+        </div>
+        <div class="mdx-mfield"><label>Published Date</label><input class="mdx-minp" type="datetime-local" data-m="publishedDate"></div>
+        <div class="mdx-mfield"><label>Modified Date</label><input class="mdx-minp" type="datetime-local" data-m="modifiedDate"></div>
+        <div class="mdx-mfield"><label>Read Time (min)</label><input class="mdx-minp" type="number" placeholder="5" data-m="readTime"></div>
+    </div>
+    <div class="mdx-tog-row">
+        <span class="mdx-tog-lbl">Featured Post</span>
+        <label class="mdx-tog"><input type="checkbox" data-m="isFeatured" id="m-featured"><span class="mdx-tog-slider"></span></label>
+    </div>
+</div>
+<div id="newItemsAlert"></div>
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Author Image</div>
+    <div class="mdx-fimg-zone" id="authorZone">
+        <input type="file" id="authorFile" accept="image/*">${this._icon('image')}
+        <p>Click to upload author image</p>
+        <img class="mdx-fimg-prev" id="authorPrev" style="display:none">
+    </div>
+</div>
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Featured Image</div>
+    <div class="mdx-fimg-zone" id="featuredZone">
+        <input type="file" id="featuredFile" accept="image/*">${this._icon('image')}
+        <p>Click to upload featured image</p>
+        <img class="mdx-fimg-prev" id="featuredPrev" style="display:none">
+    </div>
+</div>`; }
+
+    _relatedHTML() { return `
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Related Posts</div>
+    <div style="padding: 14px;">
+        <div class="mdx-related-search-bar">
+            <input type="text" 
+                   class="mdx-related-search" 
+                   id="relatedSearchInput" 
+                   placeholder="Search posts by title...">
+            <button class="mdx-btn mdx-btn-light mdx-btn-sm" id="clearRelatedSearch">${this._icon('back')} Clear</button>
+        </div>
+        <div class="mdx-related-count" id="relatedCount">0 posts selected</div>
+        <div class="mdx-related-list" id="relatedPostsList"></div>
+    </div>
+</div>`; }
+
+    _schemaHTML() { return `
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Schema Type</div>
+    <div style="padding: 14px;">
+        <div class="mdx-schema-type-sel">
+            <button class="mdx-schema-type-btn active" data-type="Article">Article</button>
+            <button class="mdx-schema-type-btn" data-type="NewsArticle">News</button>
+            <button class="mdx-schema-type-btn" data-type="BlogPosting">Blog</button>
+            <button class="mdx-schema-type-btn" data-type="JobPosting">Job</button>
+            <button class="mdx-schema-type-btn" data-type="ImageObject">Image</button>
+            <button class="mdx-schema-type-btn" data-type="Recipe">Recipe</button>
+        </div>
+    </div>
+</div>
+
+<div id="schemaBestPractices"></div>
+
+<div id="schemaArticleFields">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Article Fields (Auto-populated)</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull">
+                <label>Headline</label>
+                <input class="mdx-minp" type="text" id="schema-headline" placeholder="Auto from title" readonly>
+            </div>
+            <div class="mdx-mfield mdx-mfull">
+                <label>Description</label>
+                <input class="mdx-minp" type="text" id="schema-description" placeholder="Auto from excerpt" readonly>
+            </div>
+            <div class="mdx-mfield">
+                <label>Published</label>
+                <input class="mdx-minp" type="text" id="schema-published" placeholder="Auto" readonly>
+            </div>
+            <div class="mdx-mfield">
+                <label>Modified</label>
+                <input class="mdx-minp" type="text" id="schema-modified" placeholder="Auto" readonly>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="schemaAuthorsSection">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Authors</div>
+        <div style="padding: 14px;">
+            <div class="mdx-schema-authors" id="schemaAuthors"></div>
+            <button class="mdx-btn mdx-btn-light" id="addAuthorBtn">${this._icon('plus')} Add Author</button>
+        </div>
+    </div>
+</div>
+
+<div id="schemaFAQSection">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">FAQ Items (Optional)</div>
+        <div style="padding: 14px;">
+            <div class="mdx-schema-faq-items" id="schemaFaqItems"></div>
+            <button class="mdx-btn mdx-btn-light" id="addFaqBtn">${this._icon('plus')} Add FAQ Item</button>
+        </div>
+    </div>
+</div>
+
+<div id="schemaJobFields" style="display:none;">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Job Details</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull"><label>Job Title</label><input class="mdx-minp" type="text" id="job-title" placeholder="Software Engineer"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Job Description</label><textarea class="mdx-mtxt" id="job-description" placeholder="Full job description..." rows="4"></textarea></div>
+            <div class="mdx-mfield"><label>Date Posted</label><input class="mdx-minp" type="date" id="job-datePosted"></div>
+            <div class="mdx-mfield"><label>Valid Through</label><input class="mdx-minp" type="date" id="job-validThrough"></div>
+            <div class="mdx-mfield"><label>Employment Type</label>
+                <select class="mdx-msel" id="job-employmentType">
+                    <option value="FULL_TIME">Full Time</option>
+                    <option value="PART_TIME">Part Time</option>
+                    <option value="CONTRACTOR">Contractor</option>
+                    <option value="TEMPORARY">Temporary</option>
+                    <option value="INTERN">Intern</option>
+                    <option value="VOLUNTEER">Volunteer</option>
+                    <option value="PER_DIEM">Per Diem</option>
+                    <option value="OTHER">Other</option>
+                </select>
+            </div>
+            <div class="mdx-mfield"><label>Job Location Type</label>
+                <select class="mdx-msel" id="job-jobLocationType">
+                    <option value="">On-site</option>
+                    <option value="TELECOMMUTE">Remote/Telecommute</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Organization</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull"><label>Company Name</label><input class="mdx-minp" type="text" id="job-organizationName" placeholder="Google"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Company URL</label><input class="mdx-minp" type="url" id="job-organizationUrl" placeholder="https://www.google.com"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Company Logo URL</label><input class="mdx-minp" type="url" id="job-organizationLogo" placeholder="https://example.com/logo.png"></div>
+        </div>
+    </div>
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Location (For On-site Jobs)</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull"><label>Street Address</label><input class="mdx-minp" type="text" id="job-streetAddress" placeholder="1600 Amphitheatre Pkwy"></div>
+            <div class="mdx-mfield"><label>City</label><input class="mdx-minp" type="text" id="job-addressLocality" placeholder="Mountain View"></div>
+            <div class="mdx-mfield"><label>State/Region</label><input class="mdx-minp" type="text" id="job-addressRegion" placeholder="CA"></div>
+            <div class="mdx-mfield"><label>Postal Code</label><input class="mdx-minp" type="text" id="job-postalCode" placeholder="94043"></div>
+            <div class="mdx-mfield"><label>Country Code</label><input class="mdx-minp" type="text" id="job-addressCountry" placeholder="US"></div>
+        </div>
+    </div>
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Salary</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield"><label>Value</label><input class="mdx-minp" type="number" id="job-salaryValue" placeholder="40.00" step="0.01"></div>
+            <div class="mdx-mfield"><label>Currency</label><input class="mdx-minp" type="text" id="job-salaryCurrency" placeholder="USD"></div>
+            <div class="mdx-mfield"><label>Unit</label>
+                <select class="mdx-msel" id="job-salaryUnit">
+                    <option value="HOUR">Hour</option>
+                    <option value="DAY">Day</option>
+                    <option value="WEEK">Week</option>
+                    <option value="MONTH">Month</option>
+                    <option value="YEAR">Year</option>
+                </select>
+            </div>
+            <div class="mdx-mfield"><label>Remote Location (if TELECOMMUTE)</label><input class="mdx-minp" type="text" id="job-applicantLocationRequirements" placeholder="USA"></div>
+        </div>
+    </div>
+</div>
+
+<div id="schemaImageFields" style="display:none;">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Image Details</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull"><label>Image URL</label><input class="mdx-minp" type="url" id="img-contentUrl" placeholder="https://example.com/photo.jpg"></div>
+            <div class="mdx-mfield mdx-mfull"><label>License URL</label><input class="mdx-minp" type="url" id="img-license" placeholder="https://example.com/license"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Acquire License Page</label><input class="mdx-minp" type="url" id="img-acquireLicensePage" placeholder="https://example.com/how-to-use"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Credit Text</label><input class="mdx-minp" type="text" id="img-creditText" placeholder="Photo Lab"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Creator Name</label><input class="mdx-minp" type="text" id="img-creatorName" placeholder="Photographer Name"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Copyright Notice</label><input class="mdx-minp" type="text" id="img-copyrightNotice" placeholder="Copyright Holder"></div>
+        </div>
+    </div>
+</div>
+
+<div id="schemaRecipeFields" style="display:none;">
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Recipe Details</div>
+        <div class="mdx-mfields">
+            <div class="mdx-mfield mdx-mfull"><label>Recipe Name</label><input class="mdx-minp" type="text" id="recipe-name" placeholder="Non-Alcoholic Piña Colada"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Description</label><textarea class="mdx-mtxt" id="recipe-description" placeholder="This is everyone's favorite!" rows="2"></textarea></div>
+            <div class="mdx-mfield"><label>Cuisine</label><input class="mdx-minp" type="text" id="recipe-cuisine" placeholder="American"></div>
+            <div class="mdx-mfield"><label>Category</label><input class="mdx-minp" type="text" id="recipe-category" placeholder="Drink"></div>
+            <div class="mdx-mfield mdx-mfull"><label>Keywords</label><input class="mdx-minp" type="text" id="recipe-keywords" placeholder="non-alcoholic, summer"></div>
+            <div class="mdx-mfield"><label>Prep Time (PT15M)</label><input class="mdx-minp" type="text" id="recipe-prepTime" placeholder="PT1M"></div>
+            <div class="mdx-mfield"><label>Cook Time (PT30M)</label><input class="mdx-minp" type="text" id="recipe-cookTime" placeholder="PT2M"></div>
+            <div class="mdx-mfield"><label>Total Time</label><input class="mdx-minp" type="text" id="recipe-totalTime" placeholder="PT3M"></div>
+            <div class="mdx-mfield"><label>Yield</label><input class="mdx-minp" type="text" id="recipe-recipeYield" placeholder="4 servings"></div>
+            <div class="mdx-mfield"><label>Calories</label><input class="mdx-minp" type="text" id="recipe-calories" placeholder="120 calories"></div>
+        </div>
+    </div>
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Ingredients</div>
+        <div style="padding: 14px;">
+            <div id="recipeIngredients"></div>
+            <button class="mdx-btn mdx-btn-light" id="addIngredientBtn">${this._icon('plus')} Add Ingredient</button>
+        </div>
+    </div>
+    <div class="mdx-msec">
+        <div class="mdx-msec-title">Instructions</div>
+        <div style="padding: 14px;">
+            <div id="recipeInstructions"></div>
+            <button class="mdx-btn mdx-btn-light" id="addInstructionBtn">${this._icon('plus')} Add Step</button>
+        </div>
+    </div>
+</div>
+
+<div class="mdx-msec">
+    <div class="mdx-msec-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Generated Schema Preview</span>
+        <button class="mdx-btn mdx-btn-light mdx-btn-sm" id="testRichResultsBtn">${this._icon('external')} Test in Google</button>
+    </div>
+    <div style="padding: 14px;">
+        <textarea class="mdx-mtxt" id="schemaPreview" rows="10" readonly style="font-family: 'JetBrains Mono', monospace; font-size: 12px;"></textarea>
+    </div>
+</div>
+`; }
+
+    _seoHTML() { return `
+<div class="mdx-msec">
+    <div class="mdx-msec-title">SEO Settings</div>
+    <div class="mdx-mfields">
+        <div class="mdx-mfield mdx-mfull"><label>SEO Title</label><input class="mdx-minp" type="text" placeholder="SEO title…" data-m="seoTitle"></div>
+        <div class="mdx-mfield mdx-mfull"><label>SEO Description</label><textarea class="mdx-mtxt" placeholder="Meta description…" data-m="seoDescription" rows="3"></textarea></div>
+        <div class="mdx-mfield mdx-mfull"><label>Keywords (comma-separated)</label><input class="mdx-minp" type="text" placeholder="keyword1, keyword2" data-m="seoKeywords"></div>
+    </div>
+</div>
+<div class="mdx-msec">
+    <div class="mdx-msec-title">Open Graph Image</div>
+    <div class="mdx-fimg-zone" id="ogZone">
+        <input type="file" id="ogFile" accept="image/*">${this._icon('image')}
+        <p>Recommended: 1200×630px</p>
+        <img class="mdx-fimg-prev" id="ogPrev" style="display:none">
+    </div>
+</div>`; }
+
+    _wire() {
+        this.querySelector('#newPostBtn').addEventListener('click', () => this._openEditor(null));
+        this.querySelectorAll('.mdx-tab').forEach(t => t.addEventListener('click', () => this._switchTab(t.dataset.tab)));
+
+        this.querySelectorAll('[data-m]').forEach(el => {
+            const evt = el.type === 'checkbox' ? 'change' : 'input';
+            el.addEventListener(evt, () => {
+                const key = el.dataset.m;
+                
+                if (el.type === 'checkbox') {
+                    this._meta[key] = el.checked;
+                } else if (el.type === 'number') {
+                    this._meta[key] = el.value ? Number(el.value) : 0;
+                } else {
+                    this._meta[key] = el.value;
+                }
+                
+                if (['blogTitle', 'focusKeyphrase', 'seoTitle', 'seoDescription'].includes(key)) {
+                    this._runAnalysis();
+                }
+
+                if (['blogTitle', 'excerpt', 'author', 'authorUrl', 'publishedDate', 'modifiedDate', 'featuredImage'].includes(key)) {
+                    this._updateSchemaPreview();
+                }
+            });
+        });
+        
+        const blogTitleInput = this.querySelector('#blogTitleInput');
+        
+        blogTitleInput.addEventListener('input', (e) => {
+            this._meta.blogTitle = e.target.value;
+            this._autoSlug(e.target.value);
+            this._runAnalysis();
+            this._updateSchemaPreview();
+        });
+
+        this._wireImgZone('authorZone', 'authorFile', 'authorPrev', 'authorImage');
+        this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
+        this._wireImgZone('ogZone', 'ogFile', 'ogPrev', 'seoOgImage');
+        
+        this._wireCategoryDropdown();
+        this._wireTagsDropdown();
+        this._wireRelatedPosts();
+        this._wireSchema();
+    }
+
+    _wireCategoryDropdown() {
+        const input = this.querySelector('#categoryInput');
+        const dropdown = this.querySelector('#categoryDropdown');
+        
+        if (!input || !dropdown) return;
+
+        input.addEventListener('focus', () => {
+            this._showCategoryDropdown();
+        });
+
+        input.addEventListener('input', (e) => {
+            this._meta.category = e.target.value;
+            this._showCategoryDropdown();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.mdx-dropdown-wrapper')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+    _showCategoryDropdown() {
+        const input = this.querySelector('#categoryInput');
+        const dropdown = this.querySelector('#categoryDropdown');
+        
+        if (!input || !dropdown) return;
+
+        const searchTerm = input.value.toLowerCase().trim();
+        
+        let matchingCategories = this._allCategories.filter(cat => 
+            cat.name.toLowerCase().includes(searchTerm)
+        );
+
+        dropdown.innerHTML = '';
+
+        matchingCategories.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'mdx-dropdown-item';
+            item.textContent = cat.name;
+            item.addEventListener('click', () => {
+                input.value = cat.name;
+                this._meta.category = cat.name;
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(item);
+        });
+
+        if (searchTerm && !this._allCategories.some(cat => cat.name.toLowerCase() === searchTerm)) {
+            const createItem = document.createElement('div');
+            createItem.className = 'mdx-dropdown-item create-new';
+            createItem.textContent = `+ Create "${searchTerm}"`;
+            createItem.addEventListener('click', () => {
+                input.value = searchTerm;
+                this._meta.category = searchTerm;
+                dropdown.style.display = 'none';
+                
+                if (!this._newCategoriesCreated.includes(searchTerm)) {
+                    this._newCategoriesCreated.push(searchTerm);
+                    this._showNewItemsAlert();
+                }
+            });
+            dropdown.appendChild(createItem);
         }
 
-        if (!window.Typo) {
-            try {
-                const script2 = document.createElement('script');
-                script2.src = 'https://cdn.jsdelivr.net/npm/typo-js@1.2.1/typo.js';
-                script2.onload = async () => {
-                    this._typoLoaded = true;
-                    await this._initializeSpellChecker();
-                };
-                document.head.appendChild(script2);
-            } catch (error) {}
-        } else {
-            this._typoLoaded = true;
-            await this._initializeSpellChecker();
+        dropdown.style.display = dropdown.children.length > 0 ? 'block' : 'none';
+    }
+
+    _wireTagsDropdown() {
+        const input = this.querySelector('#tagsInput');
+        const dropdown = this.querySelector('#tagsDropdown');
+        
+        if (!input || !dropdown) return;
+
+        input.addEventListener('focus', () => {
+            this._showTagsDropdown();
+        });
+
+        input.addEventListener('input', (e) => {
+            this._meta.tags = e.target.value;
+            this._showTagsDropdown();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.mdx-dropdown-wrapper')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+    _showTagsDropdown() {
+        const input = this.querySelector('#tagsInput');
+        const dropdown = this.querySelector('#tagsDropdown');
+        
+        if (!input || !dropdown) return;
+
+        const currentValue = input.value;
+        const lastCommaIndex = currentValue.lastIndexOf(',');
+        const currentTag = lastCommaIndex >= 0 
+            ? currentValue.substring(lastCommaIndex + 1).trim().toLowerCase()
+            : currentValue.trim().toLowerCase();
+
+        if (!currentTag) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        const existingTags = currentValue.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
+        
+        let matchingTags = this._allTags.filter(tag => 
+            tag.name.toLowerCase().includes(currentTag) && 
+            !existingTags.includes(tag.name.toLowerCase())
+        );
+
+        dropdown.innerHTML = '';
+
+        matchingTags.forEach(tag => {
+            const item = document.createElement('div');
+            item.className = 'mdx-dropdown-item';
+            item.textContent = tag.name;
+            item.addEventListener('click', () => {
+                const beforeLastComma = lastCommaIndex >= 0 ? currentValue.substring(0, lastCommaIndex + 1) + ' ' : '';
+                input.value = beforeLastComma + tag.name + ', ';
+                this._meta.tags = input.value;
+                dropdown.style.display = 'none';
+                input.focus();
+            });
+            dropdown.appendChild(item);
+        });
+
+        if (!this._allTags.some(tag => tag.name.toLowerCase() === currentTag)) {
+            const createItem = document.createElement('div');
+            createItem.className = 'mdx-dropdown-item create-new';
+            createItem.textContent = `+ Create "${currentTag}"`;
+            createItem.addEventListener('click', () => {
+                const beforeLastComma = lastCommaIndex >= 0 ? currentValue.substring(0, lastCommaIndex + 1) + ' ' : '';
+                input.value = beforeLastComma + currentTag + ', ';
+                this._meta.tags = input.value;
+                dropdown.style.display = 'none';
+                input.focus();
+                
+                if (!this._newTagsCreated.includes(currentTag)) {
+                    this._newTagsCreated.push(currentTag);
+                    this._showNewItemsAlert();
+                }
+            });
+            dropdown.appendChild(createItem);
+        }
+
+        dropdown.style.display = dropdown.children.length > 0 ? 'block' : 'none';
+    }
+
+    _showNewItemsAlert() {
+        const alertContainer = this.querySelector('#newItemsAlert');
+        if (!alertContainer) return;
+
+        const newCats = this._newCategoriesCreated.length;
+        const newTags = this._newTagsCreated.length;
+
+        if (newCats === 0 && newTags === 0) {
+            alertContainer.innerHTML = '';
+            return;
+        }
+
+        let message = '<strong>New items will be created:</strong><br>';
+        if (newCats > 0) {
+            message += `• ${newCats} new categor${newCats > 1 ? 'ies' : 'y'}: ${this._newCategoriesCreated.join(', ')}<br>`;
+        }
+        if (newTags > 0) {
+            message += `• ${newTags} new tag${newTags > 1 ? 's' : ''}: ${this._newTagsCreated.join(', ')}<br>`;
+        }
+        message += '<br><em>Please complete their details in the Category & Tags Dashboard after saving this post.</em>';
+
+        alertContainer.innerHTML = `
+            <div class="mdx-alert-box mdx-alert-info" style="margin: 14px;">
+                ${this._icon('alert')}
+                <div>${message}</div>
+            </div>
+        `;
+    }
+
+    _onCategoriesList(data) {
+        this._allCategories = data.categories || [];
+    }
+
+    _onTagsList(data) {
+        this._allTags = data.tags || [];
+    }
+
+    _onCategoryCreated(data) {
+        if (data.success && data.category) {
+            this._allCategories.push(data.category);
         }
     }
 
-    async _initializeSpellChecker() {
-        if (!window.Typo || this._typoInstance) return;
+    _onTagCreated(data) {
+        if (data.success && data.tag) {
+            this._allTags.push(data.tag);
+        }
+    }
+
+    _wireRelatedPosts() {
+        const searchInput = this.querySelector('#relatedSearchInput');
+        const clearBtn = this.querySelector('#clearRelatedSearch');
         
-        try {
-            this._typoInstance = new Typo('en_US', false, false, {
-                dictionaryPath: 'https://cdn.jsdelivr.net/npm/typo-js@1.2.1/dictionaries'
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this._renderRelatedPostsList(e.target.value);
+                }, 300);
             });
-        } catch (error) {}
+        }
+        
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (searchInput) searchInput.value = '';
+                this._renderRelatedPostsList('');
+            });
+        }
+    }
+
+    _wireSchema() {
+        this.querySelectorAll('.mdx-schema-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.querySelectorAll('.mdx-schema-type-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._schemaType = btn.dataset.type;
+                
+                this._toggleSchemaFields();
+                this._updateSchemaPreview();
+            });
+        });
+
+        this.querySelector('#testRichResultsBtn').addEventListener('click', () => {
+            window.open('https://search.google.com/test/rich-results', '_blank');
+        });
+
+        this.querySelector('#addAuthorBtn').addEventListener('click', () => {
+            if (!this._meta.structuredData.authors) this._meta.structuredData.authors = [];
+            this._meta.structuredData.authors.push({ name: '', url: '' });
+            this._renderSchemaAuthors();
+            this._updateSchemaPreview();
+        });
+
+        this.querySelector('#addFaqBtn').addEventListener('click', () => {
+            if (!this._meta.structuredData.faqItems) this._meta.structuredData.faqItems = [];
+            this._meta.structuredData.faqItems.push({ question: '', answer: '' });
+            this._renderSchemaFAQ();
+            this._updateSchemaPreview();
+        });
+
+        this.querySelector('#addIngredientBtn')?.addEventListener('click', () => {
+            if (!this._meta.structuredData.recipe.ingredients) this._meta.structuredData.recipe.ingredients = [];
+            this._meta.structuredData.recipe.ingredients.push('');
+            this._renderRecipeIngredients();
+            this._updateSchemaPreview();
+        });
+
+        this.querySelector('#addInstructionBtn')?.addEventListener('click', () => {
+            if (!this._meta.structuredData.recipe.instructions) this._meta.structuredData.recipe.instructions = [];
+            this._meta.structuredData.recipe.instructions.push({ name: '', text: '' });
+            this._renderRecipeInstructions();
+            this._updateSchemaPreview();
+        });
+
+        ['job-title', 'job-description', 'job-datePosted', 'job-validThrough', 'job-employmentType', 'job-jobLocationType',
+         'job-organizationName', 'job-organizationUrl', 'job-organizationLogo', 'job-streetAddress', 'job-addressLocality',
+         'job-addressRegion', 'job-postalCode', 'job-addressCountry', 'job-salaryValue', 'job-salaryCurrency',
+         'job-salaryUnit', 'job-applicantLocationRequirements'].forEach(id => {
+            const el = this.querySelector(`#${id}`);
+            if (el) {
+                el.addEventListener('input', () => {
+                    const key = id.replace('job-', '');
+                    this._meta.structuredData.jobPosting[key] = el.value;
+                    this._updateSchemaPreview();
+                });
+            }
+        });
+
+        ['img-contentUrl', 'img-license', 'img-acquireLicensePage', 'img-creditText', 'img-creatorName', 'img-copyrightNotice'].forEach(id => {
+            const el = this.querySelector(`#${id}`);
+            if (el) {
+                el.addEventListener('input', () => {
+                    const key = id.replace('img-', '');
+                    this._meta.structuredData.imageObject[key] = el.value;
+                    this._updateSchemaPreview();
+                });
+            }
+        });
+
+        ['recipe-name', 'recipe-description', 'recipe-cuisine', 'recipe-category', 'recipe-keywords',
+         'recipe-prepTime', 'recipe-cookTime', 'recipe-totalTime', 'recipe-recipeYield', 'recipe-calories'].forEach(id => {
+            const el = this.querySelector(`#${id}`);
+            if (el) {
+                el.addEventListener('input', () => {
+                    const key = id.replace('recipe-', '');
+                    this._meta.structuredData.recipe[key] = el.value;
+                    this._updateSchemaPreview();
+                });
+            }
+        });
+
+        this._renderSchemaAuthors();
+        this._renderSchemaFAQ();
+    }
+
+    _toggleSchemaFields() {
+        const articleFields = this.querySelector('#schemaArticleFields');
+        const authorsSection = this.querySelector('#schemaAuthorsSection');
+        const faqSection = this.querySelector('#schemaFAQSection');
+        const jobFields = this.querySelector('#schemaJobFields');
+        const imageFields = this.querySelector('#schemaImageFields');
+        const recipeFields = this.querySelector('#schemaRecipeFields');
+        const bestPractices = this.querySelector('#schemaBestPractices');
+
+        articleFields.style.display = 'none';
+        authorsSection.style.display = 'none';
+        faqSection.style.display = 'none';
+        jobFields.style.display = 'none';
+        imageFields.style.display = 'none';
+        recipeFields.style.display = 'none';
+        bestPractices.innerHTML = '';
+
+        if (['Article', 'NewsArticle', 'BlogPosting'].includes(this._schemaType)) {
+            articleFields.style.display = 'block';
+            authorsSection.style.display = 'block';
+            faqSection.style.display = 'block';
+            
+            bestPractices.innerHTML = `
+                <div class="mdx-alert-box mdx-alert-warning">
+                    ${this._icon('alert')}
+                    <div>
+                        <strong>Best Practices:</strong><br>
+                        • Ensure headline is under 110 characters<br>
+                        • Add high-quality images (1200x675px recommended)<br>
+                        • FAQ items must match content visible on the page<br>
+                        • Use real author names with profile URLs
+                    </div>
+                </div>
+            `;
+        } else if (this._schemaType === 'JobPosting') {
+            jobFields.style.display = 'block';
+            
+            bestPractices.innerHTML = `
+                <div class="mdx-alert-box mdx-alert-warning">
+                    ${this._icon('alert')}
+                    <div>
+                        <strong>Important:</strong><br>
+                        • Set "Valid Through" date accurately<br>
+                        • Remove or expire job postings when no longer open<br>
+                        • Update validThrough date or remove JobPosting schema<br>
+                        • For remote jobs, use TELECOMMUTE job location type<br>
+                        • Provide complete salary information when possible
+                    </div>
+                </div>
+            `;
+        } else if (this._schemaType === 'ImageObject') {
+            imageFields.style.display = 'block';
+            
+            bestPractices.innerHTML = `
+                <div class="mdx-alert-box mdx-alert-warning">
+                    ${this._icon('alert')}
+                    <div>
+                        <strong>Best Practices:</strong><br>
+                        • Provide valid license URL<br>
+                        • Include creator information for proper attribution<br>
+                        • Ensure license page explains usage rights<br>
+                        • Use high-resolution images (minimum 1024px)
+                    </div>
+                </div>
+            `;
+        } else if (this._schemaType === 'Recipe') {
+            recipeFields.style.display = 'block';
+            this._renderRecipeIngredients();
+            this._renderRecipeInstructions();
+            
+            bestPractices.innerHTML = `
+                <div class="mdx-alert-box mdx-alert-warning">
+                    ${this._icon('alert')}
+                    <div>
+                        <strong>Best Practices:</strong><br>
+                        • Use ISO 8601 duration format (PT1H30M = 1 hour 30 min)<br>
+                        • Include high-quality step-by-step images<br>
+                        • Provide accurate nutritional information<br>
+                        • List all ingredients with precise measurements<br>
+                        • Write clear, detailed instructions
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    _renderSchemaAuthors() {
+        const container = this.querySelector('#schemaAuthors');
+        if (!container) return;
+
+        const authors = this._meta.structuredData.authors || [];
+        
+        container.innerHTML = authors.map((author, idx) => `
+            <div class="mdx-schema-author">
+                <input class="mdx-minp" type="text" placeholder="Author name" value="${author.name || ''}" data-author-idx="${idx}" data-field="name">
+                <input class="mdx-minp" type="url" placeholder="https://example.com/author" value="${author.url || ''}" data-author-idx="${idx}" data-field="url">
+                <button class="mdx-schema-author-remove" data-author-idx="${idx}">×</button>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.authorIdx);
+                const field = e.target.dataset.field;
+                this._meta.structuredData.authors[idx][field] = e.target.value;
+                this._updateSchemaPreview();
+            });
+        });
+
+        container.querySelectorAll('.mdx-schema-author-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.authorIdx);
+                this._meta.structuredData.authors.splice(idx, 1);
+                this._renderSchemaAuthors();
+                this._updateSchemaPreview();
+            });
+        });
+    }
+
+    _renderSchemaFAQ() {
+        const container = this.querySelector('#schemaFaqItems');
+        if (!container) return;
+
+        const items = this._meta.structuredData.faqItems || [];
+        
+        container.innerHTML = items.map((item, idx) => `
+            <div class="mdx-schema-faq-item">
+                <div class="mdx-schema-faq-header">
+                    <strong>FAQ #${idx + 1}</strong>
+                    <button class="mdx-schema-faq-remove" data-faq-idx="${idx}">Remove</button>
+                </div>
+                <div class="mdx-mfield mdx-mfull">
+                    <label>Question</label>
+                    <input class="mdx-minp" type="text" placeholder="Enter question" value="${item.question || ''}" data-faq-idx="${idx}" data-field="question">
+                </div>
+                <div class="mdx-mfield mdx-mfull">
+                    <label>Answer</label>
+                    <textarea class="mdx-mtxt" placeholder="Enter answer" data-faq-idx="${idx}" data-field="answer" rows="3">${item.answer || ''}</textarea>
+                </div>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('input, textarea').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.faqIdx);
+                const field = e.target.dataset.field;
+                this._meta.structuredData.faqItems[idx][field] = e.target.value;
+                this._updateSchemaPreview();
+            });
+        });
+
+        container.querySelectorAll('.mdx-schema-faq-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.faqIdx);
+                this._meta.structuredData.faqItems.splice(idx, 1);
+                this._renderSchemaFAQ();
+                this._updateSchemaPreview();
+            });
+        });
+    }
+
+    _renderRecipeIngredients() {
+        const container = this.querySelector('#recipeIngredients');
+        if (!container) return;
+
+        const ingredients = this._meta.structuredData.recipe.ingredients || [];
+        
+        container.innerHTML = ingredients.map((ing, idx) => `
+            <div class="mdx-schema-list-item">
+                <div class="mdx-schema-list-header">
+                    <strong>Ingredient #${idx + 1}</strong>
+                    <button class="mdx-schema-faq-remove" data-ing-idx="${idx}">Remove</button>
+                </div>
+                <input class="mdx-minp" type="text" placeholder="400ml of pineapple juice" value="${ing}" data-ing-idx="${idx}" style="margin-top:8px;">
+            </div>
+        `).join('');
+
+        container.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.ingIdx);
+                this._meta.structuredData.recipe.ingredients[idx] = e.target.value;
+                this._updateSchemaPreview();
+            });
+        });
+
+        container.querySelectorAll('.mdx-schema-faq-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.ingIdx);
+                this._meta.structuredData.recipe.ingredients.splice(idx, 1);
+                this._renderRecipeIngredients();
+                this._updateSchemaPreview();
+            });
+        });
+    }
+
+    _renderRecipeInstructions() {
+        const container = this.querySelector('#recipeInstructions');
+        if (!container) return;
+
+        const instructions = this._meta.structuredData.recipe.instructions || [];
+        
+        container.innerHTML = instructions.map((inst, idx) => `
+            <div class="mdx-schema-list-item">
+                <div class="mdx-schema-list-header">
+                    <strong>Step #${idx + 1}</strong>
+                    <button class="mdx-schema-faq-remove" data-inst-idx="${idx}">Remove</button>
+                </div>
+                <div class="mdx-mfield mdx-mfull" style="margin-top:8px;">
+                    <label>Step Name</label>
+                    <input class="mdx-minp" type="text" placeholder="Blend" value="${inst.name || ''}" data-inst-idx="${idx}" data-field="name">
+                </div>
+                <div class="mdx-mfield mdx-mfull">
+                    <label>Instructions</label>
+                    <textarea class="mdx-mtxt" placeholder="Blend ingredients until smooth..." data-inst-idx="${idx}" data-field="text" rows="2">${inst.text || ''}</textarea>
+                </div>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('input, textarea').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.instIdx);
+                const field = e.target.dataset.field;
+                this._meta.structuredData.recipe.instructions[idx][field] = e.target.value;
+                this._updateSchemaPreview();
+            });
+        });
+
+        container.querySelectorAll('.mdx-schema-faq-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.instIdx);
+                this._meta.structuredData.recipe.instructions.splice(idx, 1);
+                this._renderRecipeInstructions();
+                this._updateSchemaPreview();
+            });
+        });
+    }
+
+    _updateSchemaPreview() {
+        const preview = this.querySelector('#schemaPreview');
+        if (!preview) return;
+
+        const schema = this._generateStructuredData();
+        preview.value = JSON.stringify(schema, null, 2);
+
+        this.querySelector('#schema-headline').value = this._meta.blogTitle || '';
+        this.querySelector('#schema-description').value = this._meta.excerpt || '';
+        this.querySelector('#schema-published').value = this._meta.publishedDate ? new Date(this._meta.publishedDate).toISOString() : '';
+        this.querySelector('#schema-modified').value = this._meta.modifiedDate ? new Date(this._meta.modifiedDate).toISOString() : new Date().toISOString();
+    }
+
+    _generateStructuredData() {
+        const baseUrl = 'https://example.com';
+        
+        if (this._schemaType === 'JobPosting') {
+            const job = this._meta.structuredData.jobPosting;
+            const schema = {
+                "@context": "https://schema.org/",
+                "@type": "JobPosting",
+                "title": job.title || this._meta.blogTitle || '',
+                "description": job.description || this._meta.excerpt || '',
+                "identifier": {
+                    "@type": "PropertyValue",
+                    "name": job.organizationName || '',
+                    "value": "JOB_ID_HERE"
+                },
+                "datePosted": job.datePosted || new Date().toISOString().split('T')[0],
+                "employmentType": job.employmentType || 'FULL_TIME',
+                "hiringOrganization": {
+                    "@type": "Organization",
+                    "name": job.organizationName || '',
+                    "sameAs": job.organizationUrl || '',
+                    "logo": job.organizationLogo || ''
+                }
+            };
+
+            if (job.validThrough) {
+                schema.validThrough = new Date(job.validThrough).toISOString();
+            }
+
+            if (job.jobLocationType === 'TELECOMMUTE') {
+                schema.jobLocationType = "TELECOMMUTE";
+                if (job.applicantLocationRequirements) {
+                    schema.applicantLocationRequirements = {
+                        "@type": "Country",
+                        "name": job.applicantLocationRequirements
+                    };
+                }
+            } else if (job.streetAddress || job.addressLocality) {
+                schema.jobLocation = {
+                    "@type": "Place",
+                    "address": {
+                        "@type": "PostalAddress",
+                        "streetAddress": job.streetAddress || '',
+                        "addressLocality": job.addressLocality || '',
+                        "addressRegion": job.addressRegion || '',
+                        "postalCode": job.postalCode || '',
+                        "addressCountry": job.addressCountry || 'US'
+                    }
+                };
+            }
+
+            if (job.salaryValue) {
+                schema.baseSalary = {
+                    "@type": "MonetaryAmount",
+                    "currency": job.salaryCurrency || 'USD',
+                    "value": {
+                        "@type": "QuantitativeValue",
+                        "value": parseFloat(job.salaryValue),
+                        "unitText": job.salaryUnit || 'HOUR'
+                    }
+                };
+            }
+
+            return schema;
+        }
+
+        if (this._schemaType === 'ImageObject') {
+            const img = this._meta.structuredData.imageObject;
+            return {
+                "@context": "https://schema.org/",
+                "@type": "ImageObject",
+                "contentUrl": img.contentUrl || this._meta.featuredImage || '',
+                "license": img.license || '',
+                "acquireLicensePage": img.acquireLicensePage || '',
+                "creditText": img.creditText || '',
+                "creator": {
+                    "@type": "Person",
+                    "name": img.creatorName || this._meta.author || ''
+                },
+                "copyrightNotice": img.copyrightNotice || ''
+            };
+        }
+
+        if (this._schemaType === 'Recipe') {
+            const recipe = this._meta.structuredData.recipe;
+            const images = [];
+            if (this._meta.featuredImage) images.push(this._meta.featuredImage);
+
+            const schema = {
+                "@context": "https://schema.org/",
+                "@type": "Recipe",
+                "name": recipe.name || this._meta.blogTitle || '',
+                "description": recipe.description || this._meta.excerpt || '',
+                "image": images,
+                "author": {
+                    "@type": "Person",
+                    "name": this._meta.author || ''
+                },
+                "datePublished": this._meta.publishedDate ? new Date(this._meta.publishedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                "recipeCuisine": recipe.cuisine || '',
+                "recipeCategory": recipe.category || '',
+                "keywords": recipe.keywords || '',
+                "recipeYield": recipe.recipeYield || '',
+                "recipeIngredient": recipe.ingredients || [],
+                "recipeInstructions": (recipe.instructions || []).map((inst, idx) => ({
+                    "@type": "HowToStep",
+                    "name": inst.name || `Step ${idx + 1}`,
+                    "text": inst.text || ''
+                }))
+            };
+
+            if (recipe.prepTime) schema.prepTime = recipe.prepTime;
+            if (recipe.cookTime) schema.cookTime = recipe.cookTime;
+            if (recipe.totalTime) schema.totalTime = recipe.totalTime;
+            
+            if (recipe.calories) {
+                schema.nutrition = {
+                    "@type": "NutritionInformation",
+                    "calories": recipe.calories
+                };
+            }
+
+            return schema;
+        }
+
+        const images = [];
+        if (this._meta.featuredImage) images.push(this._meta.featuredImage);
+
+        const authors = (this._meta.structuredData.authors || []).filter(a => a.name).map(author => ({
+            "@type": "Person",
+            "name": author.name,
+            "url": author.url || baseUrl
+        }));
+
+        if (!authors.length && this._meta.author) {
+            authors.push({
+                "@type": "Person",
+                "name": this._meta.author,
+                "url": this._meta.authorUrl || baseUrl
+            });
+        }
+
+        const baseSchema = {
+            "@context": "https://schema.org",
+            "@type": this._schemaType,
+            "headline": this._meta.blogTitle || '',
+            "description": this._meta.excerpt || '',
+            "image": images,
+            "datePublished": this._meta.publishedDate ? new Date(this._meta.publishedDate).toISOString() : new Date().toISOString(),
+            "dateModified": this._meta.modifiedDate ? new Date(this._meta.modifiedDate).toISOString() : new Date().toISOString(),
+            "author": authors
+        };
+
+        const faqItems = (this._meta.structuredData.faqItems || []).filter(item => item.question && item.answer);
+        
+        if (faqItems.length > 0) {
+            return [
+                baseSchema,
+                {
+                    "@context": "https://schema.org",
+                    "@type": "FAQPage",
+                    "mainEntity": faqItems.map(item => ({
+                        "@type": "Question",
+                        "name": item.question,
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": item.answer
+                        }
+                    }))
+                }
+            ];
+        }
+
+        return baseSchema;
+    }
+
+    _renderRelatedPostsList(searchQuery = '') {
+        const listEl = this.querySelector('#relatedPostsList');
+        const countEl = this.querySelector('#relatedCount');
+        if (!listEl) return;
+        
+        const currentPostId = this._editPost?._id;
+        const selectedIds = this._meta.relatedPosts || [];
+        
+        let filteredPosts = this._posts.filter(p => p._id !== currentPostId);
+        
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filteredPosts = filteredPosts.filter(p => 
+                (p.blogTitle || p.title || '').toLowerCase().includes(query) ||
+                (p.slug || '').toLowerCase().includes(query)
+            );
+        }
+        
+        if (countEl) {
+            countEl.textContent = `${selectedIds.length} post${selectedIds.length !== 1 ? 's' : ''} selected`;
+        }
+        
+        if (!filteredPosts.length) {
+            listEl.innerHTML = '<div class="mdx-state-box"><p>No posts found</p></div>';
+            return;
+        }
+        
+        listEl.innerHTML = filteredPosts.map(post => {
+            const isSelected = selectedIds.includes(post._id);
+            return `
+                <div class="mdx-related-post ${isSelected ? 'selected' : ''}" data-id="${post._id}">
+                    <div class="mdx-related-check">${isSelected ? '✓' : ''}</div>
+                    <div class="mdx-related-info">
+                        <div class="mdx-related-title">${post.blogTitle || post.title || '(Untitled)'}</div>
+                        <div class="mdx-related-slug">${post.slug || ''}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        listEl.querySelectorAll('.mdx-related-post').forEach(el => {
+            el.addEventListener('click', () => {
+                const postId = el.dataset.id;
+                if (!this._meta.relatedPosts) this._meta.relatedPosts = [];
+                
+                const index = this._meta.relatedPosts.indexOf(postId);
+                if (index > -1) {
+                    this._meta.relatedPosts.splice(index, 1);
+                } else {
+                    this._meta.relatedPosts.push(postId);
+                }
+                
+                this._renderRelatedPostsList(this.querySelector('#relatedSearchInput')?.value || '');
+            });
+        });
+    }
+
+    _onSearchResults(data) {
+    }
+
+    _wireImgZone(zoneId, fileId, prevId, metaKey) {
+        const zone = this.querySelector(`#${zoneId}`);
+        const file = this.querySelector(`#${fileId}`);
+        const prev = this.querySelector(`#${prevId}`);
+        if (!zone || !file) return;
+        zone.addEventListener('click', () => file.click());
+        file.addEventListener('change', async e => {
+            const f = e.target.files[0]; if (!f) return;
+            if (prev) { prev.src = URL.createObjectURL(f); prev.style.display = 'block'; }
+            
+            const webpData = await this._convertToWebP(f);
+            const webpFilename = f.name.replace(/\.[^.]+$/, '.webp');
+            
+            this._emit('upload-meta-image', { 
+                fileData: webpData, 
+                filename: webpFilename, 
+                metaKey, 
+                optimize: true 
+            });
+        });
+    }
+
+    async _convertToWebP(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    canvas.toBlob((blob) => {
+                        const reader2 = new FileReader();
+                        reader2.onloadend = () => {
+                            resolve(reader2.result.split(',')[1]);
+                        };
+                        reader2.readAsDataURL(blob);
+                    }, 'image/webp', 1.0);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
     }
 
     async _loadToastEditor() {
@@ -308,16 +2446,643 @@ class MdxBlogEditor extends HTMLElement {
         try {
             const script = document.createElement('script');
             script.src = 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js';
-            script.onload = () => { this._toastEditorLoaded = true; };
-            script.onerror = () => { this._toast('error', 'Failed to load editor library'); };
+            script.onload = () => {
+                this._toastEditorLoaded = true;
+            };
+            script.onerror = () => {
+                this._toast('error', 'Failed to load editor library');
+            };
             document.head.appendChild(script);
         } catch (error) {}
     }
 
+    _initToastEditor(initialMarkdown = '') {
+        if (!window.toastui || !window.toastui.Editor) {
+            setTimeout(() => this._initToastEditor(initialMarkdown), 500);
+            return;
+        }
+
+        const wrapper = this.querySelector('#toastEditorWrapper');
+        if (!wrapper) return;
+
+        const editorDiv = document.createElement('div');
+        editorDiv.className = 'mdx-toast-editor-container';
+        editorDiv.style.height = '100%';
+        wrapper.appendChild(editorDiv);
+
+        const self = this;
+
+        try {
+            this._toastEditor = new toastui.Editor({
+                el: editorDiv,
+                height: '100%',
+                initialEditType: 'wysiwyg',
+                previewStyle: 'vertical',
+                initialValue: initialMarkdown,
+                usageStatistics: false,
+                autofocus: false,
+                toolbarItems: [
+                    ['heading', 'bold', 'italic', 'strike'],
+                    ['hr', 'quote'],
+                    ['ul', 'ol', 'task', 'indent', 'outdent'],
+                    ['table', 'image', 'link'],
+                    ['code', 'codeblock'],
+                    [
+                        {
+                            el: this._createCustomButton('Video', 'video', () => this._insertVideoEmbed()),
+                            tooltip: 'Insert YouTube/Vimeo Video'
+                        },
+                        {
+                            el: this._createCustomButton('HTML', 'html', () => this._insertHTMLEmbed()),
+                            tooltip: 'Insert HTML Embed'
+                        },
+                        {
+                            el: this._createCustomButton('Edit Alt', 'edit', () => this._editImageAlt()),
+                            tooltip: 'Edit Image Alt Text'
+                        }
+                    ]
+                ],
+                events: {
+                    change: () => {
+                        let md = self._toastEditor.getMarkdown();
+                        md = self._cleanMarkdown(md);
+                        self._currentMarkdown = md;
+                        self._runAnalysis();
+                    }
+                },
+                hooks: {
+                    addImageBlobHook: async (blob, callback) => {
+                        try {
+                            const webpData = await self._convertToWebP(blob);
+                            const webpFilename = (blob.name || 'image.jpg').replace(/\.[^.]+$/, '.webp');
+                            
+                            self._pendingImageUpload = { callback };
+                            
+                            self._emit('upload-image', {
+                                blockId: 'editor-' + Date.now(),
+                                fileData: webpData,
+                                filename: webpFilename,
+                                optimize: true
+                            });
+                        } catch (error) {
+                            self._toast('error', 'Image upload failed');
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            this._toast('error', 'Failed to initialize editor: ' + error.message);
+        }
+    }
+
+    _createCustomButton(text, icon, onClick) {
+        const button = document.createElement('button');
+        button.className = 'toastui-editor-toolbar-icons';
+        button.style.cssText = 'background: none; border: none; color: #555; margin: 0; padding: 0 8px; cursor: pointer; font-size: 13px; font-weight: 500;';
+        button.innerHTML = this._icon(icon);
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            onClick();
+        });
+        return button;
+    }
+
+    _editImageAlt() {
+        if (!this._toastEditor) return;
+        
+        const markdown = this._toastEditor.getMarkdown();
+        
+        const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+        let match;
+        let foundImage = null;
+        
+        while ((match = imageRegex.exec(markdown)) !== null) {
+            foundImage = {
+                fullMatch: match[0],
+                alt: match[1],
+                url: match[2],
+                index: match.index
+            };
+        }
+        
+        if (!foundImage) {
+            this._toast('info', 'Place cursor near an image or select image markdown to edit alt text');
+            return;
+        }
+        
+        const newAlt = prompt('Enter new alt text for the image:', foundImage.alt);
+        
+        if (newAlt !== null) {
+            const newImageMd = `![${newAlt}](${foundImage.url})`;
+            const newMarkdown = markdown.replace(foundImage.fullMatch, newImageMd);
+            this._toastEditor.setMarkdown(newMarkdown);
+            this._toast('success', 'Image alt text updated!');
+        }
+    }
+
+    _insertVideoEmbed() {
+        const url = prompt('Enter YouTube or Vimeo URL:');
+        if (!url) return;
+
+        let embedCode = '';
+        
+        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+        if (ytMatch) {
+            embedCode = `[youtube:${ytMatch[1]}]`;
+        }
+        
+        const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+        if (vimeoMatch) {
+            embedCode = `[vimeo:${vimeoMatch[1]}]`;
+        }
+
+        if (embedCode) {
+            this._toastEditor.insertText(embedCode);
+            this._toast('success', 'Video embed added!');
+        } else {
+            this._toast('error', 'Invalid video URL');
+        }
+    }
+
+    _insertHTMLEmbed() {
+        const html = prompt('Enter HTML code to embed:');
+        if (!html) return;
+
+        const embedCode = `\n\n[html]\n${html}\n[/html]\n\n`;
+        this._toastEditor.insertText(embedCode);
+        this._toast('success', 'HTML embed added!');
+    }
+
+    _cleanMarkdown(md) {
+        return md
+            .replace(/^(#{1,6}\s+.+)\n\*\*\*\n/gm, '$1\n\n')
+            .replace(/\\~\\~(.+?)\\~\\~/g, '~~$1~~')
+            .replace(/\\\(/g, '(')
+            .replace(/\\\)/g, ')')
+            .replace(/\\\</g, '<')
+            .replace(/\\\>/g, '>')
+            .replace(/(\*\*\*\n){2,}/g, '***\n')
+            .replace(/\*\*\*\n(#{1,6}\s)/g, '$1');
+    }
+
+    _showListView() {
+        this.querySelector('#listView').classList.remove('hidden');
+        this.querySelector('#editorView').classList.add('hidden');
+        this.querySelector('#topActs').innerHTML = '';
+        this._currentView = 'list';
+        
+        if (this._toastEditor) {
+            try {
+                this._toastEditor.destroy();
+                this._toastEditor = null;
+            } catch(e) {}
+        }
+        
+        this._emit('load-post-list', {});
+    }
+
+    _showEditorView() {
+        this.querySelector('#listView').classList.add('hidden');
+        this.querySelector('#editorView').classList.remove('hidden');
+        this._currentView = 'editor';
+
+        const isNew = !this._editPost;
+        this.querySelector('#topActs').innerHTML = `
+            <button class="mdx-btn mdx-btn-ghost" id="backBtn">${this._icon('back')} All Posts</button>
+            <button class="mdx-btn mdx-btn-ghost" id="draftBtn">${this._icon('save')} Save Draft</button>
+            <button class="mdx-btn mdx-btn-accent" id="pubBtn">${this._icon('check')} ${isNew ? 'Publish' : 'Update'}</button>`;
+
+        this.querySelector('#backBtn').addEventListener('click', () => {
+            this._showListView();
+        });
+        this.querySelector('#draftBtn').addEventListener('click', () => this._save('draft'));
+        this.querySelector('#pubBtn').addEventListener('click', () => this._save('published'));
+    }
+
+    _openEditor(post) {
+        this._editPost = post;
+        this._resetEditorState();
+        
+        let initialMarkdown = '';
+        
+        if (post && post.content) {
+            initialMarkdown = post.content;
+            this._populateEditor(post);
+        }
+        
+        this._showEditorView();
+        this._switchTab('editor');
+        
+        const wrapper = this.querySelector('#toastEditorWrapper');
+        if (wrapper) wrapper.innerHTML = '';
+        
+        setTimeout(() => {
+            this._initToastEditor(initialMarkdown);
+            if (post) {
+                setTimeout(() => {
+                    this._runAnalysis();
+                }, 500);
+            }
+        }, 200);
+    }
+
+    _onPostList(data) {
+        this.querySelector('#listLoading').style.display = 'none';
+        const content = this.querySelector('#listContent');
+        content.style.display = 'block';
+
+        this._posts = data.posts || [];
+        
+        const total = data.totalCount || this._posts.length;
+        this.querySelector('#listCount').textContent = `(${total})`;
+
+        if (!this._posts.length) {
+            content.innerHTML = `<div class="mdx-state-box">${this._icon('image')}<p>No posts yet. Click "New Post" to create your first!</p></div>`;
+            return;
+        }
+
+        content.innerHTML = `
+<table class="mdx-posts-table">
+    <thead>
+        <tr>
+            <th>Title / Slug</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="postsBody"></tbody>
+</table>`;
+
+        const tbody = content.querySelector('#postsBody');
+        this._posts.forEach((post, idx) => {
+            const tr = document.createElement('tr');
+            const dateStr = post.publishedDate
+                ? new Date(post.publishedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                : '—';
+            const badgeClass = post.status === 'published' ? 'mdx-badge-pub' : 'mdx-badge-draft';
+            const displayTitle = post.blogTitle || post.title || '(Untitled)';
+
+            tr.innerHTML = `
+<td class="mdx-col-title">
+    <div class="mdx-post-title-txt">${displayTitle}</div>
+    <div class="mdx-post-slug">${post.slug || ''}</div>
+</td>
+<td>${post.category || '—'}</td>
+<td><span class="mdx-badge ${badgeClass}">${post.status || 'draft'}</span></td>
+<td style="white-space:nowrap;font-size:13px">${dateStr}</td>
+<td>
+    <div class="mdx-row-actions">
+        <button class="mdx-btn mdx-btn-light mdx-btn-sm edit-btn" data-i="${idx}">${this._icon('edit')} Edit</button>
+        <button class="mdx-btn mdx-btn-red   mdx-btn-sm del-btn"  data-i="${idx}">${this._icon('trash')} Delete</button>
+    </div>
+</td>`;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.i);
+                const post = this._posts[idx];
+                this._openEditor(post);
+            });
+        });
+        
+        tbody.querySelectorAll('.del-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const p = this._posts[parseInt(btn.dataset.i)];
+                const displayTitle = p.blogTitle || p.title || 'this post';
+                if (!confirm(`Delete "${displayTitle}"?\n\nThis cannot be undone.`)) return;
+                this._emit('delete-post', { id: p._id, slug: p.slug });
+            });
+        });
+    }
+
+    _onDeleteResult(data) {
+        if (data.success) {
+            this._toast('success', 'Post deleted.');
+            this._emit('load-post-list', {});
+        } else {
+            this._toast('error', 'Delete failed: ' + (data.message || ''));
+        }
+    }
+
+    _switchTab(tab) {
+        this._tab = tab;
+
+        this.querySelectorAll('.mdx-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+
+        const editorPanel = this.querySelector('#editorPanel');
+        const blogTitleBar = this.querySelector('#blogTitleBar');
+        const seoSidebar = this.querySelector('#seoSidebar');
+
+        const showBlogTitle = tab === 'editor';
+        const showSidebar = tab === 'editor';
+
+        if (blogTitleBar) blogTitleBar.style.display = showBlogTitle ? 'block' : 'none';
+        if (seoSidebar) seoSidebar.classList.toggle('hidden', !showSidebar);
+
+        editorPanel.style.display = tab === 'editor' ? 'flex' : 'none';
+        this.querySelector('#prevPanel').classList.toggle('active', tab === 'preview');
+        this.querySelector('#mdPanel').classList.toggle('active', tab === 'markdown');
+        this.querySelector('#metaPanel').classList.toggle('active', tab === 'meta');
+        this.querySelector('#relatedPanel').classList.toggle('active', tab === 'related');
+        this.querySelector('#schemaPanel').classList.toggle('active', tab === 'schema');
+        this.querySelector('#seoPanel').classList.toggle('active', tab === 'seo');
+
+        if (tab === 'preview') this._buildPreview();
+        if (tab === 'markdown') this.querySelector('#mdArea').value = this._currentMarkdown || '';
+        if (tab === 'related') this._renderRelatedPostsList('');
+        if (tab === 'schema') {
+            this._toggleSchemaFields();
+            this._updateSchemaPreview();
+        }
+    }
+
+    _buildPreview() {
+        const markdown = this._currentMarkdown || '';
+        const html = this._mdToHtml(markdown);
+        
+        const blogTitle = this._meta.blogTitle || '';
+        const titleHtml = blogTitle ? `<h1>${blogTitle}</h1>` : '';
+        
+        this.querySelector('#prevInner').innerHTML = titleHtml + html;
+    }
+
+    _mdToHtml(md) {
+        md = md.replace(/\[youtube:([a-zA-Z0-9_-]+)\]/g, (match, id) => {
+            return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe></div>`;
+        });
+
+        md = md.replace(/\[vimeo:(\d+)\]/g, (match, id) => {
+            return `<div class="video-embed"><iframe src="https://player.vimeo.com/video/${id}" allowfullscreen></iframe></div>`;
+        });
+
+        md = md.replace(/\[html\]([\s\S]*?)\[\/html\]/g, (match, html) => {
+            return html;
+        });
+
+        return md
+            .replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+            .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+            .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+            .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+            .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+            .replace(/^---$/gm, '<hr>')
+            .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+            .replace(/```(\w+)?\n([\s\S]*?)```/gm, '<pre><code>$2</code></pre>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/~~(.+?)~~/g, '<del>$1</del>')
+            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+            .replace(/^[\*\-\+] (.+)$/gm, '<li>$1</li>')
+            .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/^(?!<[h1-6ublptd]|<hr|<pre|<div)(.+)$/gm, '<p>$1</p>');
+    }
+
+    _resetEditorState() {
+        this._currentMarkdown = '';
+        this._meta = this._freshMeta();
+        this._schemaType = 'Article';
+        this._newCategoriesCreated = [];
+        this._newTagsCreated = [];
+        
+        this.querySelectorAll('[data-m]').forEach(el => {
+            if (el.type === 'checkbox') el.checked = false; else el.value = '';
+        });
+        ['authorPrev', 'featuredPrev', 'ogPrev'].forEach(id => {
+            const el = this.querySelector(`#${id}`); if (el) { el.src = ''; el.style.display = 'none'; }
+        });
+        
+        this._seoScore = 0;
+        this._readabilityScore = 0;
+        this._grammarScore = 0;
+        this._updateScoreDisplay();
+        
+        this.querySelectorAll('.mdx-schema-type-btn').forEach(b => b.classList.remove('active'));
+        this.querySelector('.mdx-schema-type-btn[data-type="Article"]')?.classList.add('active');
+        
+        this._renderSchemaAuthors();
+        this._renderSchemaFAQ();
+        
+        const alertContainer = this.querySelector('#newItemsAlert');
+        if (alertContainer) alertContainer.innerHTML = '';
+    }
+
+    _populateEditor(data) {
+        if (!data) return;
+        
+        Object.keys(this._meta).forEach(k => { 
+            if (data[k] !== undefined) {
+                this._meta[k] = data[k];
+            }
+        });
+        
+        if (data.structuredData && typeof data.structuredData === 'string') {
+            try {
+                this._meta.structuredData = JSON.parse(data.structuredData);
+                this._schemaType = this._meta.structuredData.type || 'Article';
+            } catch(e) {
+                this._meta.structuredData = this._freshMeta().structuredData;
+            }
+        }
+        
+        this.querySelectorAll('[data-m]').forEach(el => {
+            const k = el.dataset.m;
+            if (k in this._meta) {
+                if (el.type === 'checkbox') {
+                    el.checked = !!this._meta[k];
+                } else if (el.type === 'datetime-local') {
+                    el.value = this._formatDateForInput(this._meta[k]);
+                } else if (el.type === 'number') {
+                    el.value = this._meta[k] || 0;
+                } else {
+                    el.value = this._meta[k] || '';
+                }
+            }
+        });
+        
+        this._currentMarkdown = data.content || '';
+        
+        if (this._meta.authorImage) {
+            const prev = this.querySelector('#authorPrev');
+            if (prev) { 
+                prev.src = this._meta.authorImage; 
+                prev.style.display = 'block'; 
+            }
+        }
+        if (this._meta.featuredImage) {
+            const prev = this.querySelector('#featuredPrev');
+            if (prev) { 
+                prev.src = this._meta.featuredImage; 
+                prev.style.display = 'block'; 
+            }
+        }
+        if (this._meta.seoOgImage) {
+            const prev = this.querySelector('#ogPrev');
+            if (prev) { 
+                prev.src = this._meta.seoOgImage; 
+                prev.style.display = 'block'; 
+            }
+        }
+        
+        this.querySelectorAll('.mdx-schema-type-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.type === this._schemaType);
+        });
+
+        if (this._schemaType === 'JobPosting') {
+            const job = this._meta.structuredData.jobPosting;
+            Object.keys(job).forEach(key => {
+                const el = this.querySelector(`#job-${key}`);
+                if (el) el.value = job[key] || '';
+            });
+        }
+
+        if (this._schemaType === 'ImageObject') {
+            const img = this._meta.structuredData.imageObject;
+            Object.keys(img).forEach(key => {
+                const el = this.querySelector(`#img-${key}`);
+                if (el) el.value = img[key] || '';
+            });
+        }
+
+        if (this._schemaType === 'Recipe') {
+            const recipe = this._meta.structuredData.recipe;
+            Object.keys(recipe).forEach(key => {
+                if (key !== 'ingredients' && key !== 'instructions') {
+                    const el = this.querySelector(`#recipe-${key}`);
+                    if (el) el.value = recipe[key] || '';
+                }
+            });
+        }
+        
+        this._renderSchemaAuthors();
+        this._renderSchemaFAQ();
+        this._renderRecipeIngredients();
+        this._renderRecipeInstructions();
+        this._toggleSchemaFields();
+        this._updateSchemaPreview();
+    }
+
+    _save(status) {
+        const md = this._cleanMarkdown(this._currentMarkdown || '');
+        
+        const publishedDate = this._meta.publishedDate ? 
+            this._parseDateFromInput(this._meta.publishedDate) : null;
+        
+        const modifiedDate = this._meta.modifiedDate ? 
+            this._parseDateFromInput(this._meta.modifiedDate) : new Date();
+        
+readTime && this._meta.readTime > 0 ?
+            Number(this._meta.readTime) :
+            Math.max(1, Math.ceil(md.split(/\s+/).length / 200));
+        
+        const structuredData = JSON.stringify({
+            type: this._schemaType,
+            ...this._meta.structuredData,
+            schema: this._generateStructuredData()
+        });
+        
+        const newCategories = this._newCategoriesCreated;
+        const newTags = this._newTagsCreated;
+        
+        this._emit('save-post', {
+            ...this._meta,
+            content: md,
+            status,
+            publishedDate: publishedDate,
+            modifiedDate: modifiedDate,
+            readTime: readTime,
+            structuredData: structuredData,
+            _id: this._editPost?._id || null,
+            newCategories: newCategories,
+            newTags: newTags
+        });
+    }
+
+    _onSaveResult(data) {
+        if (data.success) {
+            this._toast('success', data.message || 'Post saved!');
+            if (!this._editPost && data.id) this._editPost = { _id: data.id };
+            else if (this._editPost && data.id) this._editPost._id = data.id;
+            
+            this._newCategoriesCreated = [];
+            this._newTagsCreated = [];
+            this._showNewItemsAlert();
+        } else {
+            this._toast('error', data.message || 'Save failed.');
+        }
+    }
+
+    _wixUrl(url) {
+        if (!url || url.startsWith('http')) return url;
+        const m = url.match(/^wix:image:\/\/v1\/([^/]+)\//);
+        return m ? `https://static.wixstatic.com/media/${m[1]}` : url;
+    }
+
+    _onUploadResult(data) {
+        if (data.blockId && this._pendingImageUpload) {
+            const publicUrl = this._wixUrl(data.url);
+            this._pendingImageUpload.callback(publicUrl);
+            this._pendingImageUpload = null;
+            this._toast('success', 'Image uploaded!');
+        }
+        if (data.metaKey) {
+            this._meta[data.metaKey] = this._wixUrl(data.url);
+            const prev = this.querySelector(`#${data.metaKey === 'authorImage' ? 'authorPrev' : data.metaKey === 'featuredImage' ? 'featuredPrev' : 'ogPrev'}`);
+            if (prev) {
+                prev.src = this._meta[data.metaKey];
+                prev.style.display = 'block';
+            }
+            this._updateSchemaPreview();
+            this._toast('success', 'Image uploaded!');
+        }
+    }
+
+    _autoSlug(title) {
+        const baseSlug = title.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        
+        const existingSlugs = this._posts
+            .filter(p => p._id !== this._editPost?._id)
+            .map(p => p.slug);
+        
+        let slug = baseSlug;
+        let counter = 1;
+        
+        while (existingSlugs.includes(slug)) {
+            slug = `${baseSlug}-${counter}`;
+            counter++;
+        }
+        
+        const el = this.querySelector('#m-slug');
+        if (el) { 
+            el.value = slug; 
+            this._meta.slug = slug; 
+        }
+    }
+
+    _runAnalysis() {
+        this._runSEOAnalysis();
+        this._runReadabilityAnalysis();
+        this._runGrammarAnalysis();
+        this._runSpellCheck();
+    }
+
     _runGrammarAnalysis() {
-        if (!this._compromiseLoaded || !window.nlp) {
-            this._grammarAnalysis = [{ status: 'info', text: 'Loading grammar checker...' }];
+        if (!window.nlp) {
+            this._grammarAnalysis = [];
             this._grammarScore = 0;
+            this._updateScoreDisplay();
             return;
         }
 
@@ -331,12 +3096,11 @@ class MdxBlogEditor extends HTMLElement {
         if (!textContent.trim()) {
             this._grammarAnalysis = [];
             this._grammarScore = 100;
-            this._grammarIssues = [];
+            this._updateScoreDisplay();
             return;
         }
 
         const checks = [];
-        const issues = [];
         let score = 100;
         const doc = window.nlp(textContent);
 
@@ -348,13 +3112,6 @@ class MdxBlogEditor extends HTMLElement {
             
             if (hasPassive) {
                 passiveCount++;
-                issues.push({
-                    type: 'passive-voice',
-                    sentence: sentence.trim(),
-                    sentenceIndex: idx,
-                    message: 'Passive voice detected',
-                    suggestion: 'Consider using active voice for stronger writing'
-                });
             }
         });
 
@@ -381,13 +3138,6 @@ class MdxBlogEditor extends HTMLElement {
             
             if ((pluralSubject && singularVerb) || (singularSubject && pluralVerb)) {
                 agreementIssues++;
-                issues.push({
-                    type: 'agreement',
-                    sentence: clause.trim(),
-                    sentenceIndex: idx,
-                    message: 'Possible subject-verb agreement issue',
-                    suggestion: 'Check if subject and verb match in number'
-                });
             }
         });
 
@@ -431,11 +3181,11 @@ class MdxBlogEditor extends HTMLElement {
 
         this._grammarScore = Math.max(0, Math.min(100, score));
         this._grammarAnalysis = checks;
-        this._grammarIssues = issues;
+        this._updateScoreDisplay();
     }
 
     _runSpellCheck() {
-        if (!this._typoLoaded || !this._typoInstance) {
+        if (!this._typoChecker) {
             this._spellingErrors = [];
             return;
         }
@@ -460,17 +3210,18 @@ class MdxBlogEditor extends HTMLElement {
             if (word.match(/^[A-Z]{2,}$/)) return;
             if (word.match(/^[A-Z][a-z]+[A-Z]/)) return;
             
-            const isCorrect = this._typoInstance.check(word);
-            
-            if (!isCorrect) {
-                const suggestions = this._typoInstance.suggest(word).slice(0, 5);
-                errors.push({
-                    word: word,
-                    suggestions: suggestions,
-                    index: index,
-                    position: textContent.indexOf(word)
-                });
-            }
+            try {
+                const isCorrect = this._typoChecker.check(word);
+                
+                if (!isCorrect) {
+                    const suggestions = this._typoChecker.suggest(word).slice(0, 5);
+                    errors.push({
+                        word: word,
+                        suggestions: suggestions,
+                        index: index
+                    });
+                }
+            } catch(e) {}
         });
 
         this._spellingErrors = errors;
@@ -638,6 +3389,7 @@ class MdxBlogEditor extends HTMLElement {
 
         this._seoScore = Math.min(score, maxScore);
         this._seoAnalysis = checks;
+        this._updateScoreDisplay();
     }
 
     _runReadabilityAnalysis() {
@@ -658,6 +3410,7 @@ class MdxBlogEditor extends HTMLElement {
         if (wordCount === 0) {
             this._readabilityScore = 0;
             this._readabilityAnalysis = [{ status: 'bad', text: 'Start writing to analyze readability' }];
+            this._updateScoreDisplay();
             return;
         }
 
@@ -779,6 +3532,7 @@ class MdxBlogEditor extends HTMLElement {
 
         this._readabilityScore = Math.min(score, maxScore);
         this._readabilityAnalysis = checks;
+        this._updateScoreDisplay();
     }
 
     _findConsecutiveSentences(sentences) {
@@ -798,1161 +3552,6 @@ class MdxBlogEditor extends HTMLElement {
         }
         
         return maxConsecutive > 2 ? maxConsecutive : 0;
-    }
-
-    _runFullAnalysis() {
-        this._runSEOAnalysis();
-        this._runReadabilityAnalysis();
-        this._runGrammarAnalysis();
-        this._runSpellCheck();
-        this._updateScoreDisplay();
-        this._displaySpellingIssues();
-    }
-
-    _displaySpellingIssues() {
-        const card = this.querySelector('#spellingCard');
-        const list = this.querySelector('#spellingIssuesList');
-        
-        if (!card || !list) return;
-        
-        if (this._spellingErrors.length === 0) {
-            card.style.display = 'none';
-            return;
-        }
-        
-        card.style.display = 'block';
-        
-        list.innerHTML = this._spellingErrors.slice(0, 10).map(error => {
-            const suggestionsHTML = error.suggestions.length > 0
-                ? `<div class="mdx-spell-suggestions">
-                    ${error.suggestions.map(s => 
-                        `<button class="mdx-spell-suggestion" data-word="${error.word}" data-replacement="${s}">${s}</button>`
-                    ).join('')}
-                   </div>`
-                : '';
-            
-            return `
-                <div class="mdx-spell-error-item">
-                    <div class="mdx-spell-word">${error.word}</div>
-                    ${suggestionsHTML}
-                </div>
-            `;
-        }).join('');
-        
-        list.querySelectorAll('.mdx-spell-suggestion').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const word = btn.dataset.word;
-                const replacement = btn.dataset.replacement;
-                this._replaceWord(word, replacement);
-            });
-        });
-    }
-
-    _replaceWord(oldWord, newWord) {
-        if (!this._toastEditor) return;
-        
-        const markdown = this._toastEditor.getMarkdown();
-        const regex = new RegExp(`\\b${oldWord}\\b`, 'g');
-        const newMarkdown = markdown.replace(regex, newWord);
-        
-        this._toastEditor.setMarkdown(newMarkdown);
-        this._toast('success', `Replaced "${oldWord}" with "${newWord}"`);
-        
-        setTimeout(() => {
-            this._runSpellCheck();
-            this._displaySpellingIssues();
-        }, 100);
-    }
-
-    _populateEditor(data) {
-        if (!data) return;
-        
-        Object.keys(this._meta).forEach(k => { 
-            if (data[k] !== undefined) {
-                this._meta[k] = data[k];
-            }
-        });
-        
-        if (data.structuredData && typeof data.structuredData === 'string') {
-            try {
-                this._meta.structuredData = JSON.parse(data.structuredData);
-                this._schemaType = this._meta.structuredData.type || 'Article';
-            } catch(e) {
-                this._meta.structuredData = this._freshMeta().structuredData;
-            }
-        }
-        
-        this.querySelectorAll('[data-m]').forEach(el => {
-            const k = el.dataset.m;
-            if (!(k in this._meta)) return;
-            
-            if (el.type === 'checkbox') {
-                el.checked = !!this._meta[k];
-            } 
-            else if (el.type === 'datetime-local') {
-                el.value = this._formatDateForInput(this._meta[k]);
-            } 
-            else if (el.type === 'number') {
-                el.value = this._meta[k] || 0;
-            }
-            else if (el.tagName === 'SELECT') {
-                el.value = this._meta[k] || '';
-            }
-            else {
-                el.value = this._meta[k] || '';
-            }
-        });
-        
-        this._currentMarkdown = data.content || '';
-        
-        if (this._meta.authorImage) {
-            const prev = this.querySelector('#authorPrev');
-            if (prev) { 
-                prev.src = this._meta.authorImage; 
-                prev.style.display = 'block'; 
-            }
-        }
-        if (this._meta.featuredImage) {
-            const prev = this.querySelector('#featuredPrev');
-            if (prev) { 
-                prev.src = this._meta.featuredImage; 
-                prev.style.display = 'block'; 
-            }
-        }
-        if (this._meta.seoOgImage) {
-            const prev = this.querySelector('#ogPrev');
-            if (prev) { 
-                prev.src = this._meta.seoOgImage; 
-                prev.style.display = 'block'; 
-            }
-        }
-        
-        this.querySelectorAll('.mdx-schema-type-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.type === this._schemaType);
-        });
-
-        if (this._schemaType === 'JobPosting') {
-            const job = this._meta.structuredData.jobPosting;
-            Object.keys(job).forEach(key => {
-                const el = this.querySelector(`#job-${key}`);
-                if (el) el.value = job[key] || '';
-            });
-        }
-
-        if (this._schemaType === 'ImageObject') {
-            const img = this._meta.structuredData.imageObject;
-            Object.keys(img).forEach(key => {
-                const el = this.querySelector(`#img-${key}`);
-                if (el) el.value = img[key] || '';
-            });
-        }
-
-        if (this._schemaType === 'Recipe') {
-            const recipe = this._meta.structuredData.recipe;
-            Object.keys(recipe).forEach(key => {
-                if (key !== 'ingredients' && key !== 'instructions') {
-                    const el = this.querySelector(`#recipe-${key}`);
-                    if (el) el.value = recipe[key] || '';
-                }
-            });
-        }
-        
-        this._renderSchemaAuthors();
-        this._renderSchemaFAQ();
-        this._renderRecipeIngredients();
-        this._renderRecipeInstructions();
-        this._toggleSchemaFields();
-        this._updateSchemaPreview();
-    }
-
-    _save(statusButtonClicked) {
-        const md = this._cleanMarkdown(this._currentMarkdown || '');
-        
-        const publishedDate = this._meta.publishedDate ? 
-            this._parseDateFromInput(this._meta.publishedDate) : null;
-        
-        const modifiedDate = this._meta.modifiedDate ? 
-            this._parseDateFromInput(this._meta.modifiedDate) : new Date();
-        
-        const statusToSave = this._meta.status || statusButtonClicked;
-        
-        const readTimeToSave = this._meta.readTime && this._meta.readTime > 0 ?
-            Number(this._meta.readTime) :
-            Math.max(1, Math.ceil(md.split(/\s+/).length / 200));
-        
-        const structuredData = JSON.stringify({
-            type: this._schemaType,
-            ...this._meta.structuredData,
-            schema: this._generateStructuredData()
-        });
-        
-        const newCategories = this._newCategoriesCreated;
-        const newTags = this._newTagsCreated;
-        
-        this._emit('save-post', {
-            ...this._meta,
-            content: md,
-            status: statusToSave,
-            publishedDate: publishedDate,
-            modifiedDate: modifiedDate,
-            readTime: readTimeToSave,
-            structuredData: structuredData,
-            _id: this._editPost?._id || null,
-            newCategories: newCategories,
-            newTags: newTags
-        });
-    }
-
-    _wire() {
-        const newPostBtn = this.querySelector('#newPostBtn');
-        if (newPostBtn) {
-            newPostBtn.addEventListener('click', () => this._openEditor(null));
-        }
-
-        this.querySelectorAll('.mdx-tab').forEach(t => {
-            t.addEventListener('click', () => this._switchTab(t.dataset.tab));
-        });
-
-        this.querySelectorAll('[data-m]').forEach(el => {
-            const evt = el.type === 'checkbox' ? 'change' : 'input';
-            
-            el.addEventListener(evt, () => {
-                const key = el.dataset.m;
-                
-                if (el.type === 'checkbox') {
-                    this._meta[key] = el.checked;
-                } 
-                else if (el.type === 'datetime-local') {
-                    this._meta[key] = el.value;
-                } 
-                else if (el.type === 'number') {
-                    this._meta[key] = el.value ? Number(el.value) : 0;
-                } 
-                else if (el.tagName === 'SELECT') {
-                    this._meta[key] = el.value;
-                }
-                else {
-                    this._meta[key] = el.value;
-                }
-                
-                if (['blogTitle', 'focusKeyphrase', 'seoTitle', 'seoDescription'].includes(key)) {
-                    this._runSEOAnalysis();
-                }
-
-                if (['blogTitle', 'excerpt', 'author', 'authorUrl', 'publishedDate', 'modifiedDate', 'featuredImage'].includes(key)) {
-                    this._updateSchemaPreview();
-                }
-            });
-        });
-        
-        const blogTitleInput = this.querySelector('#blogTitleInput');
-        if (blogTitleInput) {
-            blogTitleInput.addEventListener('input', (e) => {
-                this._meta.blogTitle = e.target.value;
-                this._autoSlug(e.target.value);
-                this._runSEOAnalysis();
-                this._updateSchemaPreview();
-            });
-        }
-
-        const focusKeyphrase = this.querySelector('#focusKeyphrase');
-        if (focusKeyphrase) {
-            focusKeyphrase.addEventListener('input', () => {
-                this._runSEOAnalysis();
-            });
-        }
-
-        this._wireImgZone('authorZone', 'authorFile', 'authorPrev', 'authorImage');
-        this._wireImgZone('featuredZone', 'featuredFile', 'featuredPrev', 'featuredImage');
-        this._wireImgZone('ogZone', 'ogFile', 'ogPrev', 'seoOgImage');
-        
-        this._wireCategoryDropdown();
-        this._wireTagsDropdown();
-        this._wireRelatedPosts();
-        this._wireSchema();
-    }
-
-    _autoSlug(title) {
-        const slug = title
-            .toLowerCase()
-            .trim()
-            .replace(/[^\w\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-');
-        
-        this._meta.slug = slug;
-        const slugInput = this.querySelector('[data-m="slug"]');
-        if (slugInput) {
-            slugInput.value = slug;
-        }
-    }
-
-    _wireImgZone(zoneId, fileId, prevId, metaKey) {
-        const zone = this.querySelector(`#${zoneId}`);
-        const fileInput = this.querySelector(`#${fileId}`);
-        const preview = this.querySelector(`#${prevId}`);
-        
-        if (!zone || !fileInput || !preview) return;
-
-        zone.addEventListener('click', () => fileInput.click());
-        
-        zone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            zone.style.borderColor = 'var(--accent)';
-            zone.style.background = 'rgba(212, 56, 13, 0.05)';
-        });
-        
-        zone.addEventListener('dragleave', () => {
-            zone.style.borderColor = 'var(--border)';
-            zone.style.background = 'transparent';
-        });
-        
-        zone.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            zone.style.borderColor = 'var(--border)';
-            zone.style.background = 'transparent';
-            
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                await this._handleImageUpload(file, preview, metaKey);
-            }
-        });
-
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                await this._handleImageUpload(file, preview, metaKey);
-            }
-        });
-    }
-
-    async _handleImageUpload(file, preview, metaKey) {
-        try {
-            const webpData = await this._convertToWebP(file);
-            const webpFilename = (file.name || 'image.jpg').replace(/\.[^.]+$/, '.webp');
-            
-            preview.src = URL.createObjectURL(file);
-            preview.style.display = 'block';
-            
-            this._emit('upload-image', {
-                blockId: `${metaKey}-${Date.now()}`,
-                fileData: webpData,
-                filename: webpFilename,
-                metaKey: metaKey
-            });
-            
-        } catch (error) {
-            this._toast('error', 'Failed to upload image');
-        }
-    }
-
-    async _convertToWebP(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    
-                    canvas.toBlob((blob) => {
-                        const reader2 = new FileReader();
-                        reader2.onload = () => {
-                            resolve(reader2.result.split(',')[1]);
-                        };
-                        reader2.onerror = reject;
-                        reader2.readAsDataURL(blob);
-                    }, 'image/webp', 0.9);
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    _wireCategoryDropdown() {
-        const dropdown = this.querySelector('#categoryDropdown');
-        const input = this.querySelector('#categoryInput');
-        const list = this.querySelector('#categoryList');
-        const createBtn = this.querySelector('#createCategoryBtn');
-        
-        if (!dropdown || !input || !list || !createBtn) return;
-
-        input.addEventListener('focus', () => {
-            dropdown.classList.add('open');
-            this._renderCategoryList('');
-        });
-
-        input.addEventListener('input', (e) => {
-            this._renderCategoryList(e.target.value);
-        });
-
-        createBtn.addEventListener('click', () => {
-            const name = input.value.trim();
-            if (!name) return;
-            
-            this._emit('create-category', { name });
-            input.value = name;
-            this._meta.category = name;
-            dropdown.classList.remove('open');
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!dropdown.contains(e.target)) {
-                dropdown.classList.remove('open');
-            }
-        });
-    }
-
-    _renderCategoryList(filter) {
-        const list = this.querySelector('#categoryList');
-        if (!list) return;
-
-        const filtered = this._allCategories.filter(cat =>
-            cat.name.toLowerCase().includes(filter.toLowerCase())
-        );
-
-        list.innerHTML = filtered.map(cat => `
-            <div class="mdx-dropdown-item" data-value="${cat.name}">
-                ${cat.name}
-            </div>
-        `).join('');
-
-        list.querySelectorAll('.mdx-dropdown-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const value = item.dataset.value;
-                const input = this.querySelector('#categoryInput');
-                input.value = value;
-                this._meta.category = value;
-                this.querySelector('#categoryDropdown').classList.remove('open');
-            });
-        });
-    }
-
-    _wireTagsDropdown() {
-        const dropdown = this.querySelector('#tagsDropdown');
-        const input = this.querySelector('#tagsInput');
-        const list = this.querySelector('#tagsList');
-        const createBtn = this.querySelector('#createTagBtn');
-        
-        if (!dropdown || !input || !list || !createBtn) return;
-
-        input.addEventListener('focus', () => {
-            dropdown.classList.add('open');
-            this._renderTagsList('');
-        });
-
-        input.addEventListener('input', (e) => {
-            this._renderTagsList(e.target.value);
-        });
-
-        createBtn.addEventListener('click', () => {
-            const name = input.value.trim();
-            if (!name) return;
-            
-            this._emit('create-tag', { name });
-            
-            const current = this._meta.tags ? this._meta.tags.split(',').map(t => t.trim()) : [];
-            if (!current.includes(name)) {
-                current.push(name);
-                this._meta.tags = current.join(', ');
-                input.value = this._meta.tags;
-            }
-            dropdown.classList.remove('open');
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!dropdown.contains(e.target)) {
-                dropdown.classList.remove('open');
-            }
-        });
-    }
-
-    _renderTagsList(filter) {
-        const list = this.querySelector('#tagsList');
-        if (!list) return;
-
-        const filtered = this._allTags.filter(tag =>
-            tag.name.toLowerCase().includes(filter.toLowerCase())
-        );
-
-        list.innerHTML = filtered.map(tag => `
-            <div class="mdx-dropdown-item" data-value="${tag.name}">
-                ${tag.name}
-            </div>
-        `).join('');
-
-        list.querySelectorAll('.mdx-dropdown-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const value = item.dataset.value;
-                const input = this.querySelector('#tagsInput');
-                const current = this._meta.tags ? this._meta.tags.split(',').map(t => t.trim()) : [];
-                
-                if (!current.includes(value)) {
-                    current.push(value);
-                    this._meta.tags = current.join(', ');
-                    input.value = this._meta.tags;
-                }
-                this.querySelector('#tagsDropdown').classList.remove('open');
-            });
-        });
-    }
-
-    _wireRelatedPosts() {
-        const searchInput = this.querySelector('#relatedSearch');
-        const searchBtn = this.querySelector('#relatedSearchBtn');
-        
-        if (searchInput && searchBtn) {
-            searchBtn.addEventListener('click', () => {
-                const query = searchInput.value.trim();
-                if (query) {
-                    this._emit('search-posts', { query });
-                }
-            });
-            
-            searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    const query = searchInput.value.trim();
-                    if (query) {
-                        this._emit('search-posts', { query });
-                    }
-                }
-            });
-        }
-    }
-
-    _wireSchema() {
-        this.querySelectorAll('.mdx-schema-type-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this._schemaType = btn.dataset.type;
-                this.querySelectorAll('.mdx-schema-type-btn').forEach(b => {
-                    b.classList.remove('active');
-                });
-                btn.classList.add('active');
-                this._toggleSchemaFields();
-                this._updateSchemaPreview();
-            });
-        });
-
-        const addAuthorBtn = this.querySelector('#addSchemaAuthor');
-        if (addAuthorBtn) {
-            addAuthorBtn.addEventListener('click', () => {
-                this._meta.structuredData.authors.push({ name: '', url: '' });
-                this._renderSchemaAuthors();
-            });
-        }
-
-        const addFaqBtn = this.querySelector('#addSchemaFaq');
-        if (addFaqBtn) {
-            addFaqBtn.addEventListener('click', () => {
-                this._meta.structuredData.faqItems.push({ question: '', answer: '' });
-                this._renderSchemaFAQ();
-            });
-        }
-
-        const addIngredientBtn = this.querySelector('#addRecipeIngredient');
-        if (addIngredientBtn) {
-            addIngredientBtn.addEventListener('click', () => {
-                this._meta.structuredData.recipe.ingredients.push('');
-                this._renderRecipeIngredients();
-            });
-        }
-
-        const addInstructionBtn = this.querySelector('#addRecipeInstruction');
-        if (addInstructionBtn) {
-            addInstructionBtn.addEventListener('click', () => {
-                this._meta.structuredData.recipe.instructions.push('');
-                this._renderRecipeInstructions();
-            });
-        }
-
-        this._wireSchemaFields();
-    }
-
-    _wireSchemaFields() {
-        const jobFields = ['title', 'description', 'datePosted', 'validThrough', 'employmentType', 
-                          'jobLocationType', 'organizationName', 'organizationUrl', 'organizationLogo',
-                          'streetAddress', 'addressLocality', 'addressRegion', 'postalCode', 
-                          'addressCountry', 'salaryValue', 'salaryCurrency', 'salaryUnit', 
-                          'applicantLocationRequirements'];
-        
-        jobFields.forEach(field => {
-            const el = this.querySelector(`#job-${field}`);
-            if (el) {
-                el.addEventListener('input', (e) => {
-                    this._meta.structuredData.jobPosting[field] = e.target.value;
-                    this._updateSchemaPreview();
-                });
-            }
-        });
-
-        const imgFields = ['contentUrl', 'license', 'acquireLicensePage', 'creditText', 
-                          'creatorName', 'copyrightNotice'];
-        
-        imgFields.forEach(field => {
-            const el = this.querySelector(`#img-${field}`);
-            if (el) {
-                el.addEventListener('input', (e) => {
-                    this._meta.structuredData.imageObject[field] = e.target.value;
-                    this._updateSchemaPreview();
-                });
-            }
-        });
-
-        const recipeFields = ['name', 'description', 'cuisine', 'category', 'keywords',
-                             'prepTime', 'cookTime', 'totalTime', 'recipeYield', 'calories'];
-        
-        recipeFields.forEach(field => {
-            const el = this.querySelector(`#recipe-${field}`);
-            if (el) {
-                el.addEventListener('input', (e) => {
-                    this._meta.structuredData.recipe[field] = e.target.value;
-                    this._updateSchemaPreview();
-                });
-            }
-        });
-    }
-
-    _renderSchemaAuthors() {
-        const container = this.querySelector('#schemaAuthorsContainer');
-        if (!container) return;
-
-        const authors = this._meta.structuredData.authors || [];
-        container.innerHTML = authors.map((author, idx) => `
-            <div class="mdx-schema-author-row">
-                <input type="text" 
-                       placeholder="Author name" 
-                       value="${author.name || ''}"
-                       data-author-idx="${idx}"
-                       data-field="name"
-                       class="mdx-input">
-                <input type="url" 
-                       placeholder="Author URL" 
-                       value="${author.url || ''}"
-                       data-author-idx="${idx}"
-                       data-field="url"
-                       class="mdx-input">
-                <button class="mdx-btn-icon" data-remove-author="${idx}">
-                    ${this._icon('trash')}
-                </button>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.authorIdx);
-                const field = e.target.dataset.field;
-                this._meta.structuredData.authors[idx][field] = e.target.value;
-                this._updateSchemaPreview();
-            });
-        });
-
-        container.querySelectorAll('[data-remove-author]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.removeAuthor);
-                this._meta.structuredData.authors.splice(idx, 1);
-                this._renderSchemaAuthors();
-                this._updateSchemaPreview();
-            });
-        });
-    }
-
-    _renderSchemaFAQ() {
-        const container = this.querySelector('#schemaFaqContainer');
-        if (!container) return;
-
-        const faqs = this._meta.structuredData.faqItems || [];
-        container.innerHTML = faqs.map((faq, idx) => `
-            <div class="mdx-schema-faq-row">
-                <input type="text" 
-                       placeholder="Question" 
-                       value="${faq.question || ''}"
-                       data-faq-idx="${idx}"
-                       data-field="question"
-                       class="mdx-input">
-                <textarea placeholder="Answer" 
-                          data-faq-idx="${idx}"
-                          data-field="answer"
-                          class="mdx-input"
-                          rows="2">${faq.answer || ''}</textarea>
-                <button class="mdx-btn-icon" data-remove-faq="${idx}">
-                    ${this._icon('trash')}
-                </button>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('input, textarea').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.faqIdx);
-                const field = e.target.dataset.field;
-                this._meta.structuredData.faqItems[idx][field] = e.target.value;
-                this._updateSchemaPreview();
-            });
-        });
-
-        container.querySelectorAll('[data-remove-faq]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.removeFaq);
-                this._meta.structuredData.faqItems.splice(idx, 1);
-                this._renderSchemaFAQ();
-                this._updateSchemaPreview();
-            });
-        });
-    }
-
-    _renderRecipeIngredients() {
-        const container = this.querySelector('#recipeIngredientsContainer');
-        if (!container) return;
-
-        const ingredients = this._meta.structuredData.recipe.ingredients || [];
-        container.innerHTML = ingredients.map((ingredient, idx) => `
-            <div class="mdx-schema-ingredient-row">
-                <input type="text" 
-                       placeholder="e.g., 2 cups flour" 
-                       value="${ingredient}"
-                       data-ingredient-idx="${idx}"
-                       class="mdx-input">
-                <button class="mdx-btn-icon" data-remove-ingredient="${idx}">
-                    ${this._icon('trash')}
-                </button>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.ingredientIdx);
-                this._meta.structuredData.recipe.ingredients[idx] = e.target.value;
-                this._updateSchemaPreview();
-            });
-        });
-
-        container.querySelectorAll('[data-remove-ingredient]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.removeIngredient);
-                this._meta.structuredData.recipe.ingredients.splice(idx, 1);
-                this._renderRecipeIngredients();
-                this._updateSchemaPreview();
-            });
-        });
-    }
-
-    _renderRecipeInstructions() {
-        const container = this.querySelector('#recipeInstructionsContainer');
-        if (!container) return;
-
-        const instructions = this._meta.structuredData.recipe.instructions || [];
-        container.innerHTML = instructions.map((instruction, idx) => `
-            <div class="mdx-schema-instruction-row">
-                <textarea placeholder="Step ${idx + 1}" 
-                          data-instruction-idx="${idx}"
-                          class="mdx-input"
-                          rows="2">${instruction}</textarea>
-                <button class="mdx-btn-icon" data-remove-instruction="${idx}">
-                    ${this._icon('trash')}
-                </button>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('textarea').forEach(textarea => {
-            textarea.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.instructionIdx);
-                this._meta.structuredData.recipe.instructions[idx] = e.target.value;
-                this._updateSchemaPreview();
-            });
-        });
-
-        container.querySelectorAll('[data-remove-instruction]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.removeInstruction);
-                this._meta.structuredData.recipe.instructions.splice(idx, 1);
-                this._renderRecipeInstructions();
-                this._updateSchemaPreview();
-            });
-        });
-    }
-
-    _toggleSchemaFields() {
-        const fields = {
-            article: this.querySelector('#articleSchemaFields'),
-            job: this.querySelector('#jobSchemaFields'),
-            image: this.querySelector('#imageSchemaFields'),
-            recipe: this.querySelector('#recipeSchemaFields')
-        };
-
-        Object.values(fields).forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-
-        const typeMap = {
-            'Article': 'article',
-            'BlogPosting': 'article',
-            'NewsArticle': 'article',
-            'JobPosting': 'job',
-            'ImageObject': 'image',
-            'Recipe': 'recipe'
-        };
-
-        const activeField = fields[typeMap[this._schemaType]];
-        if (activeField) {
-            activeField.style.display = 'block';
-        }
-    }
-
-    _shellHTML() {
-        return `
-<div class="mdx-top-bar">
-    <div class="mdx-brand">MDX<span>Blocks</span></div>
-    <div class="mdx-top-acts" id="topActs"></div>
-</div>
-
-<div class="mdx-list-view" id="listView">
-    <div class="mdx-list-bar">
-        <div>
-            <span class="mdx-list-heading">Blog Posts</span>
-            <span class="mdx-list-count" id="listCount"></span>
-        </div>
-        <button class="mdx-btn mdx-btn-accent" id="newPostBtn">${this._icon('plus')} New Post</button>
-    </div>
-    <div class="mdx-list-scroll" id="listScroll">
-        <div class="mdx-state-box" id="listLoading">
-            <svg class="mdx-spin-anim" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" stroke-opacity=".2"/>
-                <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
-            </svg>
-            <p>Loading posts…</p>
-        </div>
-        <div id="listContent" style="display:none"></div>
-    </div>
-</div>
-
-<div class="mdx-editor-view hidden" id="editorView">
-    <div class="mdx-tab-bar">
-        <button class="mdx-tab active" data-tab="editor">${this._icon('edit')} Editor</button>
-        <button class="mdx-tab" data-tab="preview">${this._icon('eye')} Preview</button>
-        <button class="mdx-tab" data-tab="markdown">${this._icon('code')} Markdown</button>
-        <button class="mdx-tab" data-tab="meta">${this._icon('gear')} Settings</button>
-        <button class="mdx-tab" data-tab="related">${this._icon('link')} Related</button>
-        <button class="mdx-tab" data-tab="schema">${this._icon('schema')} Schema</button>
-        <button class="mdx-tab" data-tab="seo">${this._icon('seo')} SEO</button>
-    </div>
-
-    <div class="mdx-editor-body">
-        <div class="mdx-editor-main">
-            <div class="mdx-blog-title-bar" id="blogTitleBar" style="display:none;">
-                <input type="text" 
-                       class="mdx-blog-title-input" 
-                       id="blogTitleInput" 
-                       placeholder="Add your blog title here..."
-                       data-m="blogTitle">
-            </div>
-
-            <div class="mdx-editor-panel" id="editorPanel">
-                <div class="mdx-toast-editor-wrapper" id="toastEditorWrapper"></div>
-            </div>
-
-            <div class="mdx-prev-panel hidden" id="prevPanel">
-                <div class="mdx-prev-inner" id="prevInner"></div>
-            </div>
-
-            <div class="mdx-md-panel hidden" id="mdPanel">
-                <textarea class="mdx-md-area" id="mdArea" readonly spellcheck="false"></textarea>
-            </div>
-
-            <div class="mdx-meta-panel hidden" id="metaPanel">
-                <div class="mdx-meta-inner">${this._metaHTML()}</div>
-            </div>
-
-            <div class="mdx-related-panel hidden" id="relatedPanel">
-                <div class="mdx-related-inner">${this._relatedHTML()}</div>
-            </div>
-
-            <div class="mdx-schema-panel hidden" id="schemaPanel">
-                <div class="mdx-schema-inner">${this._schemaHTML()}</div>
-            </div>
-
-            <div class="mdx-seo-panel hidden" id="seoPanel">
-                <div class="mdx-seo-inner">${this._seoHTML()}</div>
-            </div>
-        </div>
-
-        <div class="mdx-sidebar" id="seoSidebar">
-            <div class="mdx-sidebar-scroll">
-                <div class="mdx-keyphrase-section">
-                    <label class="mdx-keyphrase-label">Focus Keyphrase</label>
-                    <input type="text" 
-                           class="mdx-keyphrase-input" 
-                           id="focusKeyphrase"
-                           placeholder="Enter your focus keyword..."
-                           data-m="focusKeyphrase">
-                </div>
-
-                <div class="mdx-score-card">
-                    <div class="mdx-score-title">${this._icon('grammar')} Grammar & Style</div>
-                    <div class="mdx-score-circle">
-                        <svg class="mdx-score-svg" width="120" height="120">
-                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
-                            <circle class="mdx-score-fg" id="grammarScoreCircle" cx="60" cy="60" r="52" 
-                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-                        </svg>
-                        <div class="mdx-score-text" id="grammarScoreText">0</div>
-                    </div>
-                    <div class="mdx-score-label" id="grammarScoreLabel">Analyzing...</div>
-                    <div id="grammarAnalysisItems"></div>
-                </div>
-
-                <div class="mdx-score-card">
-                    <div class="mdx-score-title">${this._icon('seo')} SEO Analysis</div>
-                    <div class="mdx-score-circle">
-                        <svg class="mdx-score-svg" width="120" height="120">
-                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
-                            <circle class="mdx-score-fg" id="seoScoreCircle" cx="60" cy="60" r="52" 
-                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-                        </svg>
-                        <div class="mdx-score-text" id="seoScoreText">0</div>
-                    </div>
-                    <div class="mdx-score-label" id="seoScoreLabel">Needs improvement</div>
-                    <div id="seoAnalysisItems"></div>
-                </div>
-
-                <div class="mdx-score-card">
-                    <div class="mdx-score-title">${this._icon('book')} Readability Analysis</div>
-                    <div class="mdx-score-circle">
-                        <svg class="mdx-score-svg" width="120" height="120">
-                            <circle class="mdx-score-bg" cx="60" cy="60" r="52"/>
-                            <circle class="mdx-score-fg" id="readScoreCircle" cx="60" cy="60" r="52"
-                                    stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-                        </svg>
-                        <div class="mdx-score-text" id="readScoreText">0</div>
-                    </div>
-                    <div class="mdx-score-label" id="readScoreLabel">Needs improvement</div>
-                    <div id="readAnalysisItems"></div>
-                </div>
-
-                <div class="mdx-score-card" id="spellingCard" style="display:none;">
-                    <div class="mdx-score-title">${this._icon('spell')} Spelling Issues</div>
-                    <div id="spellingIssuesList"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="mdx-toasts" id="toastArea"></div>
-`;
-    }
-
-    _metaHTML() {
-        return `
-<div class="mdx-form-grid">
-    <div class="mdx-form-group">
-        <label class="mdx-label">Slug</label>
-        <input type="text" class="mdx-input" data-m="slug" placeholder="auto-generated-slug">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Excerpt</label>
-        <textarea class="mdx-input" data-m="excerpt" rows="3" placeholder="Brief summary..."></textarea>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Author</label>
-        <input type="text" class="mdx-input" data-m="author" placeholder="Author name">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Author URL</label>
-        <input type="url" class="mdx-input" data-m="authorUrl" placeholder="https://...">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Author Image</label>
-        <div class="mdx-img-zone" id="authorZone">
-            <input type="file" id="authorFile" accept="image/*" style="display:none">
-            <img id="authorPrev" class="mdx-img-prev" style="display:none">
-            <div class="mdx-img-placeholder">
-                ${this._icon('image')}
-                <p>Click or drag image</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Featured Image</label>
-        <div class="mdx-img-zone" id="featuredZone">
-            <input type="file" id="featuredFile" accept="image/*" style="display:none">
-            <img id="featuredPrev" class="mdx-img-prev" style="display:none">
-            <div class="mdx-img-placeholder">
-                ${this._icon('image')}
-                <p>Click or drag image</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Category</label>
-        <div class="mdx-dropdown" id="categoryDropdown">
-            <input type="text" class="mdx-input" id="categoryInput" placeholder="Select or create category" data-m="category">
-            <div class="mdx-dropdown-list" id="categoryList"></div>
-            <button class="mdx-dropdown-create" id="createCategoryBtn">+ Create New</button>
-        </div>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Tags</label>
-        <div class="mdx-dropdown" id="tagsDropdown">
-            <input type="text" class="mdx-input" id="tagsInput" placeholder="Select or create tags (comma separated)" data-m="tags">
-            <div class="mdx-dropdown-list" id="tagsList"></div>
-            <button class="mdx-dropdown-create" id="createTagBtn">+ Create New</button>
-        </div>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Status</label>
-        <select class="mdx-input" data-m="status" id="statusInput">
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="archived">Archived</option>
-        </select>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Published Date</label>
-        <input type="datetime-local" 
-               class="mdx-input" 
-               data-m="publishedDate" 
-               id="publishedDateInput">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Modified Date</label>
-        <input type="datetime-local" 
-               class="mdx-input" 
-               data-m="modifiedDate" 
-               id="modifiedDateInput">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Read Time (minutes)</label>
-        <input type="number" 
-               class="mdx-input" 
-               data-m="readTime" 
-               id="readTimeInput" 
-               min="0" 
-               placeholder="Auto-calculated">
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-checkbox">
-            <input type="checkbox" data-m="isFeatured" id="isFeaturedInput">
-            <span>Featured Post</span>
-        </label>
-    </div>
-</div>
-`;
-    }
-
-    _seoHTML() {
-        return `
-<div class="mdx-form-grid">
-    <div class="mdx-form-group">
-        <label class="mdx-label">SEO Title</label>
-        <input type="text" class="mdx-input" data-m="seoTitle" placeholder="Optimized title (50-60 chars)" maxlength="70">
-        <small class="mdx-hint">Appears in search results and browser tabs</small>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Meta Description</label>
-        <textarea class="mdx-input" data-m="seoDescription" rows="3" placeholder="Compelling description (120-160 chars)" maxlength="170"></textarea>
-        <small class="mdx-hint">Appears in search results under the title</small>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">OG Image (Social Media)</label>
-        <div class="mdx-img-zone" id="ogZone">
-            <input type="file" id="ogFile" accept="image/*" style="display:none">
-            <img id="ogPrev" class="mdx-img-prev" style="display:none">
-            <div class="mdx-img-placeholder">
-                ${this._icon('image')}
-                <p>1200×630px recommended</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="mdx-form-group">
-        <label class="mdx-label">Keywords (comma separated)</label>
-        <input type="text" class="mdx-input" data-m="seoKeywords" placeholder="keyword1, keyword2, keyword3">
-        <small class="mdx-hint">Relevant keywords for search engines</small>
-    </div>
-</div>
-`;
-    }
-
-    _relatedHTML() {
-        return `
-<div class="mdx-related-container">
-    <div class="mdx-related-search">
-        <input type="text" id="relatedSearch" class="mdx-input" placeholder="Search posts by title...">
-        <button class="mdx-btn" id="relatedSearchBtn">${this._icon('search')} Search</button>
-    </div>
-    <div id="relatedResults"></div>
-</div>
-`;
-    }
-
-    _schemaHTML() {
-        return `
-<div class="mdx-schema-container">
-    <div class="mdx-schema-types">
-        <button class="mdx-schema-type-btn active" data-type="Article">Article</button>
-        <button class="mdx-schema-type-btn" data-type="BlogPosting">Blog</button>
-        <button class="mdx-schema-type-btn" data-type="NewsArticle">News</button>
-        <button class="mdx-schema-type-btn" data-type="JobPosting">Job</button>
-        <button class="mdx-schema-type-btn" data-type="ImageObject">Image</button>
-        <button class="mdx-schema-type-btn" data-type="Recipe">Recipe</button>
-    </div>
-
-    <div class="mdx-schema-fields" id="articleSchemaFields">
-        <h3>Article Schema</h3>
-        <div class="mdx-schema-section">
-            <label class="mdx-label">Authors</label>
-            <div id="schemaAuthorsContainer"></div>
-            <button class="mdx-btn-sm" id="addSchemaAuthor">+ Add Author</button>
-        </div>
-        <div class="mdx-schema-section">
-            <label class="mdx-label">FAQ Items</label>
-            <div id="schemaFaqContainer"></div>
-            <button class="mdx-btn-sm" id="addSchemaFaq">+ Add FAQ</button>
-        </div>
-    </div>
-
-    <div class="mdx-schema-fields" id="jobSchemaFields" style="display:none;">
-        <h3>Job Posting Schema</h3>
-    </div>
-
-    <div class="mdx-schema-fields" id="imageSchemaFields" style="display:none;">
-        <h3>Image Schema</h3>
-    </div>
-
-    <div class="mdx-schema-fields" id="recipeSchemaFields" style="display:none;">
-        <h3>Recipe Schema</h3>
-        <div id="recipeIngredientsContainer"></div>
-        <button class="mdx-btn-sm" id="addRecipeIngredient">+ Add Ingredient</button>
-        <div id="recipeInstructionsContainer"></div>
-        <button class="mdx-btn-sm" id="addRecipeInstruction">+ Add Step</button>
-    </div>
-
-    <div class="mdx-schema-preview">
-        <h4>Schema Preview</h4>
-        <pre id="schemaPreviewCode"></pre>
-    </div>
-</div>
-`;
     }
 
     _updateScoreDisplay() {
@@ -2077,1360 +3676,27 @@ class MdxBlogEditor extends HTMLElement {
         }
     }
 
-    _switchTab(tabName) {
-        this._tab = tabName;
-        
-        this.querySelectorAll('.mdx-tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.tab === tabName);
-        });
-        
-        const panels = ['editorPanel', 'prevPanel', 'mdPanel', 'metaPanel', 
-                       'relatedPanel', 'schemaPanel', 'seoPanel'];
-        panels.forEach(p => {
-            const panel = this.querySelector(`#${p}`);
-            if (panel) panel.classList.add('hidden');
-        });
-        
-        const titleBar = this.querySelector('#blogTitleBar');
-        if (titleBar) {
-            titleBar.style.display = ['editor', 'preview', 'markdown'].includes(tabName) ? 'block' : 'none';
-        }
-        
-        if (tabName === 'editor') {
-            this.querySelector('#editorPanel')?.classList.remove('hidden');
-        } else if (tabName === 'preview') {
-            this.querySelector('#prevPanel')?.classList.remove('hidden');
-            this._buildPreview();
-        } else if (tabName === 'markdown') {
-            this.querySelector('#mdPanel')?.classList.remove('hidden');
-            const mdArea = this.querySelector('#mdArea');
-            if (mdArea) mdArea.value = this._currentMarkdown || '';
-        } else if (tabName === 'meta') {
-            this.querySelector('#metaPanel')?.classList.remove('hidden');
-        } else if (tabName === 'related') {
-            this.querySelector('#relatedPanel')?.classList.remove('hidden');
-        } else if (tabName === 'schema') {
-            this.querySelector('#schemaPanel')?.classList.remove('hidden');
-        } else if (tabName === 'seo') {
-            this.querySelector('#seoPanel')?.classList.remove('hidden');
-        }
+    _emit(name, detail) {
+        this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
 
-    _initToastEditor(initialMarkdown = '') {
-        if (!window.toastui || !window.toastui.Editor) {
-            setTimeout(() => this._initToastEditor(initialMarkdown), 500);
-            return;
-        }
-
-        const wrapper = this.querySelector('#toastEditorWrapper');
-        if (!wrapper) return;
-
-        const editorDiv = document.createElement('div');
-        editorDiv.className = 'mdx-toast-editor-container';
-        editorDiv.style.height = '100%';
-        wrapper.appendChild(editorDiv);
-
-        const self = this;
-
-        try {
-            this._toastEditor = new toastui.Editor({
-                el: editorDiv,
-                height: '100%',
-                initialEditType: 'wysiwyg',
-                previewStyle: 'vertical',
-                initialValue: initialMarkdown,
-                usageStatistics: false,
-                autofocus: false,
-                toolbarItems: [
-                    ['heading', 'bold', 'italic', 'strike'],
-                    ['hr', 'quote'],
-                    ['ul', 'ol', 'task', 'indent', 'outdent'],
-                    ['table', 'image', 'link'],
-                    ['code', 'codeblock'],
-                    [
-                        {
-                            el: this._createCustomButton('Video', 'video', () => this._insertVideoEmbed()),
-                            tooltip: 'Insert YouTube/Vimeo Video'
-                        },
-                        {
-                            el: this._createCustomButton('HTML', 'html', () => this._insertHTMLEmbed()),
-                            tooltip: 'Insert HTML Embed'
-                        },
-                        {
-                            el: this._createCustomButton('Edit Alt', 'edit', () => this._editImageAlt()),
-                            tooltip: 'Edit Image Alt Text'
-                        },
-                        {
-                            el: this._createCustomButton('Check', 'spell', () => this._runFullAnalysis()),
-                            tooltip: 'Run Full Analysis'
-                        }
-                    ]
-                ],
-                events: {
-                    change: () => {
-                        let md = self._toastEditor.getMarkdown();
-                        md = self._cleanMarkdown(md);
-                        self._currentMarkdown = md;
-                        
-                        clearTimeout(self._analysisTimeout);
-                        self._analysisTimeout = setTimeout(() => {
-                            self._runFullAnalysis();
-                        }, 1000);
-                    }
-                },
-                hooks: {
-                    addImageBlobHook: async (blob, callback) => {
-                        try {
-                            const webpData = await self._convertToWebP(blob);
-                            const webpFilename = (blob.name || 'image.jpg').replace(/\.[^.]+$/, '.webp');
-                            
-                            self._pendingImageUpload = { callback };
-                            
-                            self._emit('upload-image', {
-                                blockId: 'editor-' + Date.now(),
-                                fileData: webpData,
-                                filename: webpFilename,
-                                optimize: true
-                            });
-                        } catch (error) {
-                            self._toast('error', 'Image upload failed');
-                        }
-                    }
-                }
-            });
-
-        } catch (error) {
-            this._toast('error', 'Failed to initialize editor: ' + error.message);
-        }
-    }
-
-    _createCustomButton(label, iconKey, onClick) {
-        const btn = document.createElement('button');
-        btn.className = 'toastui-editor-toolbar-icons';
-        btn.style.margin = '0';
-        btn.style.border = 'none';
-        btn.style.background = 'none';
-        btn.innerHTML = this._icon(iconKey);
-        btn.addEventListener('click', onClick);
-        return btn;
-    }
-
-    _insertVideoEmbed() {
-        const url = prompt('Enter YouTube or Vimeo URL:');
-        if (!url) return;
-
-        let embedCode = '';
-        if (url.includes('youtube.com') || url.includes('youtu.be')) {
-            const videoId = this._extractYouTubeId(url);
-            if (videoId) {
-                embedCode = `<iframe width="100%" height="400" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>`;
-            }
-        } else if (url.includes('vimeo.com')) {
-            const videoId = url.split('/').pop().split('?')[0];
-            if (videoId) {
-                embedCode = `<iframe width="100%" height="400" src="https://player.vimeo.com/video/${videoId}" frameborder="0" allowfullscreen></iframe>`;
-            }
-        }
-
-        if (embedCode) {
-            const pos = this._toastEditor.getSelection()[0];
-            this._toastEditor.insertText(`\n${embedCode}\n`);
-        }
-    }
-
-    _extractYouTubeId(url) {
-        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-        const match = url.match(regex);
-        return match ? match[1] : null;
-    }
-
-    _insertHTMLEmbed() {
-        const html = prompt('Enter HTML code:');
-        if (!html) return;
-
-        const pos = this._toastEditor.getSelection()[0];
-        this._toastEditor.insertText(`\n${html}\n`);
-    }
-
-    _editImageAlt() {
-        const md = this._toastEditor.getMarkdown();
-        const pos = this._toastEditor.getSelection()[0];
-        
-        const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-        let match;
-        let foundImage = null;
-        
-        while ((match = imgRegex.exec(md)) !== null) {
-            if (match.index <= pos && pos <= match.index + match[0].length) {
-                foundImage = { full: match[0], alt: match[1], url: match[2], index: match.index };
-                break;
-            }
-        }
-        
-        if (foundImage) {
-            const newAlt = prompt('Edit image alt text:', foundImage.alt);
-            if (newAlt !== null) {
-                const newImage = `![${newAlt}](${foundImage.url})`;
-                const newMd = md.substring(0, foundImage.index) + newImage + md.substring(foundImage.index + foundImage.full.length);
-                this._toastEditor.setMarkdown(newMd);
-            }
-        } else {
-            alert('Place cursor on an image to edit its alt text');
-        }
-    }
-
-    _cleanMarkdown(md) {
-        return md.replace(/\r\n/g, '\n').trim();
-    }
-
-    _buildPreview() {
-        const inner = this.querySelector('#prevInner');
-        if (!inner) return;
-
-        const html = this._markdownToHTML(this._currentMarkdown || '');
-        inner.innerHTML = html;
-    }
-
-    _markdownToHTML(md) {
-        let html = md;
-        
-        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-        
-        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        
-        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%">');
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-        
-        html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-        
-        html = html.replace(/\n/g, '<br>');
-        
-        return html;
-    }
-
-    _openEditor(post) {
-        this._editPost = post;
-        this._meta = post ? { ...this._freshMeta(), ...post } : this._freshMeta();
-        this._currentMarkdown = post?.content || '';
-        this._newCategoriesCreated = [];
-        this._newTagsCreated = [];
-        
-        this.querySelector('#listView')?.classList.add('hidden');
-        this.querySelector('#editorView')?.classList.remove('hidden');
-        
-        const topActs = this.querySelector('#topActs');
-        if (topActs) {
-            topActs.innerHTML = `
-                <button class="mdx-btn" id="backBtn">${this._icon('back')} Back</button>
-                <button class="mdx-btn mdx-btn-accent" id="saveDraftBtn">${this._icon('save')} Save Draft</button>
-                <button class="mdx-btn mdx-btn-accent" id="publishBtn">${this._icon('check')} Publish</button>
-            `;
-            
-            this.querySelector('#backBtn')?.addEventListener('click', () => this._closeEditor());
-            this.querySelector('#saveDraftBtn')?.addEventListener('click', () => this._save('draft'));
-            this.querySelector('#publishBtn')?.addEventListener('click', () => this._save('published'));
-        }
-        
-        if (!this._toastEditor) {
-            this._initToastEditor(this._currentMarkdown);
-        } else {
-            this._toastEditor.setMarkdown(this._currentMarkdown);
-        }
-        
-        if (post) {
-            this._populateEditor(post);
-        }
-        
-        this._switchTab('editor');
-        this._runFullAnalysis();
-    }
-
-    _closeEditor() {
-        this.querySelector('#editorView')?.classList.add('hidden');
-        this.querySelector('#listView')?.classList.remove('hidden');
-        
-        const topActs = this.querySelector('#topActs');
-        if (topActs) topActs.innerHTML = '';
-        
-        this._editPost = null;
-        this._meta = this._freshMeta();
-        this._currentMarkdown = '';
-    }
-
-    _onPostList(data) {
-        this._posts = data.items || [];
-        
-        const listLoading = this.querySelector('#listLoading');
-        const listContent = this.querySelector('#listContent');
-        const listCount = this.querySelector('#listCount');
-        
-        if (listLoading) listLoading.style.display = 'none';
-        if (listContent) listContent.style.display = 'block';
-        if (listCount) listCount.textContent = `(${this._posts.length})`;
-        
-        this._renderPostList();
-    }
-
-    _renderPostList() {
-        const listContent = this.querySelector('#listContent');
-        if (!listContent) return;
-
-        if (this._posts.length === 0) {
-            listContent.innerHTML = `
-                <div class="mdx-state-box">
-                    <p>No posts yet. Create your first post!</p>
-                </div>
-            `;
-            return;
-        }
-
-        listContent.innerHTML = this._posts.map(post => `
-            <div class="mdx-post-card">
-                <div class="mdx-post-header">
-                    <h3 class="mdx-post-title">${post.blogTitle || post.title || 'Untitled'}</h3>
-                    <div class="mdx-post-meta">
-                        <span class="mdx-post-status mdx-post-status-${post.status || 'draft'}">${post.status || 'draft'}</span>
-                        <span>${new Date(post.modifiedDate || post._createdDate).toLocaleDateString()}</span>
-                    </div>
-                </div>
-                <div class="mdx-post-excerpt">${post.excerpt || ''}</div>
-                <div class="mdx-post-actions">
-                    <button class="mdx-btn-sm" data-edit-id="${post._id}">${this._icon('edit')} Edit</button>
-                    <button class="mdx-btn-sm mdx-btn-danger" data-delete-id="${post._id}">${this._icon('trash')} Delete</button>
-                </div>
-            </div>
-        `).join('');
-
-        listContent.querySelectorAll('[data-edit-id]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const postId = btn.dataset.editId;
-                const post = this._posts.find(p => p._id === postId);
-                if (post) {
-                    this._emit('load-post-data', { _id: postId });
-                }
-            });
-        });
-
-        listContent.querySelectorAll('[data-delete-id]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const postId = btn.dataset.deleteId;
-                if (confirm('Are you sure you want to delete this post?')) {
-                    this._emit('delete-post', { _id: postId });
-                }
-            });
-        });
-    }
-
-    _onUploadResult(data) {
-        if (data.success) {
-            const url = data.url;
-            const metaKey = data.metaKey;
-            
-            if (metaKey) {
-                this._meta[metaKey] = url;
-            }
-            
-            if (this._pendingImageUpload) {
-                this._pendingImageUpload.callback(url);
-                this._pendingImageUpload = null;
-            }
-            
-            this._toast('success', 'Image uploaded successfully');
-        } else {
-            this._toast('error', data.error || 'Upload failed');
-        }
-    }
-
-    _onSaveResult(data) {
-        if (data.success) {
-            this._toast('success', 'Post saved successfully');
-            this._emit('load-post-list', {});
-        } else {
-            this._toast('error', data.error || 'Failed to save post');
-        }
-    }
-
-    _onDeleteResult(data) {
-        if (data.success) {
-            this._toast('success', 'Post deleted successfully');
-            this._emit('load-post-list', {});
-        } else {
-            this._toast('error', data.error || 'Failed to delete post');
-        }
-    }
-
-    _onSearchResults(data) {
-        const results = this.querySelector('#relatedResults');
-        if (!results) return;
-
-        if (!data.items || data.items.length === 0) {
-            results.innerHTML = '<p class="mdx-no-results">No posts found</p>';
-            return;
-        }
-
-        results.innerHTML = data.items.map(post => `
-            <div class="mdx-related-item">
-                <label>
-                    <input type="checkbox" 
-                           value="${post._id}" 
-                           ${this._meta.relatedPosts.includes(post._id) ? 'checked' : ''}
-                           class="mdx-related-checkbox">
-                    <span>${post.blogTitle || post.title}</span>
-                </label>
-            </div>
-        `).join('');
-
-        results.querySelectorAll('.mdx-related-checkbox').forEach(cb => {
-            cb.addEventListener('change', (e) => {
-                const id = e.target.value;
-                if (e.target.checked) {
-                    if (!this._meta.relatedPosts.includes(id)) {
-                        this._meta.relatedPosts.push(id);
-                    }
-                } else {
-                    this._meta.relatedPosts = this._meta.relatedPosts.filter(p => p !== id);
-                }
-            });
-        });
-    }
-
-    _onCategoriesList(data) {
-        this._allCategories = data.items || [];
-    }
-
-    _onTagsList(data) {
-        this._allTags = data.items || [];
-    }
-
-    _onCategoryCreated(data) {
-        if (data.success) {
-            this._newCategoriesCreated.push(data.name);
-            this._allCategories.push({ name: data.name, _id: data._id });
-        }
-    }
-
-    _onTagCreated(data) {
-        if (data.success) {
-            this._newTagsCreated.push(data.name);
-            this._allTags.push({ name: data.name, _id: data._id });
-        }
-    }
-
-    _generateStructuredData() {
-        const base = {
-            "@context": "https://schema.org",
-            "@type": this._schemaType
-        };
-
-        if (['Article', 'BlogPosting', 'NewsArticle'].includes(this._schemaType)) {
-            return {
-                ...base,
-                headline: this._meta.blogTitle || this._meta.seoTitle,
-                description: this._meta.excerpt || this._meta.seoDescription,
-                image: this._meta.featuredImage ? [this._meta.featuredImage] : [],
-                datePublished: this._meta.publishedDate || new Date().toISOString(),
-                dateModified: this._meta.modifiedDate || new Date().toISOString(),
-                author: this._meta.structuredData.authors.map(a => ({
-                    "@type": "Person",
-                    name: a.name,
-                    url: a.url
-                })),
-                mainEntityOfPage: {
-                    "@type": "WebPage",
-                    "@id": window.location.href
-                }
-            };
-        }
-
-        return base;
-    }
-
-    _updateSchemaPreview() {
-        const preview = this.querySelector('#schemaPreviewCode');
-        if (!preview) return;
-
-        const schema = this._generateStructuredData();
-        preview.textContent = JSON.stringify(schema, null, 2);
-    }
-
-    _emit(eventName, data) {
-        this.dispatchEvent(new CustomEvent(eventName, {
-            detail: data,
-            bubbles: true,
-            composed: true
-        }));
-    }
-
-    _toast(type, message) {
+    _toast(type, msg) {
         const area = this.querySelector('#toastArea');
         if (!area) return;
-
-        const toast = document.createElement('div');
-        toast.className = `mdx-toast mdx-toast-${type}`;
-        toast.innerHTML = `
-            ${type === 'success' ? this._icon('check') : this._icon('alert')}
-            <span>${message}</span>
-        `;
-        
-        area.appendChild(toast);
-
-        setTimeout(() => {
-            toast.classList.add('mdx-toast-show');
-        }, 10);
-
-        setTimeout(() => {
-            toast.classList.remove('mdx-toast-show');
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        const t = document.createElement('div');
+        t.className = `mdx-toast mdx-toast-${type}`;
+        t.textContent = msg;
+        area.appendChild(t);
+        setTimeout(() => t.remove(), 5000);
     }
 
-    _styles() {
-        return `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
-
-mdx-blog-editor {
-    display: block;
-    width: 100%;
-    height: 100%;
-    min-height: 720px;
-    font-family: 'DM Sans', sans-serif;
-    --ink: #111;
-    --ink2: #444;
-    --ink3: #888;
-    --paper: #fafaf8;
-    --paper2: #f2f1ee;
-    --paper3: #e8e6e1;
-    --border: #ddd9d2;
-    --accent: #d4380d;
-    --accent2: #fa8c16;
-    --green: #389e0d;
-    --blue: #1677ff;
-    --red: #cf1322;
-    --orange: #fa8c16;
-    --yellow: #faad14;
-    --purple: #722ed1;
-    --r: 8px;
-    --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-    --shadow: 0 8px 32px rgba(0,0,0,.14);
-    background: var(--paper);
-    color: var(--ink);
-}
-
-mdx-blog-editor .mdx-host {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    min-height: 720px;
-    background: var(--paper);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
-mdx-blog-editor .mdx-top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 24px;
-    background: #fff;
-    border-bottom: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-brand {
-    font-family: 'Playfair Display', serif;
-    font-size: 24px;
-    font-weight: 900;
-    color: var(--accent);
-}
-
-mdx-blog-editor .mdx-brand span {
-    color: var(--ink);
-}
-
-mdx-blog-editor .mdx-top-acts {
-    display: flex;
-    gap: 12px;
-}
-
-mdx-blog-editor .mdx-list-view {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-mdx-blog-editor .mdx-list-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 24px;
-    background: #fff;
-    border-bottom: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-list-heading {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--ink);
-}
-
-mdx-blog-editor .mdx-list-count {
-    margin-left: 8px;
-    font-size: 14px;
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-list-scroll {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-}
-
-mdx-blog-editor .mdx-post-card {
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    padding: 20px;
-    margin-bottom: 16px;
-    transition: all 0.2s;
-}
-
-mdx-blog-editor .mdx-post-card:hover {
-    box-shadow: var(--shadow-sm);
-    transform: translateY(-2px);
-}
-
-mdx-blog-editor .mdx-post-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-mdx-blog-editor .mdx-post-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
-}
-
-mdx-blog-editor .mdx-post-meta {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-post-status {
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-mdx-blog-editor .mdx-post-status-draft {
-    background: var(--paper3);
-    color: var(--ink2);
-}
-
-mdx-blog-editor .mdx-post-status-published {
-    background: rgba(56, 158, 13, 0.1);
-    color: var(--green);
-}
-
-mdx-blog-editor .mdx-post-status-archived {
-    background: rgba(207, 19, 34, 0.1);
-    color: var(--red);
-}
-
-mdx-blog-editor .mdx-post-excerpt {
-    color: var(--ink2);
-    font-size: 14px;
-    line-height: 1.6;
-    margin-bottom: 16px;
-}
-
-mdx-blog-editor .mdx-post-actions {
-    display: flex;
-    gap: 8px;
-}
-
-mdx-blog-editor .mdx-editor-view {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-mdx-blog-editor .mdx-tab-bar {
-    display: flex;
-    background: #fff;
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-}
-
-mdx-blog-editor .mdx-tab {
-    padding: 16px 20px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--ink3);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s;
-    white-space: nowrap;
-}
-
-mdx-blog-editor .mdx-tab svg {
-    width: 18px;
-    height: 18px;
-}
-
-mdx-blog-editor .mdx-tab:hover {
-    color: var(--accent);
-}
-
-mdx-blog-editor .mdx-tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-}
-
-mdx-blog-editor .mdx-editor-body {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-}
-
-mdx-blog-editor .mdx-editor-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: #fff;
-}
-
-mdx-blog-editor .mdx-blog-title-bar {
-    padding: 24px 32px;
-    border-bottom: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-blog-title-input {
-    width: 100%;
-    border: none;
-    font-size: 32px;
-    font-weight: 600;
-    font-family: 'Playfair Display', serif;
-    color: var(--ink);
-    outline: none;
-}
-
-mdx-blog-editor .mdx-blog-title-input::placeholder {
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-editor-panel,
-mdx-blog-editor .mdx-prev-panel,
-mdx-blog-editor .mdx-md-panel,
-mdx-blog-editor .mdx-meta-panel,
-mdx-blog-editor .mdx-related-panel,
-mdx-blog-editor .mdx-schema-panel,
-mdx-blog-editor .mdx-seo-panel {
-    flex: 1;
-    overflow-y: auto;
-}
-
-mdx-blog-editor .mdx-toast-editor-wrapper {
-    height: 100%;
-    padding: 16px;
-}
-
-mdx-blog-editor .mdx-prev-inner,
-mdx-blog-editor .mdx-meta-inner,
-mdx-blog-editor .mdx-related-inner,
-mdx-blog-editor .mdx-schema-inner,
-mdx-blog-editor .mdx-seo-inner {
-    padding: 32px;
-    max-width: 900px;
-    margin: 0 auto;
-}
-
-mdx-blog-editor .mdx-md-area {
-    width: 100%;
-    height: 100%;
-    padding: 32px;
-    border: none;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    resize: none;
-    outline: none;
-    background: var(--paper);
-}
-
-mdx-blog-editor .mdx-form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-}
-
-mdx-blog-editor .mdx-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-mdx-blog-editor .mdx-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink2);
-}
-
-mdx-blog-editor .mdx-input,
-mdx-blog-editor select.mdx-input {
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    font-size: 14px;
-    font-family: inherit;
-    color: var(--ink);
-    background: #fff;
-    transition: all 0.2s;
-}
-
-mdx-blog-editor .mdx-input:focus,
-mdx-blog-editor select.mdx-input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(212, 56, 13, 0.1);
-}
-
-mdx-blog-editor textarea.mdx-input {
-    resize: vertical;
-    min-height: 80px;
-}
-
-mdx-blog-editor .mdx-hint {
-    font-size: 12px;
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-
-mdx-blog-editor .mdx-checkbox input {
-    cursor: pointer;
-}
-
-mdx-blog-editor .mdx-img-zone {
-    position: relative;
-    width: 100%;
-    height: 200px;
-    border: 2px dashed var(--border);
-    border-radius: var(--r);
-    cursor: pointer;
-    transition: all 0.2s;
-    overflow: hidden;
-}
-
-mdx-blog-editor .mdx-img-zone:hover {
-    border-color: var(--accent);
-    background: rgba(212, 56, 13, 0.02);
-}
-
-mdx-blog-editor .mdx-img-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-img-placeholder svg {
-    width: 48px;
-    height: 48px;
-    margin-bottom: 8px;
-}
-
-mdx-blog-editor .mdx-img-prev {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-mdx-blog-editor .mdx-dropdown {
-    position: relative;
-}
-
-mdx-blog-editor .mdx-dropdown-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 200px;
-    overflow-y: auto;
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    margin-top: 4px;
-    box-shadow: var(--shadow-sm);
-    z-index: 100;
-    display: none;
-}
-
-mdx-blog-editor .mdx-dropdown.open .mdx-dropdown-list {
-    display: block;
-}
-
-mdx-blog-editor .mdx-dropdown-item {
-    padding: 10px 14px;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-mdx-blog-editor .mdx-dropdown-item:hover {
-    background: var(--paper2);
-}
-
-mdx-blog-editor .mdx-dropdown-create {
-    width: 100%;
-    padding: 10px 14px;
-    border: none;
-    border-top: 1px solid var(--border);
-    background: var(--paper2);
-    color: var(--accent);
-    font-weight: 500;
-    cursor: pointer;
-    text-align: left;
-}
-
-mdx-blog-editor .mdx-dropdown-create:hover {
-    background: var(--paper3);
-}
-
-mdx-blog-editor .mdx-sidebar {
-    width: 360px;
-    background: var(--paper);
-    border-left: 1px solid var(--border);
-    overflow-y: auto;
-}
-
-mdx-blog-editor .mdx-sidebar-scroll {
-    padding: 24px;
-}
-
-mdx-blog-editor .mdx-keyphrase-section {
-    margin-bottom: 24px;
-}
-
-mdx-blog-editor .mdx-keyphrase-label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink2);
-    margin-bottom: 8px;
-}
-
-mdx-blog-editor .mdx-keyphrase-input {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    font-size: 14px;
-}
-
-mdx-blog-editor .mdx-score-card {
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    padding: 20px;
-    margin-bottom: 16px;
-}
-
-mdx-blog-editor .mdx-score-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--ink);
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-mdx-blog-editor .mdx-score-title svg {
-    width: 18px;
-    height: 18px;
-}
-
-mdx-blog-editor .mdx-score-circle {
-    position: relative;
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 12px;
-}
-
-mdx-blog-editor .mdx-score-svg {
-    transform: rotate(-90deg);
-}
-
-mdx-blog-editor .mdx-score-bg {
-    fill: none;
-    stroke: var(--paper3);
-    stroke-width: 10;
-}
-
-mdx-blog-editor .mdx-score-fg {
-    fill: none;
-    stroke: var(--green);
-    stroke-width: 10;
-    stroke-linecap: round;
-    transition: all 0.5s ease;
-}
-
-mdx-blog-editor .mdx-score-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--green);
-}
-
-mdx-blog-editor .mdx-score-label {
-    text-align: center;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--green);
-    margin-bottom: 16px;
-}
-
-mdx-blog-editor .mdx-analysis-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 0;
-    font-size: 13px;
-    line-height: 1.5;
-}
-
-mdx-blog-editor .mdx-analysis-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-mdx-blog-editor .mdx-analysis-good .mdx-analysis-icon {
-    background: rgba(56, 158, 13, 0.1);
-    color: var(--green);
-}
-
-mdx-blog-editor .mdx-analysis-ok .mdx-analysis-icon {
-    background: rgba(250, 140, 22, 0.1);
-    color: var(--orange);
-}
-
-mdx-blog-editor .mdx-analysis-bad .mdx-analysis-icon {
-    background: rgba(207, 19, 34, 0.1);
-    color: var(--red);
-}
-
-mdx-blog-editor .mdx-spell-error-item {
-    padding: 10px;
-    border-bottom: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-spell-error-item:last-child {
-    border-bottom: none;
-}
-
-mdx-blog-editor .mdx-spell-word {
-    font-weight: 600;
-    color: var(--red);
-    margin-bottom: 6px;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-mdx-blog-editor .mdx-spell-suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-mdx-blog-editor .mdx-spell-suggestion {
-    padding: 4px 10px;
-    background: var(--paper2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-
-mdx-blog-editor .mdx-spell-suggestion:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-mdx-blog-editor .mdx-btn {
-    padding: 10px 20px;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    background: #fff;
-    color: var(--ink);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-mdx-blog-editor .mdx-btn svg {
-    width: 16px;
-    height: 16px;
-}
-
-mdx-blog-editor .mdx-btn:hover {
-    background: var(--paper2);
-}
-
-mdx-blog-editor .mdx-btn-accent {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-mdx-blog-editor .mdx-btn-accent:hover {
-    background: #b8300b;
-    border-color: #b8300b;
-}
-
-mdx-blog-editor .mdx-btn-sm {
-    padding: 6px 12px;
-    font-size: 13px;
-}
-
-mdx-blog-editor .mdx-btn-danger {
-    color: var(--red);
-}
-
-mdx-blog-editor .mdx-btn-danger:hover {
-    background: rgba(207, 19, 34, 0.1);
-}
-
-mdx-blog-editor .mdx-btn-icon {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    background: #fff;
-    cursor: pointer;
-}
-
-mdx-blog-editor .mdx-btn-icon:hover {
-    background: var(--paper2);
-}
-
-mdx-blog-editor .mdx-btn-icon svg {
-    width: 16px;
-    height: 16px;
-}
-
-mdx-blog-editor .mdx-schema-types {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 24px;
-}
-
-mdx-blog-editor .mdx-schema-type-btn {
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    background: #fff;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-mdx-blog-editor .mdx-schema-type-btn:hover {
-    background: var(--paper2);
-}
-
-mdx-blog-editor .mdx-schema-type-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-mdx-blog-editor .mdx-schema-section {
-    margin-bottom: 24px;
-}
-
-mdx-blog-editor .mdx-schema-author-row,
-mdx-blog-editor .mdx-schema-faq-row,
-mdx-blog-editor .mdx-schema-ingredient-row,
-mdx-blog-editor .mdx-schema-instruction-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-mdx-blog-editor .mdx-schema-preview {
-    margin-top: 32px;
-    padding-top: 32px;
-    border-top: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-schema-preview pre {
-    background: var(--paper);
-    padding: 16px;
-    border-radius: var(--r);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    overflow-x: auto;
-}
-
-mdx-blog-editor .mdx-toasts {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-mdx-blog-editor .mdx-toast {
-    padding: 16px 20px;
-    background: #fff;
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    box-shadow: var(--shadow);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 300px;
-    transform: translateX(400px);
-    opacity: 0;
-    transition: all 0.3s;
-}
-
-mdx-blog-editor .mdx-toast-show {
-    transform: translateX(0);
-    opacity: 1;
-}
-
-mdx-blog-editor .mdx-toast svg {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-}
-
-mdx-blog-editor .mdx-toast-success {
-    border-left: 4px solid var(--green);
-}
-
-mdx-blog-editor .mdx-toast-success svg {
-    color: var(--green);
-}
-
-mdx-blog-editor .mdx-toast-error {
-    border-left: 4px solid var(--red);
-}
-
-mdx-blog-editor .mdx-toast-error svg {
-    color: var(--red);
-}
-
-mdx-blog-editor .mdx-state-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px;
-    color: var(--ink3);
-}
-
-mdx-blog-editor .mdx-spin-anim {
-    width: 48px;
-    height: 48px;
-    margin-bottom: 16px;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-mdx-blog-editor .hidden {
-    display: none !important;
-}
-
-mdx-blog-editor .mdx-no-results {
-    text-align: center;
-    color: var(--ink3);
-    padding: 24px;
-}
-
-mdx-blog-editor .mdx-related-item {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-}
-
-mdx-blog-editor .mdx-related-item:last-child {
-    border-bottom: none;
-}
-
-mdx-blog-editor .mdx-related-item label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-
-mdx-blog-editor .mdx-related-search {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-}
-
-mdx-blog-editor .mdx-related-search .mdx-input {
-    flex: 1;
-}
-`;
+    _toBase64(file) {
+        return new Promise((res, rej) => {
+            const r = new FileReader();
+            r.onloadend = () => res(r.result.split(',')[1]);
+            r.onerror = rej;
+            r.readAsDataURL(file);
+        });
     }
 }
 
