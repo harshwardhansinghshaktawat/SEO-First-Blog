@@ -24,9 +24,6 @@ class BlogPageElement extends HTMLElement {
         
         const initialStyleProps = this.getAttribute('style-props');
         this.styleProps = initialStyleProps ? JSON.parse(initialStyleProps) : this.getDefaultStyleProps();
-        
-        this.imageCache = new Map();
-        this.intersectionObserver = null;
     }
 
     static get observedAttributes() {
@@ -93,34 +90,11 @@ class BlogPageElement extends HTMLElement {
         `;
         
         this.initialRenderDone = true;
-        this.setupIntersectionObserver();
         this.render();
     }
 
     disconnectedCallback() {
-        if (this.intersectionObserver) {
-            this.intersectionObserver.disconnect();
-        }
-    }
-
-    setupIntersectionObserver() {
-        if ('IntersectionObserver' in window) {
-            this.intersectionObserver = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            const img = entry.target;
-                            if (img.dataset.src) {
-                                img.src = img.dataset.src;
-                                img.removeAttribute('data-src');
-                                this.intersectionObserver.unobserve(img);
-                            }
-                        }
-                    });
-                },
-                { rootMargin: '50px' }
-            );
-        }
+        // Cleanup if needed
     }
 
     getStyles() {
@@ -745,7 +719,7 @@ class BlogPageElement extends HTMLElement {
 
     renderHeroSection() {
         const post = this.state.heroPost;
-        const imageUrl = this.convertWixImageUrl(post.featuredImage, 'hero');
+        const imageUrl = this.convertWixImageUrl(post.featuredImage);
         const displayTitle = post.blogTitle || post.title || 'Untitled';
 
         return `
@@ -756,7 +730,6 @@ class BlogPageElement extends HTMLElement {
                             src="${imageUrl}" 
                             alt="${this.escapeHtml(displayTitle)}"
                             class="hero-image"
-                            loading="eager"
                             onerror="this.src='https://via.placeholder.com/1200x600/e5e7eb/6b7280?text=Hero+Post'"
                         />
                     </div>
@@ -993,7 +966,7 @@ class BlogPageElement extends HTMLElement {
     }
 
     renderPostCard(post, lazy = true) {
-        const imageUrl = this.convertWixImageUrl(post.featuredImage, 'card');
+        const imageUrl = this.convertWixImageUrl(post.featuredImage);
         const displayTitle = post.blogTitle || post.title || 'Untitled';
 
         return `
@@ -1003,7 +976,7 @@ class BlogPageElement extends HTMLElement {
                         src="${imageUrl}"
                         alt="${this.escapeHtml(displayTitle)}"
                         class="post-image"
-                        loading="${lazy ? 'lazy' : 'eager'}"
+                        loading="lazy"
                         onerror="this.src='https://via.placeholder.com/400x240/e5e7eb/6b7280?text=No+Image'"
                     />
                 </div>
@@ -1037,7 +1010,7 @@ class BlogPageElement extends HTMLElement {
     }
 
     renderCompactCard(post) {
-        const imageUrl = this.convertWixImageUrl(post.featuredImage, 'thumbnail');
+        const imageUrl = this.convertWixImageUrl(post.featuredImage);
         const displayTitle = post.blogTitle || post.title || 'Untitled';
 
         return `
@@ -1076,53 +1049,20 @@ class BlogPageElement extends HTMLElement {
         }));
     }
 
-    convertWixImageUrl(wixUrl, size = 'card') {
+    convertWixImageUrl(wixUrl) {
         if (!wixUrl || typeof wixUrl !== 'string') return '';
-        if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) {
-            return this.optimizeImageUrl(wixUrl, size);
-        }
+        if (wixUrl.startsWith('http://') || wixUrl.startsWith('https://')) return wixUrl;
 
         if (wixUrl.startsWith('wix:image://')) {
             try {
                 const parts = wixUrl.split('/');
                 const fileId = parts[3]?.split('#')[0];
-                if (fileId) {
-                    const baseUrl = `https://static.wixstatic.com/media/${fileId}`;
-                    return this.optimizeImageUrl(baseUrl, size);
-                }
+                if (fileId) return `https://static.wixstatic.com/media/${fileId}`;
             } catch (e) {
                 console.error('Error parsing Wix image URL:', e);
             }
         }
         return '';
-    }
-
-    optimizeImageUrl(url, size) {
-        if (!url) return '';
-        
-        // If it's already a Wix static URL with parameters, return as is
-        if (url.includes('/v1/fill/')) return url;
-        
-        // Define size parameters for different contexts
-        const sizeParams = {
-            hero: '/v1/fill/w_1200,h_600,al_c,q_85,usm_0.66_1.00_0.01',
-            card: '/v1/fill/w_400,h_240,al_c,q_80,usm_0.66_1.00_0.01',
-            thumbnail: '/v1/fill/w_100,h_100,al_c,q_75,usm_0.66_1.00_0.01'
-        };
-
-        const params = sizeParams[size] || sizeParams.card;
-        
-        // Only append if it's a Wix static URL and doesn't already have parameters
-        if (url.includes('static.wixstatic.com/media/')) {
-            // Ensure URL ends with proper file extension
-            if (!url.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-                // Add default jpg extension if missing
-                return url + params + '/file.jpg';
-            }
-            return url + params;
-        }
-        
-        return url;
     }
 
     formatDate(dateString) {
