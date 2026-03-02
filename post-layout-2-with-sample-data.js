@@ -8,6 +8,7 @@ class MagazineGridBlogViewer extends HTMLElement {
         this.state = {
             postData: null,
             relatedPosts: [],
+            tagDetails: [],
             isLoading: true,
             viewCount: 0
         };
@@ -21,7 +22,7 @@ class MagazineGridBlogViewer extends HTMLElement {
     }
 
     static get observedAttributes() {
-        return ['post-data', 'related-posts', 'style-props', 'view-count'];
+        return ['post-data', 'related-posts', 'style-props', 'view-count', 'tag-details'];
     }
 
     get postData() { return this.state.postData; }
@@ -62,6 +63,18 @@ class MagazineGridBlogViewer extends HTMLElement {
             }
         } catch (e) {
             console.error('Error setting view count:', e);
+        }
+    }
+
+    get tagDetails() { return this.state.tagDetails; }
+    set tagDetails(value) {
+        try {
+            this.state.tagDetails = typeof value === 'string' ? JSON.parse(value) : value;
+            if (this.initialRenderDone && this.state.postData) {
+                this._renderTags(this.state.tagDetails);
+            }
+        } catch (e) {
+            console.error('Error setting tag details:', e);
         }
     }
 
@@ -124,6 +137,8 @@ class MagazineGridBlogViewer extends HTMLElement {
             this.relatedPosts = newValue; 
         } else if (name === 'view-count') {
             this.viewCount = newValue;
+        } else if (name === 'tag-details') {
+            this.tagDetails = newValue;
         } else if (name === 'style-props') {
             try {
                 const newStyleProps = JSON.parse(newValue);
@@ -746,6 +761,9 @@ class MagazineGridBlogViewer extends HTMLElement {
                 font-weight: 600;
                 border: 1px solid ${tagBorder};
                 transition: all 0.2s;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-block;
             }
             
             magazine-grid-blog-viewer .tag:hover {
@@ -836,6 +854,10 @@ class MagazineGridBlogViewer extends HTMLElement {
                     gap: 40px;
                 }
                 
+                magazine-grid-blog-viewer .sidebar-right {
+                    order: -1;
+                }
+                
                 magazine-grid-blog-viewer .sticky-sidebar {
                     position: relative;
                     top: 0;
@@ -873,6 +895,10 @@ class MagazineGridBlogViewer extends HTMLElement {
                 
                 magazine-grid-blog-viewer .article-content p:first-of-type::first-letter {
                     font-size: 2.5em;
+                }
+                
+                magazine-grid-blog-viewer .sidebar-right {
+                    order: -1;
                 }
                 
                 magazine-grid-blog-viewer .sticky-sidebar {
@@ -1003,8 +1029,12 @@ class MagazineGridBlogViewer extends HTMLElement {
         `;
         this.articleFooter.style.display = 'block';
         
-        // Render Tags
-        if (post.tags) this._renderTags(post.tags);
+        // Render Tags with tag details if available
+        if (this.state.tagDetails && this.state.tagDetails.length > 0) {
+            this._renderTags(this.state.tagDetails);
+        } else if (post.tags) {
+            this._renderTags(null); // Will use fallback string parsing
+        }
     }
 
     _renderContent(markdown) {
@@ -1275,15 +1305,49 @@ class MagazineGridBlogViewer extends HTMLElement {
         });
     }
 
-    _renderTags(tags) {
-        const tagArray = tags.split(',').map(t => t.trim());
+    _renderTags(tagDetails) {
+        if (!tagDetails || tagDetails.length === 0) {
+            // Fallback for simple string tags (backward compatibility)
+            if (this.state.postData && this.state.postData.tags) {
+                const tagArray = this.state.postData.tags.split(',').map(t => t.trim());
+                this.tagsSection.innerHTML = `
+                    <div class="tags-title">Tagged With</div>
+                    <div class="tags-container">
+                        ${tagArray.map(tag => `<span class="tag">${this._escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                `;
+                this.tagsSection.style.display = 'block';
+            }
+            return;
+        }
+
+        // Render clickable tags with slugs
         this.tagsSection.innerHTML = `
             <div class="tags-title">Tagged With</div>
             <div class="tags-container">
-                ${tagArray.map(tag => `<span class="tag">${this._escapeHtml(tag)}</span>`).join('')}
+                ${tagDetails.map(tag => `
+                    <a href="#" class="tag" data-slug="${tag.slug}" data-tag-id="${tag._id}">
+                        ${this._escapeHtml(tag.name)}
+                    </a>
+                `).join('')}
             </div>
         `;
         this.tagsSection.style.display = 'block';
+
+        // Add click handlers for tag navigation
+        this.querySelectorAll('.tag[data-slug]').forEach(tagElement => {
+            tagElement.addEventListener('click', (e) => {
+                e.preventDefault();
+                const slug = tagElement.getAttribute('data-slug');
+                this._navigateToTag(slug);
+            });
+        });
+    }
+
+    _navigateToTag(slug) {
+        this.dispatchEvent(new CustomEvent('navigate-to-tag', {
+            detail: { slug }, bubbles: true, composed: true
+        }));
     }
 
     renderRelatedPosts() {
@@ -1473,12 +1537,12 @@ class MagazineGridBlogViewer extends HTMLElement {
         const demoPostData = {
             blogTitle: 'Complete Markdown Guide: Typography, Code, Tables & More',
             author: 'Jane Smith',
-            authorImage: 'https://via.placeholder.com/80',
+            authorImage: 'https://picsum.photos/seed/author/80/80',
             publishedDate: new Date().toISOString(),
             readTime: '8',
             category: 'Tutorial',
             excerpt: 'A comprehensive guide showcasing all markdown elements.',
-            featuredImage: 'https://via.placeholder.com/1400x800',
+            featuredImage: 'https://picsum.photos/seed/featured/1400/800',
             tags: 'Markdown,Tutorial,Typography,Demo',
             content: `This is a **comprehensive demo** showcasing all the *amazing features* of our magazine-style blog viewer!
 
@@ -1541,9 +1605,13 @@ def process_data(posts):
 | Domain | ❌ | ✅ | ✅ |
 | Price | $0 | $29 | Custom |
 
-## Images
+## Beautiful Images
 
-![Demo image](https://via.placeholder.com/800x400)
+![Scenic landscape demonstration](https://picsum.photos/seed/landscape/800/400)
+
+*Caption: High-quality images render beautifully in the magazine layout*
+
+![Architecture photography](https://picsum.photos/seed/architecture/800/400)
 
 ---
 
@@ -1552,13 +1620,20 @@ def process_data(posts):
 **Try different color themes** to see how your content will look in this beautiful magazine layout!`
         };
 
+        const demoTagDetails = [
+            { name: 'Markdown', slug: 'markdown', _id: 'tag-1' },
+            { name: 'Tutorial', slug: 'tutorial', _id: 'tag-2' },
+            { name: 'Typography', slug: 'typography', _id: 'tag-3' },
+            { name: 'Demo', slug: 'demo', _id: 'tag-4' }
+        ];
+
         const demoRelatedPosts = [
             {
                 slug: 'getting-started',
                 blogTitle: 'Getting Started with Markdown',
                 excerpt: 'Learn the basics of Markdown syntax.',
                 category: 'Tutorial',
-                featuredImage: 'https://via.placeholder.com/400x220',
+                featuredImage: 'https://picsum.photos/seed/post1/400/220',
                 publishedDate: new Date(Date.now() - 86400000).toISOString(),
                 readTime: '5'
             },
@@ -1567,7 +1642,7 @@ def process_data(posts):
                 blogTitle: 'Advanced Formatting Tips',
                 excerpt: 'Take your content to the next level.',
                 category: 'Advanced',
-                featuredImage: 'https://via.placeholder.com/400x220',
+                featuredImage: 'https://picsum.photos/seed/post2/400/220',
                 publishedDate: new Date(Date.now() - 172800000).toISOString(),
                 readTime: '7'
             },
@@ -1576,7 +1651,7 @@ def process_data(posts):
                 blogTitle: 'Styling Your Blog Like a Pro',
                 excerpt: 'Professional styling techniques.',
                 category: 'Design',
-                featuredImage: 'https://via.placeholder.com/400x220',
+                featuredImage: 'https://picsum.photos/seed/post3/400/220',
                 publishedDate: new Date(Date.now() - 259200000).toISOString(),
                 readTime: '6'
             }
@@ -1584,6 +1659,7 @@ def process_data(posts):
 
         this.state.postData = demoPostData;
         this.state.relatedPosts = demoRelatedPosts;
+        this.state.tagDetails = demoTagDetails;
         this.state.viewCount = 1247;
         this.state.isLoading = false;
 
