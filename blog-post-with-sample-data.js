@@ -697,6 +697,9 @@ class EnhancedBlogPostViewer extends HTMLElement {
     }
 
     _renderTags(tagDetails) {
+        console.log('_renderTags called with:', tagDetails);
+        console.log('tagsSection element:', this.tagsSection);
+        
         if (!tagDetails || tagDetails.length === 0) {
             if (this.tagsSection) this.tagsSection.style.display = 'none';
             return;
@@ -721,6 +724,9 @@ class EnhancedBlogPostViewer extends HTMLElement {
             </div>
         `;
         this.tagsSection.style.display = 'block';
+        
+        console.log('Tags section display set to block');
+        console.log('Tags HTML:', this.tagsSection.innerHTML.substring(0, 200));
 
         // Setup tag click handlers
         this.querySelectorAll('.tag').forEach(tagElement => {
