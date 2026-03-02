@@ -241,8 +241,7 @@ class MagazineGridBlogViewer extends HTMLElement {
             /* Hero Header with Featured Image */
             magazine-grid-blog-viewer .hero-header {
                 width: 100%;
-                height: 60vh;
-                min-height: 400px;
+                height: 500px;
                 position: relative;
                 overflow: hidden;
                 background: linear-gradient(135deg, ${tableRowBg} 0%, ${bgColor} 100%);
@@ -253,6 +252,7 @@ class MagazineGridBlogViewer extends HTMLElement {
                 height: 100%;
                 object-fit: cover;
                 opacity: 0.7;
+                will-change: auto;
             }
             
             magazine-grid-blog-viewer .hero-overlay {
@@ -881,8 +881,7 @@ class MagazineGridBlogViewer extends HTMLElement {
                 }
                 
                 magazine-grid-blog-viewer .hero-header {
-                    height: 40vh;
-                    min-height: 300px;
+                    height: 300px;
                 }
                 
                 magazine-grid-blog-viewer .post-title {
@@ -942,7 +941,16 @@ class MagazineGridBlogViewer extends HTMLElement {
         // Render Hero Header
         const featuredImageUrl = this._convertWixImageUrl(post.featuredImage);
         this.heroHeader.innerHTML = `
-            <img src="${featuredImageUrl}" alt="${this._escapeHtml(post.blogTitle || post.title)}" class="hero-image" loading="eager" />
+            <img 
+                src="${featuredImageUrl}" 
+                alt="${this._escapeHtml(post.blogTitle || post.title)}" 
+                class="hero-image" 
+                width="1400" 
+                height="500"
+                loading="eager" 
+                fetchpriority="high"
+                decoding="async"
+            />
             <div class="hero-overlay"></div>
         `;
         
