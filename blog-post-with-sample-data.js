@@ -1020,12 +1020,12 @@ class EnhancedBlogPostViewer extends HTMLElement {
         const demoPostData = {
             blogTitle: 'Complete Markdown Guide: Typography, Code, Tables & More',
             author: 'Jane Smith',
-            authorImage: 'https://via.placeholder.com/56',
+            authorImage: 'https://picsum.photos/seed/author/56/56',
             publishedDate: new Date().toISOString(),
             readTime: '8',
             category: 'Tutorial',
             excerpt: 'A comprehensive guide showcasing all markdown elements, styling options, and advanced features available in this blog post viewer.',
-            featuredImage: 'https://via.placeholder.com/1200x600',
+            featuredImage: 'https://picsum.photos/seed/featured/1200/600',
             tags: 'Markdown,Tutorial,Typography,Demo',
             content: `This is a **comprehensive demo** showcasing all the *amazing features* of our blog viewer. Let's explore everything!
 
@@ -1136,11 +1136,13 @@ print(f"Found {len(recent_posts)} recent posts")
 | Rust | ⭐⭐⭐ | Systems Programming | Hard |
 | Go | ⭐⭐⭐⭐ | Backend Services | Medium |
 
-## Images
+## Beautiful Images
 
-![Beautiful landscape showing mountains and lakes](https://via.placeholder.com/800x400)
+![Scenic mountain landscape](https://picsum.photos/seed/landscape/800/400)
 
-*Caption: A stunning vista demonstrating image rendering*
+*Caption: High-quality images render beautifully*
+
+![Modern architecture photography](https://picsum.photos/seed/architecture/800/400)
 
 ---
 
@@ -1238,7 +1240,7 @@ This demo showcases the comprehensive markdown support including:
                 title: 'Getting Started with Markdown',
                 excerpt: 'Learn the basics of Markdown syntax and start creating beautifully formatted content today.',
                 category: 'Tutorial',
-                featuredImage: 'https://via.placeholder.com/400x200',
+                featuredImage: 'https://picsum.photos/seed/post1/400/200',
                 publishedDate: new Date(Date.now() - 86400000).toISOString(),
                 readTime: '5'
             },
@@ -1248,7 +1250,7 @@ This demo showcases the comprehensive markdown support including:
                 title: 'Advanced Formatting Tips',
                 excerpt: 'Take your content to the next level with these advanced formatting techniques and best practices.',
                 category: 'Advanced',
-                featuredImage: 'https://via.placeholder.com/400x200',
+                featuredImage: 'https://picsum.photos/seed/post2/400/200',
                 publishedDate: new Date(Date.now() - 172800000).toISOString(),
                 readTime: '7'
             },
@@ -1258,7 +1260,7 @@ This demo showcases the comprehensive markdown support including:
                 title: 'Styling Your Blog Like a Pro',
                 excerpt: 'Discover professional styling techniques to make your blog stand out from the competition.',
                 category: 'Design',
-                featuredImage: 'https://via.placeholder.com/400x200',
+                featuredImage: 'https://picsum.photos/seed/post3/400/200',
                 publishedDate: new Date(Date.now() - 259200000).toISOString(),
                 readTime: '6'
             }
